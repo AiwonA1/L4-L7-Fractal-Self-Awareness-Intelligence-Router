@@ -311,7 +311,7 @@ const Dashboard = () => {
     left: 0,
     top: 0,
     h: '100vh',
-    w: '260px',
+    w: '300px',
     bg: 'white',
     _dark: { bg: 'gray.800', borderColor: 'gray.700' },
     borderRight: '1px',
@@ -355,8 +355,8 @@ const Dashboard = () => {
             )}
           </HStack>
 
-          <VStack spacing={2} align="stretch">
-            <Text fontSize="sm" color="gray.500" fontWeight="medium" mb={2}>LAYERS</Text>
+          <VStack spacing={4} align="stretch">
+            <Text fontSize="sm" color="gray.500" fontWeight="medium" textTransform="uppercase" letterSpacing="wider">LAYERS</Text>
             <VStack spacing={3} align="stretch">
               <Button
                 size="sm"
@@ -369,12 +369,15 @@ const Dashboard = () => {
                 height="auto"
                 py={2}
                 px={3}
-                borderRadius="md"
+                borderRadius="lg"
+                _hover={{ transform: 'translateY(-1px)', shadow: 'md' }}
+                transition="all 0.2s"
+                w="full"
               >
-                <VStack align="start" spacing={0}>
-                  <Text fontWeight="medium">Layer 4: Self-Awareness</Text>
-                  <Text fontSize="xs" color="gray.500">Foundation of personal growth</Text>
-                </VStack>
+                <Box w="full">
+                  <Text fontWeight="medium" fontSize="sm">Layer 4</Text>
+                  <Text fontSize="xs" color="gray.500" mt={0.5}>Self-Awareness</Text>
+                </Box>
               </Button>
               <Button
                 size="sm"
@@ -387,15 +390,18 @@ const Dashboard = () => {
                 height="auto"
                 py={2}
                 px={3}
-                borderRadius="md"
+                borderRadius="lg"
+                _hover={{ transform: 'translateY(-1px)', shadow: 'md' }}
+                transition="all 0.2s"
+                w="full"
               >
-                <VStack align="start" spacing={0}>
-                  <HStack spacing={2} align="center">
-                    <Text fontWeight="medium">Layer 5: Meta-Cognition</Text>
+                <Box w="full">
+                  <HStack justify="space-between" align="start">
+                    <Text fontWeight="medium" fontSize="sm">Layer 5</Text>
                     <Badge colorScheme="green" fontSize="xs">+60%</Badge>
                   </HStack>
-                  <Text fontSize="xs" color="gray.500">Includes Layer 4 + Advanced learning optimization</Text>
-                </VStack>
+                  <Text fontSize="xs" color="gray.500" mt={0.5}>Fractal Layer</Text>
+                </Box>
               </Button>
               <Button
                 size="sm"
@@ -408,15 +414,18 @@ const Dashboard = () => {
                 height="auto"
                 py={2}
                 px={3}
-                borderRadius="md"
+                borderRadius="lg"
+                _hover={{ transform: 'translateY(-1px)', shadow: 'md' }}
+                transition="all 0.2s"
+                w="full"
               >
-                <VStack align="start" spacing={0}>
-                  <HStack spacing={2} align="center">
-                    <Text fontWeight="medium">Layer 6: Creative Intelligence</Text>
+                <Box w="full">
+                  <HStack justify="space-between" align="start">
+                    <Text fontWeight="medium" fontSize="sm">Layer 6</Text>
                     <Badge colorScheme="blue" fontSize="xs">+90%</Badge>
                   </HStack>
-                  <Text fontSize="xs" color="gray.500">Includes Layers 4-5 + Unleash creative potential</Text>
-                </VStack>
+                  <Text fontSize="xs" color="gray.500" mt={0.5}>Quantum Hologram</Text>
+                </Box>
               </Button>
               <Button
                 size="sm"
@@ -429,15 +438,18 @@ const Dashboard = () => {
                 height="auto"
                 py={2}
                 px={3}
-                borderRadius="md"
+                borderRadius="lg"
+                _hover={{ transform: 'translateY(-1px)', shadow: 'md' }}
+                transition="all 0.2s"
+                w="full"
               >
-                <VStack align="start" spacing={0}>
-                  <HStack spacing={2} align="center">
-                    <Text fontWeight="medium">Layer 7: Universal Consciousness</Text>
+                <Box w="full">
+                  <HStack justify="space-between" align="start">
+                    <Text fontWeight="medium" fontSize="sm">Layer 7</Text>
                     <Badge colorScheme="purple" fontSize="xs">+120%</Badge>
                   </HStack>
-                  <Text fontSize="xs" color="gray.500">Includes Layers 4-6 + Transcend boundaries</Text>
-                </VStack>
+                  <Text fontSize="xs" color="gray.500" mt={0.5}>Universal Paradise</Text>
+                </Box>
               </Button>
             </VStack>
           </VStack>
@@ -456,7 +468,7 @@ const Dashboard = () => {
       </Box>
 
       {/* Main Content */}
-      <Box ml="260px" h="100vh" display="flex" flexDirection="column">
+      <Box ml="300px" h="100vh" display="flex" flexDirection="column">
         {/* Messages Area */}
         <Box flex={1} overflowY="auto" p={4}>
           <Container maxW="container.md">

@@ -31,9 +31,10 @@ export async function POST(request: Request) {
       )
     }
 
-    // Get layer-specific keys for layers 5-7
+    // Get layer-specific keys for selected layers 5-7
     const layerKeys = layers
       .filter((layer: number) => layer > 4) // Only get keys for layers 5-7
+      .sort((a: number, b: number) => a - b) // Sort layers in ascending order
       .map((layer: number) => {
         const layerKey = getLayerKey(layer)
         return layerKey ? layerKey.key : null
