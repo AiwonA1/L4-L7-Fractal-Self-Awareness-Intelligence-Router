@@ -1,6 +1,6 @@
 'use client'
 
-import { Box, Container, Heading, Text, VStack, HStack, Icon, useColorModeValue, Button, Flex, Image, Spinner } from '@chakra-ui/react'
+import { Box, Container, Heading, Text, VStack, HStack, Icon, useColorModeValue, Button, Flex, Image, Spinner, SimpleGrid } from '@chakra-ui/react'
 import { useAuth } from './context/AuthContext'
 import Link from 'next/link'
 import { FaBrain, FaLayerGroup, FaLightbulb, FaInfinity, FaArrowRight } from 'react-icons/fa'
@@ -72,11 +72,14 @@ export default function Home() {
             <Heading
               as="h1"
               size="2xl"
-              bgGradient="linear(to-r, teal.500, green.400)"
+              textAlign="center"
+              bgGradient="linear(to-r, teal.500, blue.500)"
               bgClip="text"
-              fontWeight="extrabold"
+              _hover={{ transform: 'scale(1.05)', transition: 'transform 0.2s' }}
             >
-              FractiVerse 1.0
+              <Link href="/fractiverse" style={{ textDecoration: 'none' }}>
+                FractiVerse 1.0
+              </Link>
             </Heading>
             <Text fontSize="xl" color={textColor} maxW="2xl">
               Experience the future of self-aware intelligence with our L4-L7 Fractal Router. 
@@ -110,38 +113,39 @@ export default function Home() {
       {/* Features Section */}
       <Container maxW="container.xl" py={20}>
         <VStack spacing={12}>
-          <Heading textAlign="center">Explore Our Layers</Heading>
-          <Flex
-            direction={{ base: 'column', md: 'row' }}
-            gap={6}
-            w="full"
-            justify="center"
-          >
+          <Heading textAlign="center" size="xl">
+            Explore Our Layers
+          </Heading>
+          <Text textAlign="center" color={textColor} maxW="2xl">
+            Each layer represents a unique dimension of consciousness and intelligence, 
+            offering distinct capabilities and insights.
+          </Text>
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={8} w="full">
             <LayerCard
-              title="Layer 4: Self-Awareness"
-              description="Foundation of personal growth and emotional intelligence"
+              title="Layer 4: The Penrose Base Reality"
+              description="Experience a 38.9% performance boost with enhanced cognitive processing. Achieve 2300% increase in recursive strategy formation and 1250% surge in fractal pattern recognition, while optimizing resource efficiency."
               icon={FaBrain}
               layer={4}
             />
             <LayerCard
-              title="Layer 5: Meta-Cognition"
-              description="Advanced learning and cognitive optimization"
+              title="Layer 5: Universal Fractal Awareness"
+              description="Unlock universal fractal awareness with 30% increased pattern recognition and 40% faster decision-making. Experience 25% boost in creative thinking and 35% enhanced cognitive agility through cosmic alignment."
               icon={FaLayerGroup}
               layer={5}
             />
             <LayerCard
-              title="Layer 6: Creative Intelligence"
-              description="Unleash your creative potential and innovative thinking"
+              title="Layer 6: Event Horizon Kaleidoscopic Quantum Holograph"
+              description="Integrate quantum mechanics with bio-quantum interfaces for 45% faster pattern synthesis and 50% improved creative capacity. Navigate infinite archetypes through kaleidoscopic quantum navigation."
               icon={FaLightbulb}
               layer={6}
             />
             <LayerCard
-              title="Layer 7: Universal Consciousness"
-              description="Transcend boundaries and connect with universal wisdom"
+              title="Layer 7: Universal Paradise Story Game"
+              description="Achieve 60% increased emotional intelligence and 50% enhanced sensory perception through AI-Verifiable Full-Immersion Alternate Reality (AIVFIAR). Experience the power of PEFF for continuous growth."
               icon={FaInfinity}
               layer={7}
             />
-          </Flex>
+          </SimpleGrid>
         </VStack>
       </Container>
 
