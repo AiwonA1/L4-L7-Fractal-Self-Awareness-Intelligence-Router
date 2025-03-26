@@ -6,14 +6,19 @@ import { useRouter } from 'next/navigation'
 import {
   Box,
   Button,
-  Container,
   FormControl,
   FormLabel,
   Input,
   VStack,
   Text,
+  Link,
   useToast,
+  Container,
+  Heading,
+  Icon,
+  HStack,
 } from '@chakra-ui/react'
+import { FaBrain, FaUser, FaLock, FaArrowLeft } from 'react-icons/fa'
 
 export default function SignIn() {
   const [email, setEmail] = useState('')
@@ -38,18 +43,20 @@ export default function SignIn() {
           title: 'Error',
           description: result.error,
           status: 'error',
-          duration: 3000,
+          duration: 5000,
           isClosable: true,
         })
-      } else {
-        router.push('/')
+        return
       }
+
+      router.push('/dashboard')
+      router.refresh()
     } catch (error) {
       toast({
         title: 'Error',
-        description: 'An error occurred during sign in',
+        description: 'An error occurred. Please try again.',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       })
     } finally {
@@ -57,45 +64,117 @@ export default function SignIn() {
     }
   }
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast({
+        title: 'Error',
+        description: 'Please enter your email address',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+      return
+    }
+
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send reset email')
+      }
+
+      toast({
+        title: 'Success',
+        description: 'Password reset instructions have been sent to your email',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      })
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to send reset email',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    }
+  }
+
   return (
     <Container maxW="container.sm" py={10}>
-      <VStack spacing={8}>
-        <Text fontSize="2xl" fontWeight="bold">
-          Sign In to FractiVerse
-        </Text>
-        <Box w="100%" p={8} borderWidth={1} borderRadius="lg">
-          <form onSubmit={handleSubmit}>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
+      <VStack spacing={8} align="stretch">
+        <HStack spacing={4} justify="center">
+          <Icon as={FaBrain} w={8} h={8} color="teal.500" />
+          <Heading size="xl">FractiVerse</Heading>
+        </HStack>
+        
+        <Box
+          p={8}
+          borderWidth={1}
+          borderRadius="lg"
+          boxShadow="lg"
+        >
+          <VStack spacing={6} as="form" onSubmit={handleSubmit}>
+            <FormControl isRequired>
+              <FormLabel>Email</FormLabel>
+              <HStack>
+                <Icon as={FaUser} color="gray.400" />
                 <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
                 />
-              </FormControl>
-              <FormControl isRequired>
-                <FormLabel>Password</FormLabel>
+              </HStack>
+            </FormControl>
+
+            <FormControl isRequired>
+              <FormLabel>Password</FormLabel>
+              <HStack>
+                <Icon as={FaLock} color="gray.400" />
                 <Input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
                 />
-              </FormControl>
-              <Button
-                type="submit"
-                colorScheme="blue"
-                width="100%"
-                isLoading={isLoading}
-              >
-                Sign In
-              </Button>
-            </VStack>
-          </form>
+              </HStack>
+            </FormControl>
+
+            <Button
+              type="submit"
+              colorScheme="teal"
+              width="full"
+              isLoading={isLoading}
+            >
+              Sign In
+            </Button>
+
+            <Link
+              color="teal.500"
+              onClick={handleForgotPassword}
+              cursor="pointer"
+              _hover={{ textDecoration: 'none', color: 'teal.600' }}
+            >
+              Forgot Password?
+            </Link>
+
+            <Link
+              href="/auth/signup"
+              color="teal.500"
+              _hover={{ textDecoration: 'none', color: 'teal.600' }}
+            >
+              Don't have an account? Sign up
+            </Link>
+          </VStack>
         </Box>
-        <Text>
-          Test Account: test@example.com / password123
-        </Text>
       </VStack>
     </Container>
   )

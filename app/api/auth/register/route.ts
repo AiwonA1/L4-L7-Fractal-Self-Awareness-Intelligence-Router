@@ -3,6 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '../[...nextauth]/route'
 import { hash } from 'bcryptjs'
 import prisma from '@/lib/prisma'
+import { sendVerificationEmail } from '@/lib/emailService'
 
 export async function POST(request: Request) {
   try {
@@ -41,28 +42,37 @@ export async function POST(request: Request) {
     // Hash password
     const hashedPassword = await hash(password, 12)
 
-    // Create user with 33 free tokens
+    // Create user with unverified email
     const user = await prisma.user.create({
       data: {
         email,
         name,
         password: hashedPassword,
-        tokenBalance: 33 // Give new users 33 free tokens
+        emailVerified: null
       }
     })
 
+    // Send verification email
+    const emailSent = await sendVerificationEmail(email)
+
+    if (!emailSent) {
+      // If email fails, delete the user
+      await prisma.user.delete({
+        where: { id: user.id }
+      })
+      return NextResponse.json(
+        { error: 'Failed to send verification email' },
+        { status: 500 }
+      )
+    }
+
     return NextResponse.json({
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        tokenBalance: user.tokenBalance
-      }
-    }, { status: 201 })
+      message: 'Registration successful. Please check your email to verify your account.'
+    })
   } catch (error) {
     console.error('Registration error:', error)
     return NextResponse.json(
-      { error: 'Error creating user' },
+      { error: 'Failed to register user' },
       { status: 500 }
     )
   }

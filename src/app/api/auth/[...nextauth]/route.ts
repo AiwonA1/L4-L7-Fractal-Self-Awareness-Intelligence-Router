@@ -12,13 +12,6 @@ declare module 'next-auth' {
   }
 }
 
-// Test user for development
-const TEST_USER = {
-  id: '1',
-  email: 'test@example.com',
-  password: 'password123'
-}
-
 export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
@@ -32,29 +25,20 @@ export const authOptions: AuthOptions = {
           throw new Error('Please enter an email and password')
         }
 
-        // Check for test user
-        if (credentials.email === TEST_USER.email) {
-          // For test user, do a direct comparison
-          if (credentials.password !== TEST_USER.password) {
-            throw new Error('Invalid password')
-          }
-          return {
-            id: TEST_USER.id,
-            email: TEST_USER.email,
-            name: 'Test User',
-          }
-        }
-
-        // For database users
         const user = await prisma.user.findUnique({
           where: { email: credentials.email }
         })
 
-        if (!user || !user.password) {
-          throw new Error('Invalid email or password')
+        if (!user) {
+          throw new Error('No user found with this email')
+        }
+
+        if (!user.password) {
+          throw new Error('Invalid user configuration')
         }
 
         const isValid = await compare(credentials.password, user.password)
+
         if (!isValid) {
           throw new Error('Invalid password')
         }
@@ -69,8 +53,6 @@ export const authOptions: AuthOptions = {
   ],
   session: {
     strategy: 'jwt' as const,
-    maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
   },
   callbacks: {
     async jwt({ token, user }) {
@@ -88,10 +70,7 @@ export const authOptions: AuthOptions = {
   },
   pages: {
     signIn: '/auth/signin',
-    signOut: '/auth/signin',
   },
-  secret: process.env.NEXTAUTH_SECRET,
-  debug: process.env.NODE_ENV === 'development',
 }
 
 const handler = NextAuth(authOptions)

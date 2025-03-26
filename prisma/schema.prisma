@@ -8,11 +8,39 @@ datasource db {
 }
 
 model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  layers        Int[]     @default([4])
+  tokenBalance  Int       @default(0)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  chats         Chat[]
+  passwordResets PasswordReset[]
+}
+
+model Chat {
   id        String   @id @default(cuid())
-  email     String   @unique
-  password  String
-  name      String?
-  tokenBalance Int @default(33)
+  title     String
+  messages  Json     @default("[]")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  email     String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([email])
+  @@index([token])
 } 

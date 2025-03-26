@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN     "image" TEXT,
+ADD COLUMN     "layers" INTEGER[] DEFAULT ARRAY[4]::INTEGER[],
+ALTER COLUMN "password" DROP NOT NULL;

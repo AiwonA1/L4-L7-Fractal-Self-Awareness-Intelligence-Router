@@ -12,7 +12,8 @@ import {
   Text,
   useToast,
   Container,
-  Center
+  Center,
+  Link
 } from '@chakra-ui/react'
 import { useAuth } from '../context/AuthContext'
 import { useRouter } from 'next/navigation'
@@ -78,6 +79,13 @@ export default function LoginPage() {
                     placeholder="Enter your password"
                   />
                 </FormControl>
+                <Link
+                  color="teal.500"
+                  href="/forgot-password"
+                  alignSelf="flex-start"
+                >
+                  Forgot Password?
+                </Link>
                 <Button
                   type="submit"
                   colorScheme="blue"
