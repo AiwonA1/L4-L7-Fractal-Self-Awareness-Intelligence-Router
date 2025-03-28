@@ -35,8 +35,7 @@ export async function POST(req: Request) {
         email,
         password: hashedPassword,
         name,
-        layers: [4], // Start with Layer 4 by default
-        tokenBalance: 100, // Give some initial tokens
+        tokenBalance: 100, // Give initial tokens
       }
     })
 

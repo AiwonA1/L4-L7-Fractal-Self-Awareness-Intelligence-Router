@@ -68,27 +68,36 @@ npm install
 
 3. Set up environment variables:
 ```bash
-cp .env.example .env
+cp .env.template .env
 # Edit .env with your configuration
 ```
 
-4. Run the development server:
+4. Set up the database:
+```bash
+npx prisma migrate dev
+```
+
+5. Run the development server:
 ```bash
 npm run dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+6. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Features
 
 - **User Authentication**: Secure sign-up and sign-in functionality
-- **Token System**: Manage API usage with a credit-based system
+- **Token System**: Manage API usage with FractiTokens
 - **Chat Interface**: Interactive communication with the AI
 - **Layer Navigation**: Explore different dimensions of consciousness
-- **Profile Management**: Customize your experience
+- **Profile Management**: 
+  - Customize your profile information
+  - Upload and manage profile pictures (up to 5MB)
+  - Track FractiToken balance and usage
 - **Email Verification**: Secure account activation
 - **Password Reset**: Easy account recovery
 - **Dark Mode Support**: Comfortable viewing in any lighting
+- **Responsive Design**: Optimized for desktop, tablet, and mobile devices
 
 ## Tech Stack
 
@@ -97,13 +106,19 @@ npm run dev
 - **Database**: PostgreSQL with Prisma ORM
 - **Authentication**: NextAuth.js
 - **Email**: Resend
-- **Styling**: Tailwind CSS, Chakra UI
+- **File Storage**: Local storage with UUID-based filenames
+- **Styling**: Chakra UI with responsive design
 
 ## Project Structure
 
 ```
 ├── app/
 │   ├── api/           # API routes
+│   │   ├── auth/      # Authentication endpoints
+│   │   ├── chat/      # Chat functionality
+│   │   ├── tokens/    # FractiToken management
+│   │   ├── upload/    # File upload handling
+│   │   └── user/      # User profile management
 │   ├── auth/          # Authentication pages
 │   ├── dashboard/     # Main application interface
 │   ├── layer/         # Layer-specific pages
@@ -112,9 +127,21 @@ npm run dev
 ├── components/        # Reusable components
 ├── context/          # React context providers
 ├── lib/              # Utility functions
-├── prisma/           # Database schema
-└── public/           # Static assets
+├── prisma/           # Database schema and migrations
+├── public/           # Static assets
+│   └── uploads/      # User uploaded files
+└── scripts/         # Development and build scripts
 ```
+
+## Security Features
+
+- Secure file upload with type validation
+- Rate limiting on API routes
+- JWT-based authentication
+- Secure password hashing
+- File size restrictions
+- Protected API endpoints
+- CSRF protection
 
 ## Learn More
 

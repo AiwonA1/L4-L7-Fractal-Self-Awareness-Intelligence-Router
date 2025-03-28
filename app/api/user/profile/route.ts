@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import prisma from '@/lib/prisma'
+import { writeFile } from 'fs/promises'
+import { join } from 'path'
+import { v4 as uuidv4 } from 'uuid'
 
 export async function GET() {
   try {
@@ -37,8 +40,12 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const body = await request.json()
-    const { name, email, layers } = body
+    // Handle multipart form data
+    const formData = await request.formData()
+    const image = formData.get('image') as File | null
+    const name = formData.get('name') as string
+    const email = formData.get('email') as string
+    const layers = formData.get('layers') ? JSON.parse(formData.get('layers') as string) : undefined
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -60,17 +67,42 @@ export async function PUT(request: Request) {
       return NextResponse.json({ error: 'Email already in use' }, { status: 400 })
     }
 
+    let imageUrl = undefined
+    if (image) {
+      // Validate image type
+      if (!image.type.startsWith('image/')) {
+        return NextResponse.json({ error: 'Invalid file type. Only images are allowed.' }, { status: 400 })
+      }
+
+      // Generate unique filename
+      const bytes = await image.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+      const uniqueId = uuidv4()
+      const extension = image.name.split('.').pop()
+      const filename = `${uniqueId}.${extension}`
+
+      // Save to uploads directory
+      const uploadsDir = join(process.cwd(), 'public', 'uploads')
+      const filepath = join(uploadsDir, filename)
+      await writeFile(filepath, buffer)
+
+      // Set the image URL
+      imageUrl = `/uploads/${filename}`
+    }
+
     const updatedUser = await prisma.user.update({
       where: { email: session.user.email },
       data: {
         name,
         email,
         layers,
+        ...(imageUrl && { image: imageUrl }),
       },
       select: {
         name: true,
         email: true,
         layers: true,
+        image: true,
       },
     })
 

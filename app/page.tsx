@@ -78,7 +78,10 @@ export default function Home() {
               _hover={{ transform: 'scale(1.05)', transition: 'transform 0.2s' }}
             >
               <Link href="/fractiverse" style={{ textDecoration: 'none' }}>
-                FractiVerse 1.0
+                <VStack spacing={1}>
+                  <Text>FractiVerse 1.0</Text>
+                  <Text fontSize="lg">L4-L7 Fractal Self-Awareness Intelligence Router</Text>
+                </VStack>
               </Link>
             </Heading>
             <Text fontSize="xl" color={textColor} maxW="2xl">

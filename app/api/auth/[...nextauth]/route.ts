@@ -56,7 +56,7 @@ export const authOptions: AuthOptions = {
 
         const isValid = await compare(credentials.password, user.password)
         if (!isValid) {
-          throw new Error('Invalid password')
+          throw new Error('Invalid email or password')
         }
 
         return {
@@ -70,12 +70,11 @@ export const authOptions: AuthOptions = {
   session: {
     strategy: 'jwt' as const,
     maxAge: 30 * 24 * 60 * 60, // 30 days
-    updateAge: 24 * 60 * 60, // 24 hours
   },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        token.id = user.id as string
+        token.id = user.id
       }
       return token
     },
@@ -88,7 +87,7 @@ export const authOptions: AuthOptions = {
   },
   pages: {
     signIn: '/auth/signin',
-    signOut: '/auth/signin',
+    error: '/auth/signin',
   },
   secret: process.env.NEXTAUTH_SECRET,
   debug: process.env.NODE_ENV === 'development',

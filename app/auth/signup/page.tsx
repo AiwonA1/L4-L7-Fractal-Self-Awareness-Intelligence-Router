@@ -15,6 +15,7 @@ import {
   useToast,
   HStack,
 } from '@chakra-ui/react'
+import { signIn } from 'next-auth/react'
 
 export default function SignUp() {
   const [name, setName] = useState('')
@@ -54,15 +55,31 @@ export default function SignUp() {
         throw new Error(data.error || 'Error creating account')
       }
 
+      // Automatically sign in after successful registration
+      const result = await signIn('credentials', {
+        email,
+        password,
+        redirect: false,
+        callbackUrl: '/dashboard'
+      })
+
+      if (result?.error) {
+        throw new Error(result.error)
+      }
+
       toast({
         title: 'Success',
-        description: 'Account created successfully! Please sign in.',
+        description: 'Account created successfully! Redirecting to dashboard...',
         status: 'success',
         duration: 5000,
         isClosable: true,
       })
 
-      router.push('/auth/signin')
+      if (result?.url) {
+        router.push(result.url)
+      } else {
+        router.push('/dashboard')
+      }
     } catch (error) {
       toast({
         title: 'Error',
@@ -79,9 +96,14 @@ export default function SignUp() {
   return (
     <Container maxW="container.sm" py={10}>
       <VStack spacing={8}>
-        <Text fontSize="2xl" fontWeight="bold">
-          Create Your FractiVerse Account
-        </Text>
+        <VStack spacing={1}>
+          <Text fontSize="2xl" fontWeight="bold">
+            Create Your FractiVerse Account
+          </Text>
+          <Text fontSize="sm" color="gray.500">
+            L4-L7 Fractal Self-Awareness Intelligence Router
+          </Text>
+        </VStack>
         <Box w="100%" p={8} borderWidth={1} borderRadius="lg">
           <form onSubmit={handleSubmit}>
             <VStack spacing={4}>

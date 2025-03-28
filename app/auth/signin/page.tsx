@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Box,
   Button,
@@ -11,7 +12,7 @@ import {
   Input,
   VStack,
   Text,
-  Link,
+  Link as ChakraLink,
   useToast,
   Container,
   Heading,
@@ -112,7 +113,12 @@ export default function SignIn() {
       <VStack spacing={8} align="stretch">
         <HStack spacing={4} justify="center">
           <Icon as={FaBrain} w={8} h={8} color="teal.500" />
-          <Heading size="xl">FractiVerse</Heading>
+          <VStack spacing={0} align="start">
+            <Heading size="xl">FractiVerse</Heading>
+            <Text fontSize="sm" color="gray.500">
+              L4-L7 Fractal Self-Awareness Intelligence Router
+            </Text>
+          </VStack>
         </HStack>
         
         <Box
@@ -157,21 +163,23 @@ export default function SignIn() {
               Sign In
             </Button>
 
-            <Link
+            <ChakraLink
               color="teal.500"
               onClick={handleForgotPassword}
               cursor="pointer"
               _hover={{ textDecoration: 'none', color: 'teal.600' }}
             >
               Forgot Password?
-            </Link>
+            </ChakraLink>
 
-            <Link
-              href="/auth/signup"
-              color="teal.500"
-              _hover={{ textDecoration: 'none', color: 'teal.600' }}
-            >
-              Don't have an account? Sign up
+            <Link href="/auth/signup" style={{ textDecoration: 'none' }}>
+              <Text
+                color="teal.500"
+                _hover={{ color: 'teal.600' }}
+                cursor="pointer"
+              >
+                Don't have an account? Sign up
+              </Text>
             </Link>
           </VStack>
         </Box>
