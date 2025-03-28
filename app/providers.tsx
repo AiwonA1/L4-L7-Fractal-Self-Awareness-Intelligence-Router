@@ -1,16 +1,18 @@
 'use client'
 
+import { ReactNode } from 'react'
 import { ChakraProvider } from '@chakra-ui/react'
-import { AuthProvider } from './context/AuthContext'
 import { SessionProvider } from 'next-auth/react'
+import { StripeProvider } from './components/StripeProvider'
+import { theme } from '@/lib/theme'
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children }: { children: ReactNode }) {
   return (
     <SessionProvider>
-      <ChakraProvider>
-        <AuthProvider>
+      <ChakraProvider theme={theme}>
+        <StripeProvider>
           {children}
-        </AuthProvider>
+        </StripeProvider>
       </ChakraProvider>
     </SessionProvider>
   )

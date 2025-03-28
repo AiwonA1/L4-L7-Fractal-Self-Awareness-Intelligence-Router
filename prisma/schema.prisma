@@ -35,18 +35,21 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  password      String?
-  emailVerified DateTime?
-  image         String?
-  tokenBalance  Int       @default(0)
-  transactions  Transaction[]
-  accounts      Account[]
-  sessions      Session[]
-  chats         Chat[]
-  usage         Usage[]
+  id              String    @id @default(cuid())
+  name            String?
+  email           String?   @unique
+  emailVerified   DateTime?
+  image           String?
+  password        String?
+  tokenBalance    Int       @default(0)
+  stripeCustomerId String?
+  transactions    Transaction[]
+  accounts        Account[]
+  sessions        Session[]
+  chats           Chat[]
+  usage           Usage[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model VerificationToken {
@@ -91,9 +94,13 @@ model Transaction {
   id          String   @id @default(cuid())
   userId      String
   type        String   // PURCHASE, USAGE, etc.
-  amount      Int
-  status      String   // COMPLETED, PENDING, FAILED
-  description String?
-  createdAt   DateTime @default(now())
+  amount      Int      // Amount in cents
+  status      String   // COMPLETED, FAILED, etc.
+  description String
+  metadata    Json?    // For storing additional data like paymentIntentId
   user        User     @relation(fields: [userId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
 } 

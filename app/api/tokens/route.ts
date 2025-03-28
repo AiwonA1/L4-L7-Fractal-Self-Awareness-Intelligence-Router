@@ -1,26 +1,32 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '../auth/[...nextauth]/route'
 import prisma from '@/lib/prisma'
 
 export async function GET() {
+  console.log('📥 [API] GET /api/tokens')
   try {
     const session = await getServerSession()
+    console.log('🔑 [API] Session:', session?.user?.id || session?.user?.email)
+
     if (!session?.user?.email) {
+      console.log('❌ [API] Unauthorized - No session or user email')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    console.log('🔍 [API] Finding user by email:', session.user.email)
     const user = await prisma.user.findUnique({
       where: { email: session.user.email }
     })
 
     if (!user) {
+      console.log('❌ [API] User not found')
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
+    console.log('✅ [API] Returning token balance:', user.tokenBalance)
     return NextResponse.json({ balance: user.tokenBalance })
   } catch (error) {
-    console.error('Error fetching token balance:', error)
+    console.error('💥 [API] Error in GET /api/tokens:', error)
     return NextResponse.json(
       { error: 'Failed to fetch token balance' },
       { status: 500 }
@@ -29,9 +35,13 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  console.log('📥 [API] POST /api/tokens')
   try {
     const session = await getServerSession()
+    console.log('🔑 [API] Session:', session?.user?.email)
+
     if (!session?.user?.email) {
+      console.log('❌ [API] Unauthorized - No session or user email')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -44,18 +54,19 @@ export async function POST(request: Request) {
       )
     }
 
-    // Get current user
+    console.log('🔍 [API] Finding user by email:', session.user.email)
     const user = await prisma.user.findUnique({
       where: { email: session.user.email }
     })
 
     if (!user) {
+      console.log('❌ [API] User not found')
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Update user's token balance
+    console.log('💰 [API] Updating token balance')
     const updatedUser = await prisma.user.update({
-      where: { email: session.user.email },
+      where: { id: user.id },
       data: {
         tokenBalance: {
           increment: amount
@@ -63,7 +74,7 @@ export async function POST(request: Request) {
       }
     })
 
-    // Create a transaction record
+    console.log('📝 [API] Creating transaction record')
     await prisma.transaction.create({
       data: {
         userId: user.id,
@@ -74,12 +85,13 @@ export async function POST(request: Request) {
       }
     })
 
+    console.log('✅ [API] Token purchase successful')
     return NextResponse.json({
       success: true,
       balance: updatedUser.tokenBalance
     })
   } catch (error) {
-    console.error('Error processing token purchase:', error)
+    console.error('💥 [API] Error processing token purchase:', error)
     return NextResponse.json(
       { error: 'Failed to process token purchase' },
       { status: 500 }
