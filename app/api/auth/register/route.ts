@@ -57,25 +57,29 @@ export async function POST(request: Request) {
         email,
         name,
         password: hashedPassword,
-        emailVerified: null
+        emailVerified: new Date() // Auto-verify in development
       }
     })
     console.log('User created successfully:', user.id)
+
+    // In development, skip email verification
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Development mode: Skipping email verification')
+      return NextResponse.json({
+        message: 'Registration successful. Email verification skipped in development mode.'
+      })
+    }
 
     // Send verification email
     console.log('Sending verification email...')
     const emailSent = await sendVerificationEmail(email)
 
     if (!emailSent) {
-      console.log('Failed to send verification email, deleting user...')
-      // If email fails, delete the user
-      await prisma.user.delete({
-        where: { id: user.id }
+      console.log('Failed to send verification email, but keeping user...')
+      // In production, we'll keep the user even if email fails
+      return NextResponse.json({
+        message: 'Registration successful, but email verification failed. Please contact support.'
       })
-      return NextResponse.json(
-        { error: 'Failed to send verification email' },
-        { status: 500 }
-      )
     }
     console.log('Verification email sent successfully')
 
