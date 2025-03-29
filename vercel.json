@@ -2,7 +2,7 @@
   "framework": "nextjs",
   "regions": ["iad1"],
   "env": {
-    "NEXTAUTH_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-kklcc7bzh.vercel.app",
-    "NEXT_PUBLIC_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-kklcc7bzh.vercel.app"
+    "NEXTAUTH_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-seven.vercel.app",
+    "NEXT_PUBLIC_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-seven.vercel.app"
   }
 } 
