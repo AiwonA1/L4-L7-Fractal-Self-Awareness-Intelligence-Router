@@ -7,7 +7,8 @@
     "build": "prisma generate && next build",
     "postinstall": "prisma generate",
     "vercel-build": "prisma generate && next build",
-    "start": "next start"
+    "start": "next start",
+    "setup-db": "ts-node scripts/setup-db.ts"
   },
   "dependencies": {
     "@chakra-ui/react": "^2.8.2",
