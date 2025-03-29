@@ -359,6 +359,6 @@ OPENAI_API_KEY=[Your OpenAI API Key]
   - Verify all required environment variables are set in the Vercel dashboard 
 
 ## Current Deployment
-Latest deployment URL: https://l4-l7-fractal-self-awareness-intelligence-router-ixgnkgauc.vercel.app
+Latest deployment URL: https://l4-l7-fractal-self-awareness-intelligence-router-dyar8it9s.vercel.app
 
 Note: The deployment URL changes with each deployment. The latest URL will be updated in this README after each deployment. 
