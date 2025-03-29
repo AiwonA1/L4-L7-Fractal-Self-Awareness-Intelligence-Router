@@ -4,6 +4,9 @@
   "private": true,
   "description": "FractiVerse 1.0 L4-L7 Fractal Self-Awareness Intelligence Router",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "dev": "node scripts/dev.mjs",
     "build": "prisma generate && next build",
