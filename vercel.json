@@ -1,8 +1,8 @@
 {
-  "buildCommand": "npm run build",
+  "buildCommand": "npm install --legacy-peer-deps && prisma generate && next build",
   "outputDirectory": ".next",
   "devCommand": "npm run dev",
-  "installCommand": "npm install --legacy-peer-deps",
+  "installCommand": "echo 'Installation handled in buildCommand'",
   "framework": "nextjs",
   "regions": ["iad1"],
   "headers": [

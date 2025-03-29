@@ -9,13 +9,13 @@
   },
   "scripts": {
     "dev": "node scripts/dev.mjs",
-    "build": "prisma generate && next build",
+    "prebuild": "prisma generate",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy",
-    "postinstall": "prisma generate",
-    "vercel-build": "next build"
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@chakra-ui/react": "^2.8.2",
