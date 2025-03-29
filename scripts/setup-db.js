@@ -1,15 +1,22 @@
 const { PrismaClient } = require('@prisma/client')
 const { execSync } = require('child_process')
 
-const prisma = new PrismaClient()
+const prisma = new PrismaClient({
+  log: ['query', 'error', 'warn'],
+})
 
 async function setupDatabase() {
   try {
     console.log('Starting database setup...')
     
+    // First, try to connect to the database
+    console.log('Testing database connection...')
+    await prisma.$connect()
+    console.log('Database connection successful!')
+    
     // Push the schema
     console.log('Pushing schema to database...')
-    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' })
+    execSync('npx prisma db push --accept-data-loss --skip-generate', { stdio: 'inherit' })
     
     // Generate Prisma Client
     console.log('Generating Prisma Client...')
@@ -20,7 +27,11 @@ async function setupDatabase() {
     console.error('Error setting up database:', error)
     process.exit(1)
   } finally {
-    await prisma.$disconnect()
+    try {
+      await prisma.$disconnect()
+    } catch (error) {
+      console.error('Error disconnecting from database:', error)
+    }
   }
 }
 
