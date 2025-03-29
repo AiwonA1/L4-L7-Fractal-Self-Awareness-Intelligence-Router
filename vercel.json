@@ -1,4 +1,10 @@
 {
-  "version": 2,
-  "framework": "nextjs"
+  "buildCommand": "npm run setup-db && next build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"],
+  "env": {
+    "NEXTAUTH_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-cxvzwsuol.vercel.app",
+    "NEXT_PUBLIC_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-cxvzwsuol.vercel.app"
+  }
 } 
