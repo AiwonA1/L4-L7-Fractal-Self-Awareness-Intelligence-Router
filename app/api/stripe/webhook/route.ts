@@ -2,11 +2,16 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { headers } from 'next/headers'
 import prisma from '@/lib/prisma'
+import { stripe } from '@/app/lib/stripe'
+
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
 // Initialize Stripe with the secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia',
+const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
+  apiVersion: '2023-08-16',
 })
+
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   const body = await req.text()
@@ -16,10 +21,10 @@ export async function POST(req: Request) {
 
   try {
     // Verify webhook signature
-    event = stripe.webhooks.constructEvent(
+    event = stripeInstance.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET || ''
+      webhookSecret || ''
     )
   } catch (error) {
     console.error('Webhook signature verification failed:', error)

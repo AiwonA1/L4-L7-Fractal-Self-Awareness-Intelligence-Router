@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/auth';
 import { stripe, getPriceFromTier, getTokensFromTier, TokenTier } from '@/app/lib/stripe';
 import prisma from '@/app/lib/prisma';
 
@@ -48,7 +48,6 @@ export async function POST(request: Request) {
       amount,
       currency: 'usd',
       customer: customerId,
-      automatic_tax: { enabled: true },
       metadata: {
         userId: user.id,
         tokens: tokens,
@@ -58,8 +57,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       clientSecret: paymentIntent.client_secret,
-      amount: paymentIntent.amount,
-      tax: paymentIntent.automatic_tax
+      amount: paymentIntent.amount
     });
   } catch (error) {
     console.error('Payment intent creation error:', error);

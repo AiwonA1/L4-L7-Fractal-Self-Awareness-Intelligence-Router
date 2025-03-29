@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '../[...nextauth]/route'
+import { authOptions } from '@/lib/auth'
 import { hash } from 'bcryptjs'
 import prisma from '@/lib/prisma'
 import { sendVerificationEmail } from '@/lib/emailService'

@@ -5,8 +5,10 @@ import prisma from '@/lib/prisma'
 
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2025-02-24.acacia',
+  apiVersion: '2023-08-16',
 })
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {

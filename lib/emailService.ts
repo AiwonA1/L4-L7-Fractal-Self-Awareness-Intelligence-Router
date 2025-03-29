@@ -1,10 +1,9 @@
 import nodemailer from 'nodemailer'
 import { sign } from 'jsonwebtoken'
 import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
+import prisma from './prisma'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
-const prisma = new PrismaClient()
 
 // Create a transporter using SMTP
 const transporter = nodemailer.createTransport({
@@ -81,12 +80,21 @@ async function createResetToken(email: string): Promise<string> {
     { expiresIn: '1h' }
   )
 
+  // Find user by email
+  const user = await prisma.user.findUnique({
+    where: { email }
+  })
+
+  if (!user) {
+    throw new Error('User not found')
+  }
+
   // Store token in database with expiration
   await prisma.passwordReset.create({
     data: {
-      email,
+      userId: user.id,
       token,
-      expiresAt: new Date(Date.now() + 3600000) // 1 hour from now
+      expires: new Date(Date.now() + 3600000) // 1 hour from now
     }
   })
 

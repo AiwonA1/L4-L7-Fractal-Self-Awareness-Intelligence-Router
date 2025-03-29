@@ -34,7 +34,7 @@ export async function POST(request: Request) {
       data: {
         userId: user.id,
         token: resetToken,
-        expiresAt: resetTokenExpiry,
+        expires: resetTokenExpiry,
       },
     })
 

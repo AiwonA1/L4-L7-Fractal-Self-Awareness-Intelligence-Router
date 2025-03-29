@@ -1,11 +1,11 @@
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["jsonProtocol"]
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("POSTGRES_PRISMA_URL")
 }
 
 model Account {
@@ -25,6 +25,7 @@ model Account {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerAccountId])
+  @@map("accounts")
 }
 
 model Session {
@@ -33,6 +34,8 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }
 
 model User {
@@ -49,8 +52,22 @@ model User {
   sessions        Session[]
   chats           Chat[]
   usage           Usage[]
+  passwordResets  PasswordReset[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
+
+  @@map("users")
+}
+
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expires   DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_resets")
 }
 
 model VerificationToken {
@@ -59,6 +76,7 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+  @@map("verification_tokens")
 }
 
 model Chat {
@@ -70,6 +88,8 @@ model Chat {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   usage     Usage[]
+
+  @@map("chats")
 }
 
 model Usage {
@@ -89,6 +109,7 @@ model Usage {
   @@index([userId])
   @@index([chatId])
   @@index([createdAt])
+  @@map("usage")
 }
 
 model Transaction {
@@ -104,4 +125,5 @@ model Transaction {
   updatedAt   DateTime @updatedAt
 
   @@index([userId])
+  @@map("transactions")
 } 

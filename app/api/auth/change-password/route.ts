@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
-import { authOptions } from '../[...nextauth]/route'
+import { authOptions } from '@/lib/auth'
 import { hash, compare } from 'bcryptjs'
 import prisma from '@/lib/prisma'
 
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       where: { email: session.user.email }
     })
 
-    if (!user) {
+    if (!user || !user.password) {
       return NextResponse.json(
         { error: 'User not found' },
         { status: 404 }

@@ -6,6 +6,8 @@ import { writeFile } from 'fs/promises'
 import { join } from 'path'
 import { v4 as uuidv4 } from 'uuid'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions)
@@ -18,7 +20,8 @@ export async function GET() {
       select: {
         name: true,
         email: true,
-        layers: true,
+        tokenBalance: true,
+        image: true,
       },
     })
 
@@ -45,7 +48,6 @@ export async function PUT(request: Request) {
     const image = formData.get('image') as File | null
     const name = formData.get('name') as string
     const email = formData.get('email') as string
-    const layers = formData.get('layers') ? JSON.parse(formData.get('layers') as string) : undefined
 
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -95,14 +97,13 @@ export async function PUT(request: Request) {
       data: {
         name,
         email,
-        layers,
         ...(imageUrl && { image: imageUrl }),
       },
       select: {
         name: true,
         email: true,
-        layers: true,
         image: true,
+        tokenBalance: true,
       },
     })
 

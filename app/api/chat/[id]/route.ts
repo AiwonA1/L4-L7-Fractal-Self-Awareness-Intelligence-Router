@@ -355,7 +355,16 @@ export async function GET(
         console.error(`[GET /api/chat/${params.id}] Error parsing messages:`, error)
       }
     } else if (Array.isArray(chat.messages)) {
-      messages = chat.messages as ChatMessage[]
+      // Apply proper type validation to ensure they are ChatMessages
+      const jsonMessages = chat.messages as any[];
+      messages = jsonMessages.filter(msg => 
+        typeof msg === 'object' && 
+        msg !== null &&
+        'role' in msg && 
+        'content' in msg &&
+        typeof msg.role === 'string' &&
+        typeof msg.content === 'string'
+      ) as ChatMessage[];
     }
 
     console.log(`[GET /api/chat/${params.id}] Chat found, messages count:`, messages.length)

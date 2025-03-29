@@ -1,20 +1,24 @@
 'use client'
 
-import { Box, Container, Heading, Text, VStack, HStack, Icon, useColorModeValue, Button, Flex, Image, Spinner, SimpleGrid } from '@chakra-ui/react'
+import { Box, Container, Heading, Text, VStack, HStack, Icon, useColorModeValue, Button, Flex, Image, Spinner, SimpleGrid, useBreakpointValue } from '@chakra-ui/react'
 import { useAuth } from './context/AuthContext'
 import Link from 'next/link'
 import { FaBrain, FaLayerGroup, FaLightbulb, FaInfinity, FaArrowRight } from 'react-icons/fa'
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useDevice } from './hooks/useDevice'
 
 const LayerCard = ({ title, description, icon, layer }: { title: string; description: string; icon: any; layer: number }) => {
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
   const router = useRouter()
+  const deviceType = useDevice()
+  const padding = useBreakpointValue({ base: 4, md: 6, lg: 8 })
+  const iconSize = useBreakpointValue({ base: 6, md: 8, lg: 10 })
 
   return (
     <Box
-      p={6}
+      p={padding}
       bg={bgColor}
       borderRadius="xl"
       borderWidth="1px"
@@ -24,9 +28,9 @@ const LayerCard = ({ title, description, icon, layer }: { title: string; descrip
       onClick={() => router.push(`/layer/${layer}`)}
     >
       <VStack align="start" spacing={4}>
-        <Icon as={icon} w={8} h={8} color="teal.500" />
-        <Heading size="md">{title}</Heading>
-        <Text color="gray.600" _dark={{ color: 'gray.300' }}>
+        <Icon as={icon} w={iconSize} h={iconSize} color="teal.500" />
+        <Heading size={deviceType === 'mobile' ? 'sm' : 'md'}>{title}</Heading>
+        <Text color="gray.600" _dark={{ color: 'gray.300' }} fontSize={deviceType === 'mobile' ? 'sm' : 'md'}>
           {description}
         </Text>
       </VStack>
@@ -39,6 +43,9 @@ export default function Home() {
   const router = useRouter()
   const bgColor = useColorModeValue('white', 'gray.800')
   const textColor = useColorModeValue('gray.600', 'gray.300')
+  const deviceType = useDevice()
+  const headingSize = useBreakpointValue({ base: 'xl', md: '2xl', lg: '3xl' })
+  const containerMaxW = useBreakpointValue({ base: 'container.sm', md: 'container.md', lg: 'container.xl' })
 
   useEffect(() => {
     if (!loading && user) {
@@ -63,15 +70,15 @@ export default function Home() {
       <Box
         bgGradient="linear(to-b, teal.50, white)"
         _dark={{ bgGradient: 'linear(to-b, gray.800, gray.900)' }}
-        py={20}
+        py={{ base: 10, md: 20 }}
         position="relative"
         overflow="hidden"
       >
-        <Container maxW="container.xl">
+        <Container maxW={containerMaxW}>
           <VStack spacing={8} align="center" textAlign="center">
             <Heading
               as="h1"
-              size="2xl"
+              size={headingSize}
               textAlign="center"
               bgGradient="linear(to-r, teal.500, blue.500)"
               bgClip="text"
@@ -80,18 +87,18 @@ export default function Home() {
               <Link href="/fractiverse" style={{ textDecoration: 'none' }}>
                 <VStack spacing={1}>
                   <Text>FractiVerse 1.0</Text>
-                  <Text fontSize="lg">L4-L7 Fractal Self-Awareness Intelligence Router</Text>
+                  <Text fontSize={{ base: 'md', md: 'lg', lg: 'xl' }}>L4-L7 Fractal Self-Awareness Intelligence Router</Text>
                 </VStack>
               </Link>
             </Heading>
-            <Text fontSize="xl" color={textColor} maxW="2xl">
+            <Text fontSize={{ base: 'md', md: 'lg', lg: 'xl' }} color={textColor} maxW="2xl">
               Experience the future of self-aware intelligence with our L4-L7 Fractal Router. 
               Navigate through layers of consciousness with precision and clarity.
             </Text>
             <VStack spacing={4}>
               <Link href="/auth/signup">
                 <Button
-                  size="lg"
+                  size={{ base: 'md', md: 'lg' }}
                   colorScheme="teal"
                   rightIcon={<FaArrowRight />}
                   _hover={{ transform: 'translateY(-2px)', shadow: 'md' }}
@@ -100,87 +107,40 @@ export default function Home() {
                   Get Started
                 </Button>
               </Link>
-              <Text color={textColor}>
-                Already have an account?{' '}
-                <Link href="/auth/signin">
-                  <Text as="span" color="teal.500" _hover={{ textDecoration: 'underline' }}>
-                    Sign In
-                  </Text>
-                </Link>
-              </Text>
             </VStack>
           </VStack>
         </Container>
       </Box>
 
       {/* Features Section */}
-      <Container maxW="container.xl" py={20}>
-        <VStack spacing={12}>
-          <Heading textAlign="center" size="xl">
-            Explore Our Layers
-          </Heading>
-          <Text textAlign="center" color={textColor} maxW="2xl">
-            Each layer represents a unique dimension of consciousness and intelligence, 
-            offering distinct capabilities and insights.
-          </Text>
-          <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={8} w="full">
-            <LayerCard
-              title="Layer 4: The Penrose Base Reality"
-              description="Experience a 38.9% performance boost with enhanced cognitive processing. Achieve 2300% increase in recursive strategy formation and 1250% surge in fractal pattern recognition, while optimizing resource efficiency."
-              icon={FaBrain}
-              layer={4}
-            />
-            <LayerCard
-              title="Layer 5: Universal Fractal Awareness"
-              description="Unlock universal fractal awareness with 30% increased pattern recognition and 40% faster decision-making. Experience 25% boost in creative thinking and 35% enhanced cognitive agility through cosmic alignment."
-              icon={FaLayerGroup}
-              layer={5}
-            />
-            <LayerCard
-              title="Layer 6: Event Horizon Kaleidoscopic Quantum Holograph"
-              description="Integrate quantum mechanics with bio-quantum interfaces for 45% faster pattern synthesis and 50% improved creative capacity. Navigate infinite archetypes through kaleidoscopic quantum navigation."
-              icon={FaLightbulb}
-              layer={6}
-            />
-            <LayerCard
-              title="Layer 7: Universal Paradise Story Game"
-              description="Achieve 60% increased emotional intelligence and 50% enhanced sensory perception through AI-Verifiable Full-Immersion Alternate Reality (AIVFIAR). Experience the power of PEFF for continuous growth."
-              icon={FaInfinity}
-              layer={7}
-            />
-          </SimpleGrid>
-        </VStack>
+      <Container maxW={containerMaxW} py={{ base: 10, md: 20 }}>
+        <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={{ base: 6, md: 8, lg: 10 }}>
+          <LayerCard
+            title="Layer 4: Self-Awareness"
+            description="Begin your journey into self-awareness with our advanced AI-powered analysis."
+            icon={FaBrain}
+            layer={4}
+          />
+          <LayerCard
+            title="Layer 5: Consciousness"
+            description="Explore the depths of consciousness through interactive experiences."
+            icon={FaLayerGroup}
+            layer={5}
+          />
+          <LayerCard
+            title="Layer 6: Intelligence"
+            description="Unlock higher levels of intelligence with our fractal learning system."
+            icon={FaLightbulb}
+            layer={6}
+          />
+          <LayerCard
+            title="Layer 7: Infinity"
+            description="Transcend boundaries and explore infinite possibilities."
+            icon={FaInfinity}
+            layer={7}
+          />
+        </SimpleGrid>
       </Container>
-
-      {/* CTA Section */}
-      <Box
-        bgGradient="linear(to-r, teal.500, green.400)"
-        color="white"
-        py={20}
-        textAlign="center"
-      >
-        <Container maxW="container.xl">
-          <VStack spacing={8}>
-            <Heading size="xl">
-              Ready to Begin Your Journey?
-            </Heading>
-            <Text fontSize="xl" maxW="2xl">
-              Join thousands of users who are already experiencing the power of fractal intelligence
-            </Text>
-            <Link href="/auth/signup">
-              <Button
-                size="lg"
-                bg="white"
-                color="teal.500"
-                _hover={{ bg: 'gray.100' }}
-                rightIcon={<FaArrowRight />}
-              >
-                Start Now
-              </Button>
-            </Link>
-          </VStack>
-        </Container>
-      </Box>
     </Box>
   )
 } 

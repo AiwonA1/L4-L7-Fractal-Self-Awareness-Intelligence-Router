@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { sign } from 'jsonwebtoken'
+import prisma from '@/lib/prisma'
+import { verify } from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
+
+export const dynamic = 'force-dynamic'
 
 export async function POST(request: Request) {
   try {
@@ -16,7 +18,7 @@ export async function POST(request: Request) {
     }
 
     // Verify the token
-    const decoded = sign.verify(token, JWT_SECRET) as { email: string }
+    const decoded = verify(token, JWT_SECRET) as { email: string }
 
     // Update user's email verification status
     await prisma.user.update({
@@ -47,7 +49,7 @@ export async function GET(request: Request) {
     }
 
     // Verify the token
-    const decoded = sign.verify(token, JWT_SECRET) as { email: string }
+    const decoded = verify(token, JWT_SECRET) as { email: string }
 
     // Update user's email verification status
     await prisma.user.update({

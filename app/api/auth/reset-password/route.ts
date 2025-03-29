@@ -14,22 +14,20 @@ export async function POST(request: Request) {
       )
     }
 
-    // Verify token
-    const decoded = verify(token, process.env.JWT_SECRET || 'your-secret-key') as { email: string }
-    const email = decoded.email
-
     // Check if token exists and is not expired
     const resetToken = await prisma.passwordReset.findFirst({
       where: {
-        email,
         token,
-        expiresAt: {
+        expires: {
           gt: new Date()
         }
+      },
+      include: {
+        user: true
       }
     })
 
-    if (!resetToken) {
+    if (!resetToken || !resetToken.user) {
       return NextResponse.json(
         { error: 'Invalid or expired reset token' },
         { status: 400 }
@@ -41,7 +39,7 @@ export async function POST(request: Request) {
 
     // Update user password
     await prisma.user.update({
-      where: { email },
+      where: { id: resetToken.userId },
       data: { password: hashedPassword }
     })
 
