@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "node scripts/setup-db.js && npm run build",
+  "buildCommand": "npm run build",
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["iad1"],
@@ -9,5 +9,14 @@
     "NEXT_PUBLIC_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-seven.vercel.app",
     "DATABASE_URL": "postgres://postgres.snrvxmjcsqxhdpmvghlh:wC8NR69pPtkGJa3H@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x",
     "POSTGRES_PRISMA_URL": "postgres://postgres.snrvxmjcsqxhdpmvghlh:wC8NR69pPtkGJa3H@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x"
+  },
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/next"
+    }
+  ],
+  "hooks": {
+    "post-deploy": "node scripts/setup-db.js"
   }
 } 
