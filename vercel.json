@@ -15,8 +15,5 @@
       "src": "package.json",
       "use": "@vercel/next"
     }
-  ],
-  "hooks": {
-    "post-deploy": "node scripts/setup-db.js"
-  }
+  ]
 } 
