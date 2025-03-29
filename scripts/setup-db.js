@@ -1,57 +1,27 @@
-const { Pool } = require('@vercel/postgres');
-const { hash } = require('bcryptjs');
-require('dotenv').config();
+const { PrismaClient } = require('@prisma/client')
+const { execSync } = require('child_process')
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-});
+const prisma = new PrismaClient()
 
-async function setup() {
-  console.log('🔧 Setting up the database...');
-
+async function setupDatabase() {
   try {
-    // Check if we can connect to the database
-    await pool.query('SELECT NOW()');
-    console.log('✅ Database connection successful!');
-
-    // Check if the test user exists
-    const userResult = await pool.query(
-      "SELECT * FROM \"User\" WHERE email = 'test@example.com'"
-    );
-
-    if (userResult.rows.length === 0) {
-      console.log('📝 Creating test user...');
-      
-      // Create a test user
-      const hashedPassword = await hash('password123', 10);
-      await pool.query(
-        `INSERT INTO "User" (id, name, email, password, "tokenBalance", "createdAt", "updatedAt") 
-         VALUES (gen_random_uuid(), 'Test User', 'test@example.com', $1, 100, NOW(), NOW())`,
-        [hashedPassword]
-      );
-      
-      console.log('✅ Test user created successfully!');
-    } else {
-      console.log('✅ Test user already exists!');
-    }
-
-    // Verify the schema
-    const tables = await pool.query(
-      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"
-    );
+    console.log('Starting database setup...')
     
-    console.log('📊 Database tables:');
-    tables.rows.forEach(table => {
-      console.log(`- ${table.table_name}`);
-    });
-
-    console.log('🎉 Database setup complete!');
+    // Push the schema
+    console.log('Pushing schema to database...')
+    execSync('npx prisma db push --accept-data-loss', { stdio: 'inherit' })
+    
+    // Generate Prisma Client
+    console.log('Generating Prisma Client...')
+    execSync('npx prisma generate', { stdio: 'inherit' })
+    
+    console.log('Database setup completed successfully!')
   } catch (error) {
-    console.error('❌ Database setup failed:', error);
-    process.exit(1);
+    console.error('Error setting up database:', error)
+    process.exit(1)
   } finally {
-    await pool.end();
+    await prisma.$disconnect()
   }
 }
 
-setup(); 
+setupDatabase() 
