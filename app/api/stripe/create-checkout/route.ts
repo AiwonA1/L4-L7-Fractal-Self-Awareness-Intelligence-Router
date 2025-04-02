@@ -1,84 +1,105 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import Stripe from 'stripe'
-import prisma from '@/lib/prisma'
+import { getServerSession } from 'next-auth'
+import { authOptions } from '@/app/api/auth/auth.config'
+import { prisma } from '@/lib/prisma'
 
-// Initialize Stripe with the secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-08-16',
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2023-10-16'
 })
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    // Get the session to check authentication
-    const session = await getServerSession()
+    console.log('Starting checkout process...')
+    const session = await getServerSession(authOptions)
+    
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      console.log('Authentication failed: No session or email')
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      )
     }
 
-    // Find the user by email
+    console.log('User authenticated:', session.user.email)
+
+    // Verify user exists and has token balance
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
+      where: { email: session.user.email },
+      select: { id: true, tokenBalance: true }
     })
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+      console.log('User not found in database:', session.user.email)
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      )
     }
 
-    // Extract request body
-    const { amount, priceInCents, mode } = await request.json()
+    console.log('User found:', { id: user.id, tokenBalance: user.tokenBalance })
 
-    // Validate input
-    if (!amount || !priceInCents) {
-      return NextResponse.json({ error: 'Invalid request parameters' }, { status: 400 })
+    const body = await req.json()
+    const { package: tokenPackage } = body
+
+    console.log('Requested package:', tokenPackage)
+
+    // Define package prices
+    const PACKAGE_PRICES = {
+      100: 20.00,
+      500: 90.00,
+      1000: 160.00
     }
 
-    // For test mode in development
-    if (mode === 'test' && process.env.NODE_ENV !== 'production') {
-      // In test mode, just return success
-      console.log(`[TEST MODE] Creating purchase of ${amount} tokens for $${priceInCents/100}`)
-      return NextResponse.json({ 
-        success: true, 
-        testMode: true,
-        amount 
-      })
+    // Validate package
+    if (!PACKAGE_PRICES[tokenPackage as keyof typeof PACKAGE_PRICES]) {
+      console.log('Invalid package selected:', tokenPackage)
+      return NextResponse.json(
+        { error: 'Invalid package selected' },
+        { status: 400 }
+      )
     }
 
-    // Create a checkout session with Stripe
-    const checkoutSession = await stripe.checkout.sessions.create({
+    const price = PACKAGE_PRICES[tokenPackage as keyof typeof PACKAGE_PRICES]
+    console.log('Package price:', price)
+
+    // Create Stripe checkout session
+    console.log('Creating Stripe checkout session...')
+    const stripeSession = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: 'FractiTokens',
-              description: `${amount} FractiTokens for the FractiVerse Router`,
-              images: [process.env.NEXT_PUBLIC_URL + '/images/fracti-logo.png']
+              name: `${tokenPackage} FractiTokens`,
+              description: `Purchase ${tokenPackage} FractiTokens for the L4-L7 Fractal Router`,
             },
-            unit_amount: priceInCents,
+            unit_amount: Math.round(price * 100), // Convert to cents
           },
           quantity: 1,
         },
       ],
+      mode: 'payment',
+      success_url: `${process.env.NEXTAUTH_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXTAUTH_URL}/dashboard`,
       metadata: {
         userId: user.id,
-        tokenAmount: amount.toString(),
+        tokenAmount: tokenPackage,
+        userEmail: session.user.email
       },
-      mode: 'payment',
-      success_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?success=true&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?canceled=true`,
+      customer_email: session.user.email,
     })
 
-    return NextResponse.json({ 
-      success: true, 
-      url: checkoutSession.url,
-      sessionId: checkoutSession.id,
-    })
+    console.log('Stripe session created:', { sessionId: stripeSession.id })
+    return NextResponse.json({ url: stripeSession.url })
   } catch (error) {
-    console.error('Stripe checkout error:', error)
+    console.error('Stripe checkout error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      error
+    })
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create checkout session' },
+      { error: 'Failed to create checkout session. Please try again.' },
       { status: 500 }
     )
   }

@@ -1,22 +1,17 @@
 'use client'
 
-import { ReactNode } from 'react'
-import { ChakraProvider } from '@chakra-ui/react'
-import { SessionProvider } from 'next-auth/react'
-import { StripeProvider } from './components/StripeProvider'
-import { AuthProvider } from './context/AuthContext'
-import { theme } from '@/lib/theme'
+import { CacheProvider } from '@chakra-ui/next-js'
+import { ChakraProvider, ColorModeProvider } from '@chakra-ui/react'
+import { theme } from './theme'
 
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <SessionProvider>
-      <ChakraProvider theme={theme}>
-        <AuthProvider>
-          <StripeProvider>
-            {children}
-          </StripeProvider>
-        </AuthProvider>
+    <CacheProvider>
+      <ChakraProvider theme={theme} resetCSS>
+        <ColorModeProvider value={theme.config.initialColorMode}>
+          {children}
+        </ColorModeProvider>
       </ChakraProvider>
-    </SessionProvider>
+    </CacheProvider>
   )
 } 

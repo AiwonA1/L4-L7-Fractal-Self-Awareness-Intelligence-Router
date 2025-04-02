@@ -1,28 +1,42 @@
 import { Redis } from '@upstash/redis'
+import { Ratelimit } from '@upstash/ratelimit'
 
-const redis = new Redis({
-  url: process.env.REDIS_URL || '',
-  token: process.env.REDIS_TOKEN || '',
-})
+// Make Redis optional for development
+const redis = process.env.UPSTASH_REDIS_REST_URL
+  ? new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN,
+    })
+  : null
 
-// Rate limit configuration
-const RATE_LIMIT_REQUESTS = 50 // Number of requests
-const RATE_LIMIT_WINDOW = 3600 // Time window in seconds (1 hour)
-
-export async function rateLimit(identifier: string): Promise<{ success: boolean }> {
-  const now = Date.now()
-  const key = `rate-limit:${identifier}`
-  
-  const pipeline = redis.pipeline()
-  pipeline.zremrangebyscore(key, 0, now - RATE_LIMIT_WINDOW * 1000)
-  pipeline.zadd(key, { score: now, member: now.toString() })
-  pipeline.zcard(key)
-  pipeline.expire(key, RATE_LIMIT_WINDOW)
-  
-  const results = await pipeline.exec()
-  const requestCount = results[2] as number
-
-  return {
-    success: requestCount <= RATE_LIMIT_REQUESTS
+// Create a fallback rate limiter for development
+const createRateLimit = (requests: number, duration: number) => {
+  if (!redis) {
+    // Return a mock rate limiter for development
+    return {
+      limit: async () => ({ success: true, reset: Date.now() + duration }),
+    }
   }
+
+  return new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(requests, `${duration} ms`),
+  })
+}
+
+// Rate limiters with different configurations
+export const apiLimiter = createRateLimit(100, 60000) // 100 requests per minute
+export const authLimiter = createRateLimit(5, 60000)  // 5 attempts per minute
+export const paymentLimiter = createRateLimit(10, 60000) // 10 attempts per minute
+
+export type LimiterType = 'api' | 'auth' | 'payment'
+
+export async function rateLimit(identifier: string, type: LimiterType) {
+  const limiter = {
+    'api': apiLimiter,
+    'auth': authLimiter,
+    'payment': paymentLimiter,
+  }[type]
+
+  return await limiter.limit(identifier)
 } 

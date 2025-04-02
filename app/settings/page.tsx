@@ -1,65 +1,140 @@
 'use client'
 
-import { useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { useState, useEffect } from 'react'
 import {
   Box,
-  Container,
   VStack,
-  Input,
-  Button,
-  Text,
+  Heading,
   FormControl,
   FormLabel,
-  Textarea,
+  Input,
+  Button,
   useToast,
+  Container,
+  Card,
+  CardBody,
+  Text,
+  useColorModeValue,
+  FormErrorMessage,
+  Spinner,
+  HStack,
+  Icon,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalCloseButton,
+  useDisclosure,
 } from '@chakra-ui/react'
+import { useSession } from 'next-auth/react'
+import { useRouter } from 'next/navigation'
+import { FaCoins } from 'react-icons/fa'
+import TokenPurchase from '@/app/components/TokenPurchase'
 
-export default function Settings() {
-  const { data: session } = useSession()
-  const [key, setKey] = useState('')
-  const [description, setDescription] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+export default function SettingsPage() {
+  const { data: session, status } = useSession({
+    required: true,
+    onUnauthenticated() {
+      console.log('User not authenticated, redirecting to login')
+      router.push('/login')
+    },
+  })
+  const router = useRouter()
   const toast = useToast()
+  const { isOpen, onOpen, onClose } = useDisclosure()
+  const [isLoading, setIsLoading] = useState(false)
+  const [formData, setFormData] = useState({
+    displayName: '',
+  })
+  const [errors, setErrors] = useState({
+    displayName: '',
+  })
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!session?.user?.email) return
+  const bgColor = useColorModeValue('white', 'gray.800')
+  const borderColor = useColorModeValue('gray.200', 'gray.700')
+  const textColor = useColorModeValue('gray.600', 'gray.300')
 
-    setIsLoading(true)
+  useEffect(() => {
+    console.log('Session status:', status)
+    console.log('Session data:', session)
+    
+    if (session?.user) {
+      console.log('Session user details:', {
+        email: session.user.email,
+        name: session.user.name,
+        tokenBalance: (session.user as any)?.tokenBalance
+      })
+      setFormData({
+        displayName: session.user.name || '',
+      })
+    }
+  }, [session, status])
+
+  const validateForm = () => {
+    const newErrors = {
+      displayName: '',
+    }
+    let isValid = true
+
+    if (!formData.displayName.trim()) {
+      newErrors.displayName = 'Display name is required'
+      isValid = false
+    }
+
+    setErrors(newErrors)
+    return isValid
+  }
+
+  const handleSaveSettings = async () => {
+    if (!validateForm()) return
+
     try {
-      const response = await fetch('/api/settings/key', {
+      setIsLoading(true)
+      console.log('Saving settings with data:', formData)
+      console.log('Current session:', session)
+
+      if (!session?.user?.email) {
+        throw new Error('No authenticated user found')
+      }
+
+      const response = await fetch('/api/user/update', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          email: session.user.email,
-          key,
-          description,
+          displayName: formData.displayName,
+          email: session.user.email
         }),
       })
 
+      const data = await response.json()
+
       if (!response.ok) {
-        throw new Error('Failed to save key')
+        console.error('Settings update error:', data)
+        throw new Error(data.message || 'Failed to update settings')
       }
 
+      console.log('Settings update successful:', data)
+
       toast({
-        title: 'Success',
-        description: 'Key saved successfully',
+        title: 'Settings updated',
+        description: 'Your profile has been updated successfully.',
         status: 'success',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       })
 
-      setKey('')
-      setDescription('')
+      // Refresh the session to update the displayed name
+      router.refresh()
     } catch (error) {
+      console.error('Error saving settings:', error)
       toast({
         title: 'Error',
-        description: 'Failed to save key',
+        description: error instanceof Error ? error.message : 'Failed to update settings',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
       })
     } finally {
@@ -67,52 +142,102 @@ export default function Settings() {
     }
   }
 
-  if (!session) {
+  const handlePurchase = (amount: number) => {
+    console.log('Handling purchase for amount:', amount)
+    console.log('Current session:', session)
+    // Refresh the session to update the token balance
+    router.refresh()
+    onClose()
+  }
+
+  if (status === 'loading') {
+    console.log('Loading session...')
     return (
-      <Container maxW="container.md" py={10}>
-        <Text>Please sign in to access settings</Text>
+      <Container maxW="container.md" py={8}>
+        <Box display="flex" justifyContent="center" alignItems="center" minH="200px">
+          <Spinner size="xl" />
+        </Box>
       </Container>
     )
   }
 
+  if (!session?.user) {
+    console.log('No session found, redirecting to login')
+    router.push('/login')
+    return null
+  }
+
   return (
-    <Container maxW="container.md" py={10}>
-      <VStack spacing={8}>
-        <Text fontSize="2xl" fontWeight="bold">
-          Key Settings
-        </Text>
-        <Box w="100%" p={8} borderWidth={1} borderRadius="lg">
-          <form onSubmit={handleSubmit}>
-            <VStack spacing={4}>
-              <FormControl isRequired>
-                <FormLabel>Your Secret Key</FormLabel>
+    <Container maxW="container.md" py={8}>
+      <VStack spacing={8} align="stretch">
+        <Heading size="lg">Settings</Heading>
+        <Card bg={bgColor} borderWidth="1px" borderColor={borderColor}>
+          <CardBody>
+            <VStack spacing={6} align="stretch">
+              <FormControl isInvalid={!!errors.displayName}>
+                <FormLabel>Display Name</FormLabel>
                 <Input
-                  type="text"
-                  value={key}
-                  onChange={(e) => setKey(e.target.value)}
-                  placeholder="Enter your secret key"
+                  value={formData.displayName}
+                  onChange={(e) => setFormData({ ...formData, displayName: e.target.value })}
+                  placeholder="Enter your display name"
                 />
+                <FormErrorMessage>{errors.displayName}</FormErrorMessage>
               </FormControl>
+
               <FormControl>
-                <FormLabel>Description (Optional)</FormLabel>
-                <Textarea
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="Enter a description for this key"
+                <FormLabel>Email</FormLabel>
+                <Input
+                  value={session.user.email || ''}
+                  isReadOnly
+                  bg={useColorModeValue('gray.100', 'gray.700')}
+                  color={useColorModeValue('gray.800', 'white')}
+                  borderColor={useColorModeValue('gray.300', 'gray.600')}
+                  _hover={{ borderColor: useColorModeValue('gray.400', 'gray.500') }}
                 />
+                <Text fontSize="sm" color={textColor} mt={1}>
+                  Email cannot be changed
+                </Text>
               </FormControl>
-              <Button
-                type="submit"
-                colorScheme="blue"
-                width="100%"
-                isLoading={isLoading}
+
+              <Box 
+                p={4} 
+                bg={useColorModeValue('gray.50', 'gray.700')} 
+                borderRadius="md"
+                cursor="pointer"
+                onClick={onOpen}
+                _hover={{ bg: useColorModeValue('gray.100', 'gray.600') }}
+                transition="background-color 0.2s"
               >
-                Save Key
+                <HStack spacing={2}>
+                  <Icon as={FaCoins} color="yellow.500" />
+                  <Text fontSize="lg" fontWeight="bold">
+                    Current FractiToken Balance: {(session.user as any)?.tokenBalance || 0}
+                  </Text>
+                </HStack>
+                <Text fontSize="sm" color={textColor} mt={1}>
+                  Click to purchase more tokens
+                </Text>
+              </Box>
+
+              <Button
+                colorScheme="blue"
+                onClick={handleSaveSettings}
+                isLoading={isLoading}
+                loadingText="Saving..."
+                mt={4}
+              >
+                Save Changes
               </Button>
             </VStack>
-          </form>
-        </Box>
+          </CardBody>
+        </Card>
       </VStack>
+
+      <TokenPurchase 
+        isOpen={isOpen} 
+        onClose={onClose} 
+        onPurchase={handlePurchase}
+      />
     </Container>
   )
 } 

@@ -9,7 +9,7 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
-    "noEmit": true,
+    "outDir": "./dist",
     "incremental": true,
     "module": "esnext",
     "esModuleInterop": true,
@@ -23,8 +23,11 @@
       }
     ],
     "paths": {
-      "@/*": ["./*"]
-    }
+      "@/*": [
+        "./*"
+      ]
+    },
+    "noEmit": true
   },
   "include": [
     "next-env.d.ts",

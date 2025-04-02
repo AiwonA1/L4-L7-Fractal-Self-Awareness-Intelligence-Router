@@ -1,96 +1,73 @@
 import { NextResponse } from 'next/server'
-import Stripe from 'stripe'
-import { headers } from 'next/headers'
-import prisma from '@/lib/prisma'
 import { stripe } from '@/app/lib/stripe'
+import { prisma } from '@/lib/prisma'
+import { headers } from 'next/headers'
+import Stripe from 'stripe'
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-
-// Initialize Stripe with the secret key
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-08-16',
-})
-
-export const dynamic = 'force-dynamic'
-
+// Stripe webhook handler
 export async function POST(req: Request) {
   const body = await req.text()
   const signature = headers().get('stripe-signature') as string
-
+  
   let event: Stripe.Event
-
+  
   try {
-    // Verify webhook signature
-    event = stripeInstance.webhooks.constructEvent(
+    event = stripe.webhooks.constructEvent(
       body,
       signature,
-      webhookSecret || ''
+      process.env.STRIPE_WEBHOOK_SECRET as string
     )
   } catch (error) {
-    console.error('Webhook signature verification failed:', error)
-    return NextResponse.json({ error: 'Webhook signature verification failed' }, { status: 400 })
+    console.error('Error verifying webhook signature:', error)
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
-
-  // Handle the checkout.session.completed event
-  if (event.type === 'checkout.session.completed') {
-    const session = event.data.object as Stripe.Checkout.Session
-    
-    // Get the userId and tokenAmount from the metadata
-    const userId = session.metadata?.userId
-    const tokenAmount = session.metadata?.tokenAmount
-
-    if (!userId || !tokenAmount) {
-      console.error('Missing metadata in webhook event')
-      return NextResponse.json({ error: 'Missing metadata' }, { status: 400 })
-    }
-
-    try {
-      // Update user's token balance
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-      })
-
-      if (!user) {
-        console.error('User not found:', userId)
-        return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  
+  // Handle the event
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session
+      
+      // Extract user and token information from metadata
+      const userId = session.metadata?.userId
+      const tokenAmount = session.metadata?.tokenAmount
+      
+      if (!userId || !tokenAmount) {
+        throw new Error('Missing metadata in Stripe session')
       }
-
-      // Add tokens to the user's balance
-      await prisma.user.update({
+      
+      // Add tokens to user's balance
+      const tokens = parseInt(tokenAmount, 10)
+      
+      // Update user's token balance
+      const user = await prisma.user.update({
         where: { id: userId },
         data: {
           tokenBalance: {
-            increment: parseInt(tokenAmount),
-          },
-        },
+            increment: tokens
+          }
+        }
       })
-
-      // Create transaction record
+      
+      // Create a transaction record
       await prisma.transaction.create({
         data: {
           userId: userId,
           type: 'PURCHASE',
-          amount: parseInt(tokenAmount),
+          amount: tokens,
+          description: `Purchased ${tokens} FractiTokens`,
           status: 'COMPLETED',
-          description: `Purchased ${tokenAmount} FractiTokens`,
-          metadata: { 
-            sessionId: session.id,
-            paymentMethod: session.payment_method_types?.[0] || 'card'
-          },
-        },
+        }
       })
-
-      console.log(`Successfully processed payment for ${tokenAmount} tokens for user ${userId}`)
-      return NextResponse.json({ received: true })
-    } catch (error) {
-      console.error('Error processing webhook:', error)
-      return NextResponse.json(
-        { error: 'Error processing webhook' },
-        { status: 500 }
-      )
+      
+      console.log(`Added ${tokens} tokens to user ${userId}`)
     }
+    
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    console.error('Error processing webhook:', error)
+    return NextResponse.json(
+      { error: 'Error processing webhook' },
+      { status: 500 }
+    )
   }
-
-  // Handle other event types as needed
-  return NextResponse.json({ received: true })
 } 

@@ -1,333 +1,168 @@
+import React, { useState } from 'react';
 import {
   Modal,
   ModalOverlay,
   ModalContent,
   ModalHeader,
-  ModalCloseButton,
   ModalBody,
-  VStack,
-  Box,
-  Text,
+  ModalCloseButton,
   Button,
+  VStack,
   HStack,
-  useColorModeValue,
-  ModalFooter,
-  Flex,
-  Badge,
-  Alert,
-  AlertIcon,
+  Text,
+  Box,
   useToast,
-  Divider
-} from '@chakra-ui/react'
-import { useState, useEffect } from 'react'
-import { FaCreditCard, FaLock } from 'react-icons/fa'
-import StripeCheckoutForm from './StripeCheckoutForm'
+  Divider,
+  Badge,
+  useColorModeValue,
+} from '@chakra-ui/react';
+import { FaCoins, FaArrowRight } from 'react-icons/fa';
+import { FRACTIVERSE_PRICES, TokenTier, formatPrice } from '@/app/lib/stripe';
 
 interface TokenBalanceModalProps {
-  isOpen: boolean
-  onClose: () => void
-  balance: number
-  onPurchase: (amount: number) => void
+  isOpen: boolean;
+  onClose: () => void;
+  balance: number;
+  onPurchase: (amount: number) => void;
 }
 
 const TokenBalanceModal = ({ isOpen, onClose, balance, onPurchase }: TokenBalanceModalProps) => {
-  const [selectedAmount, setSelectedAmount] = useState<number | null>(null)
-  const [selectedPrice, setSelectedPrice] = useState<number | null>(null)
-  const [showConfirmation, setShowConfirmation] = useState(false)
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [hasPaymentMethod, setHasPaymentMethod] = useState(false)
-  const [showStripeCheckout, setShowStripeCheckout] = useState(false)
-  const [savedPaymentMethod, setSavedPaymentMethod] = useState<{last4: string} | null>(null)
-  const toast = useToast()
-  
-  // Prices in cents for Stripe
-  const tokenPrices = {
-    100: 2000, // $20.00
-    500: 9000, // $90.00
-    1000: 16000, // $160.00
-  }
+  const [selectedTier, setSelectedTier] = useState<TokenTier | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const toast = useToast();
+  const highlightColor = useColorModeValue('teal.50', 'teal.900');
+  const borderColor = useColorModeValue('gray.200', 'gray.700');
 
-  // Check if the user has a saved payment method
-  useEffect(() => {
-    const checkPaymentMethods = async () => {
-      try {
-        const response = await fetch('/api/stripe/payment-methods')
-        if (response.ok) {
-          const data = await response.json()
-          if (data.paymentMethods && data.paymentMethods.length > 0) {
-            setHasPaymentMethod(true)
-            setSavedPaymentMethod({
-              last4: data.paymentMethods[0].card.last4
-            })
-          } else {
-            setHasPaymentMethod(false)
-            setSavedPaymentMethod(null)
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching payment methods:', error)
-      }
-    }
+  const handleClose = () => {
+    setSelectedTier(null);
+    onClose();
+  };
 
-    if (showConfirmation) {
-      checkPaymentMethods()
-    }
-  }, [showConfirmation])
-
-  const handleSelectPlan = (amount: number, price: number) => {
-    setSelectedAmount(amount)
-    setSelectedPrice(price)
-    setShowConfirmation(true)
-  }
-  
-  const handleConfirmPurchase = async () => {
-    if (!hasPaymentMethod) {
-      setShowStripeCheckout(true)
-      return
-    }
-    
-    setIsProcessing(true)
+  const handleInitiateCheckout = async (tier: TokenTier) => {
+    setSelectedTier(tier);
+    setIsProcessing(true);
     
     try {
-      // Process payment with saved payment method
-      const response = await fetch('/api/stripe/charge-saved-method', {
+      // Create a Stripe checkout session
+      const response = await fetch('/api/stripe/create-checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          amount: selectedAmount,
-          priceInCents: tokenPrices[selectedAmount as keyof typeof tokenPrices] || 0,
+          tier: tier,
         }),
-      })
-      
+      });
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to process payment')
+        throw new Error('Failed to create checkout session');
       }
+
+      const data = await response.json();
       
-      const data = await response.json()
-      
-      if (data.success) {
-        onPurchase(selectedAmount!)
-        setIsProcessing(false)
-        setShowConfirmation(false)
-        setSelectedAmount(null)
-        setSelectedPrice(null)
-        
-        toast({
-          title: 'Purchase Successful',
-          description: `Added ${selectedAmount} FractiTokens to your account.`,
-          status: 'success',
-          duration: 5000,
-          isClosable: true,
-        })
+      // Redirect to Stripe checkout
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No checkout URL provided');
       }
     } catch (error) {
-      console.error('Payment error:', error)
-      setIsProcessing(false)
+      console.error('Error creating checkout:', error);
       toast({
-        title: 'Payment Error',
-        description: error instanceof Error ? error.message : 'Failed to process payment',
+        title: 'Error',
+        description: 'Failed to initiate checkout. Please try again.',
         status: 'error',
         duration: 5000,
         isClosable: true,
-      })
+      });
+      setIsProcessing(false);
     }
-  }
-  
-  const handleStripeSuccess = () => {
-    onPurchase(selectedAmount!)
-    setShowStripeCheckout(false)
-    setShowConfirmation(false)
-    setSelectedAmount(null)
-    setSelectedPrice(null)
-  }
-  
-  const handleClose = () => {
-    setShowConfirmation(false)
-    setShowStripeCheckout(false)
-    setSelectedAmount(null)
-    setSelectedPrice(null)
-    onClose()
-  }
+  };
 
-  // If showing Stripe checkout
-  if (showStripeCheckout) {
-    return (
-      <Modal isOpen={isOpen} onClose={handleClose} size="md">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Add Payment Method</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <StripeCheckoutForm
-              amount={selectedAmount!}
-              priceInCents={tokenPrices[selectedAmount as keyof typeof tokenPrices] || 0}
-              onSuccess={handleStripeSuccess}
-              onCancel={() => setShowStripeCheckout(false)}
-            />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-    )
-  }
-
-  // If showing confirmation screen
-  if (showConfirmation) {
-    return (
-      <Modal isOpen={isOpen} onClose={handleClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Confirm Purchase</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <VStack spacing={6} align="stretch">
-              <Box p={4} bg={useColorModeValue('gray.50', 'gray.700')} borderRadius="lg">
-                <Text fontSize="sm" color="gray.500">You're about to purchase</Text>
-                <Text fontSize="2xl" fontWeight="bold" color="teal.500">
-                  {selectedAmount} FractiTokens
-                </Text>
-                <Flex justify="space-between" mt={2}>
-                  <Text fontSize="sm" color="gray.500">Price:</Text>
-                  <Text fontSize="sm" fontWeight="bold">${selectedPrice}</Text>
-                </Flex>
-              </Box>
-              
-              {hasPaymentMethod && savedPaymentMethod ? (
-                <Box p={4} borderWidth="1px" borderRadius="lg">
-                  <HStack justify="space-between">
-                    <HStack>
-                      <FaCreditCard />
-                      <Text>•••• •••• •••• {savedPaymentMethod.last4}</Text>
-                    </HStack>
-                    <Badge colorScheme="green">Default</Badge>
-                  </HStack>
-                  <Button 
-                    size="sm" 
-                    variant="link" 
-                    mt={2}
-                    onClick={() => setShowStripeCheckout(true)}
-                  >
-                    Use different payment method
-                  </Button>
-                </Box>
-              ) : (
-                <Alert status="info" borderRadius="md">
-                  <AlertIcon />
-                  <Text fontSize="sm">
-                    You'll need to add a payment method to complete this purchase.
-                  </Text>
-                </Alert>
-              )}
-
-              {/* Environment indicator for development/testing */}
-              {process.env.NODE_ENV !== 'production' && (
-                <Alert status="info" variant="subtle">
-                  <AlertIcon />
-                  <Text fontSize="sm">
-                    <strong>Test Mode</strong>: No actual charges will be made.
-                  </Text>
-                </Alert>
-              )}
-            </VStack>
-          </ModalBody>
-          
-          <ModalFooter>
-            <Button variant="ghost" mr={3} onClick={handleClose}>
-              Cancel
-            </Button>
-            
-            {hasPaymentMethod ? (
-              <Button 
-                colorScheme="teal" 
-                onClick={handleConfirmPurchase}
-                isLoading={isProcessing}
-                loadingText="Processing"
-                leftIcon={<FaLock />}
-              >
-                Confirm Purchase
-              </Button>
-            ) : (
-              <Button 
-                colorScheme="teal" 
-                onClick={() => setShowStripeCheckout(true)}
-                leftIcon={<FaCreditCard />}
-              >
-                Add Payment Method
-              </Button>
-            )}
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-    )
-  }
-
-  // Main token balance and packages screen
   return (
-    <Modal isOpen={isOpen} onClose={onClose}>
+    <Modal isOpen={isOpen} onClose={handleClose} size="md">
       <ModalOverlay />
       <ModalContent>
-        <ModalHeader>FractiToken Balance</ModalHeader>
+        <ModalHeader>FractiTokens</ModalHeader>
         <ModalCloseButton />
         <ModalBody pb={6}>
           <VStack spacing={6} align="stretch">
-            <Box p={4} bg={useColorModeValue('gray.50', 'gray.700')} borderRadius="lg">
-              <Text fontSize="sm" color="gray.500">Current Balance</Text>
-              <Text fontSize="3xl" fontWeight="bold" color="teal.500">
-                {balance} FractiTokens
-              </Text>
-              <Text fontSize="xs" color="gray.500" mt={2}>
-                1 FractiToken = 1 Router Access
+            <Box 
+              p={4} 
+              borderWidth="1px" 
+              borderRadius="md" 
+              borderColor={borderColor}
+              bg={useColorModeValue('gray.50', 'gray.800')}
+            >
+              <HStack>
+                <Box as={FaCoins} color="yellow.500" boxSize={5} />
+                <Text fontWeight="bold" fontSize="lg">Current Balance</Text>
+              </HStack>
+              <Text fontSize="3xl" fontWeight="bold" mt={2}>
+                {balance} <Text as="span" fontSize="md">FractiTokens</Text>
               </Text>
             </Box>
 
             <Divider />
+            
+            <Text fontWeight="bold" fontSize="lg">Purchase Plans</Text>
+            <Text fontSize="sm" color="gray.500" mt={-2} mb={2}>
+              Select a plan to enhance your FractiVerse experience
+            </Text>
 
-            <Box>
-              <Text fontSize="sm" color="gray.500" mb={4}>FractiToken Packages</Text>
-              <VStack spacing={3} align="stretch">
-                <Button
-                  variant="outline"
-                  colorScheme="teal"
-                  onClick={() => handleSelectPlan(100, 20)}
+            <VStack spacing={4} align="stretch">
+              {(Object.keys(FRACTIVERSE_PRICES) as TokenTier[]).map((tier) => (
+                <Box
+                  key={tier}
+                  p={4}
+                  borderWidth="1px"
+                  borderRadius="md"
+                  borderColor={selectedTier === tier ? 'teal.500' : borderColor}
+                  bg={selectedTier === tier ? highlightColor : 'transparent'}
+                  _hover={{ 
+                    borderColor: 'teal.500', 
+                    bg: highlightColor,
+                    cursor: 'pointer' 
+                  }}
+                  onClick={() => setSelectedTier(tier)}
                 >
-                  <HStack justify="space-between" w="full">
-                    <Text>100 FractiTokens</Text>
-                    <Text fontWeight="bold">$20</Text>
+                  <HStack justify="space-between" mb={2}>
+                    <HStack>
+                      <Box as={FaCoins} color="yellow.500" />
+                      <Text fontWeight="bold">
+                        {FRACTIVERSE_PRICES[tier].tokens} FractiTokens
+                      </Text>
+                    </HStack>
+                    <Badge colorScheme="teal" variant="solid" px={2}>
+                      {formatPrice(FRACTIVERSE_PRICES[tier].price)}
+                    </Badge>
                   </HStack>
-                </Button>
-                <Button
-                  variant="outline"
-                  colorScheme="teal"
-                  onClick={() => handleSelectPlan(500, 90)}
-                >
-                  <HStack justify="space-between" w="full">
-                    <Text>500 FractiTokens</Text>
-                    <Text fontWeight="bold">$90</Text>
-                  </HStack>
-                </Button>
-                <Button
-                  variant="outline"
-                  colorScheme="teal"
-                  onClick={() => handleSelectPlan(1000, 160)}
-                >
-                  <HStack justify="space-between" w="full">
-                    <Text>1000 FractiTokens</Text>
-                    <Text fontWeight="bold">$160</Text>
-                  </HStack>
-                </Button>
-              </VStack>
-            </Box>
-
-            <Text fontSize="sm" color="gray.500" textAlign="center">
-              Each FractiToken grants one access to the Router.
+                  <Text fontSize="sm" color="gray.500">
+                    {FRACTIVERSE_PRICES[tier].description}
+                  </Text>
+                </Box>
+              ))}
+            </VStack>
+            
+            <Button
+              colorScheme="teal"
+              size="lg"
+              isDisabled={!selectedTier}
+              onClick={() => selectedTier && handleInitiateCheckout(selectedTier)}
+              isLoading={isProcessing}
+              rightIcon={<FaArrowRight />}
+            >
+              Proceed to Checkout
+            </Button>
+            
+            <Text fontSize="xs" color="gray.500" textAlign="center">
+              Secure payment processing by Stripe. Your tokens will be added immediately after payment.
             </Text>
           </VStack>
         </ModalBody>
       </ModalContent>
     </Modal>
-  )
-}
+  );
+};
 
-export default TokenBalanceModal 
+export default TokenBalanceModal; 

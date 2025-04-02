@@ -13,13 +13,13 @@ async function seed() {
     const paradisePru = await prisma.user.upsert({
       where: { email: 'paradisepru@icloud.com' },
       update: {
-        tokenBalance: 100
+        tokenBalance: 33
       },
       create: {
         email: 'paradisepru@icloud.com',
         name: 'Paradise Pru',
         password: hashedPasswordPru1,
-        tokenBalance: 100,
+        tokenBalance: 33,
         emailVerified: new Date()
       }
     });
@@ -29,13 +29,13 @@ async function seed() {
     const pru = await prisma.user.upsert({
       where: { email: 'espressolico@gmail.com' },
       update: {
-        tokenBalance: 90
+        tokenBalance: 33
       },
       create: {
         email: 'espressolico@gmail.com',
         name: 'Pru',
         password: hashedPasswordPru2,
-        tokenBalance: 90,
+        tokenBalance: 33,
         emailVerified: new Date()
       }
     });

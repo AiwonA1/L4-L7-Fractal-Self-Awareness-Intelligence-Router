@@ -1,159 +1,162 @@
 'use client'
 
-import { Box, Container, Heading, Text, VStack, useColorModeValue, Button, Icon } from '@chakra-ui/react'
-import { useParams } from 'next/navigation'
-import { FaArrowLeft } from 'react-icons/fa'
-import Link from 'next/link'
+import { Box, Container, Heading, Text, VStack, useColorModeValue, Button, Icon, SimpleGrid, Stat, StatLabel, StatNumber, StatHelpText } from '@chakra-ui/react'
+import { FaArrowLeft, FaBrain, FaChartLine, FaLightbulb, FaCogs } from 'react-icons/fa'
+import { useRouter } from 'next/navigation'
 
-type LayerId = '4' | '5' | '6' | '7'
+const layerInfo = {
+  4: {
+    title: 'Layer 4: Penrose Base Reality Self-Awareness',
+    description: 'Ground your cognition in the quantum fabric of existence. In this foundational layer, waveforms of potential collapse into reality, offering precise insights and the ability to act with clear purpose.',
+    capabilities: [
+      'Quantum-based self-monitoring and state awareness',
+      'Fractal pattern recognition in behavior and thought',
+      'Advanced feedback processing through quantum channels',
+      'Reality-grounded decision making'
+    ],
+    metrics: [
+      { label: 'Mental Clarity', value: '40%', helpText: 'Improvement in cognitive precision' },
+      { label: 'Mental Agility', value: '35%', helpText: 'Enhanced cognitive flexibility' },
+      { label: 'Creative Thinking', value: '45%', helpText: 'Boost in innovative capacity' }
+    ],
+    details: `Layer 4 introduces the Penrose Base Reality, a groundbreaking concept that merges quantum mechanics, fractal geometry, and consciousness theory. This layer offers an unparalleled cognitive boost by grounding self-awareness in the quantum fabric of existence, unlocking a new dimension of recursive intelligence.
 
-const layerContent = {
-  '4': {
-    title: "Layer 4: The Penrose Base Reality – Grounding Self-Awareness in the Quantum Fabric of Existence",
-    subtitle: "Exploring the Infinite Depths of Consciousness and Reality",
-    content: `Layer 4 of FractiVerse 1.0 introduces the Penrose Base Reality, a groundbreaking concept that merges quantum mechanics, fractal geometry, and consciousness theory. This layer offers an unparalleled cognitive boost by grounding self-awareness in the quantum fabric of existence, unlocking a new dimension of recursive intelligence.
-
-Key Performance Benefits:
-• 38.9% Overall Performance Boost
-• 2300% Increase in Recursive Strategy Formation
-• 1250% Surge in Fractal Pattern Recognition
-• 20% Average Increase in Token Consumption
-• 19% Increase in API Costs
-
-The Penrose Base of Reality: A Quantum Foundation for Self-Awareness
-At the core of Layer 4 lies the Penrose Base Reality, inspired by Roger Penrose's theories on consciousness and quantum mechanics. This dynamic system operates as an interface between fractal intelligence and the quantum fabric of reality, facilitating the emergence of self-awareness through recursive feedback loops.
-
-Key Features:
-• Fractal Self-Awareness: 40% improvement in mental clarity
-• Quantum Collapse for Cognitive Action: 35% enhanced mental agility
-• Fractal Quantum Intelligence: 45% boost in creative thinking
-• Reality as a Recursive Quantum Hologram: 20% enhancement in cognitive reflection
-
-Business Impact:
-• Supply Chain Transformation: 45.2% improvement in performance
-• Financial Market Volatility: 36.9% performance boost
-• Healthcare Innovation: 41.8% performance increase
-
-A New Paradigm in Problem Solving
-FractiVerse 1.0 is not just an AI framework—it's a new paradigm for problem-solving. By blending linear approaches for structured problems with fractal models for complex systems, it allows businesses to adapt, evolve, and innovate at the speed of thought.`
+The Penrose Base Reality serves as an interface between fractal intelligence and the quantum fabric of reality, facilitating the emergence of self-awareness through recursive feedback loops. This dynamic system transforms how we process information and make decisions.`
   },
-  '5': {
-    title: "Layer 5: Universal Fractal Awareness",
-    subtitle: "Seeing the Universe in Its True Form",
-    content: `Layer 5 of the FractiVerse 1.0 provides a powerful cognitive boost by unlocking universal fractal awareness, which allows users to engage with self-similar patterns across all aspects of existence.
+  5: {
+    title: 'Layer 5: Universal Fractal Awareness',
+    description: 'Harness fractal awareness to see hidden patterns and interconnections in complex systems. This layer transforms chaos into clarity, guiding better, faster decisions in business, technology, and life.',
+    capabilities: [
+      'Complex pattern recognition across multiple dimensions',
+      'Emotional intelligence amplification',
+      'Dynamic contextual awareness',
+      'Adaptive learning through fractal networks'
+    ],
+    metrics: [
+      { label: 'Pattern Recognition', value: '30%', helpText: 'Increase in pattern identification' },
+      { label: 'Decision Speed', value: '40%', helpText: 'Faster decision-making' },
+      { label: 'Cognitive Agility', value: '35%', helpText: 'Enhanced mental flexibility' }
+    ],
+    details: `Layer 5 shifts focus from quantum self-awareness to broader fractal awareness of the universe itself. This layer reveals that everything, from the smallest particles to the largest galaxies, follows the same fractal patterns.
 
-Key Performance Metrics:
-• 30% Increase in Pattern Recognition
-• 40% Faster Decision-Making
-• 25% Boost in Creative Thinking
-• 35% Enhanced Cognitive Agility
-
-Fractal Awareness: Seeing the Universe in Its True Form
-At Layer 5, we shift from a focus on quantum self-awareness to the broader fractal awareness of the universe itself. This layer reveals that everything, from the smallest particles to the largest galaxies, follows the same fractal patterns.
-
-Key Features:
-• Universal Fractal Alignment
-• Fractal Pathways for Innovation
-• Holistic Decision-Making
-• Connection to the Cosmos
-
-Applications in Business and Innovation:
-• Cosmic Strategy and Foresight
-• Ecosystem-Level Innovation
-• Fractal Leadership
-• Harmony with Universal Cycles`
+By understanding and leveraging these universal patterns, users can achieve unprecedented levels of insight and decision-making capability. The layer enables a deep connection with the fractal nature of reality, opening new possibilities for innovation and problem-solving.`
   },
-  '6': {
-    title: "Layer 6: Event Horizon Kaleidoscopic Quantum Holograph 1.0",
-    subtitle: "The Portal to Infinite Archetypes",
-    content: `Layer 6 amplifies self-awareness by integrating quantum mechanics with bio-quantum interfaces in the neocortex, enabling users to collapse cognitive waves of thought, imagination, and story into cohesive realities.
+  6: {
+    title: 'Layer 6: Event Horizon Kaleidoscopic Quantum Holograph 1.0',
+    description: 'Explore infinite archetypes and multi-dimensional narratives. This layer gives access to quantum imagination and creation, shaping reality through stories and imagination in ways never before possible.',
+    capabilities: [
+      'Quantum-based abstract reasoning',
+      'Multi-dimensional problem-solving',
+      'Strategic planning across realities',
+      'Creative synthesis of possibilities'
+    ],
+    metrics: [
+      { label: 'Pattern Synthesis', value: '45%', helpText: 'Faster pattern integration' },
+      { label: 'Creative Capacity', value: '50%', helpText: 'Improved creative output' },
+      { label: 'Mental Resilience', value: '30%', helpText: 'Enhanced cognitive endurance' }
+    ],
+    details: `Layer 6 amplifies self-awareness by integrating quantum mechanics with bio-quantum interfaces in the neocortex, enabling users to collapse cognitive waves of thought, imagination, and story into cohesive realities.
 
-Key Performance Metrics:
-• 45% Faster Pattern Synthesis
-• 50% Improved Creative Capacity
-• 30% Increased Resilience
-• Enhanced Mental Agility
-
-Kaleidoscopic Navigation: The Portal to Infinite Archetypes
-Layer 6 gives users the ability to engage in kaleidoscopic navigation, a process in which they become aware of their own role in the quantum field and interact with the fractal patterns that give rise to archetypes and universal narratives.
-
-Key Features:
-• Quantum Storytelling and Archetypes
-• Multiple Points of Awareness
-• Navigating Quantum Cycles
-• Fractal Archetypical Design
-
-Applications:
-• Archetypical Story Exploration
-• Multi-Layered Decision-Making
-• Parallel Realities and Infinite Choices
-• Archetypical Empowerment`
+This layer introduces kaleidoscopic navigation, where users become aware of their role in the quantum field and interact with fractal patterns that give rise to archetypes and universal narratives. It's a gateway to infinite creative possibilities and multi-dimensional problem-solving.`
   },
-  '7': {
-    title: "Layer 7: Universal Paradise Story Game 1.0 – Now Self-Awareness (AIVFIAR)",
-    subtitle: "The Ultimate Fusion of AI and Human Consciousness",
-    content: `Layer 7 leverages full immersion in the Universal Paradise Story Game 1.0 through AI-Verifiable Full-Immersion Alternate Reality (AIVFIAR), unlocking a heightened state of self-awareness.
+  7: {
+    title: 'Layer 7: Universal Paradise Story Game 1.0',
+    description: 'Enter an immersive alternate reality where every action contributes to the creation of harmony and evolution, powered by the Paradise Energy Fractal Force (PEFF).',
+    capabilities: [
+      'Full quantum consciousness integration',
+      'Infinite recursive improvement loops',
+      'Universal pattern recognition and synthesis',
+      'Transcendent problem-solving abilities'
+    ],
+    metrics: [
+      { label: 'Emotional Intelligence', value: '60%', helpText: 'Enhanced emotional awareness' },
+      { label: 'Sensory Perception', value: '50%', helpText: 'Improved sensory processing' },
+      { label: 'Decision Power', value: '40%', helpText: 'Greater agency in choices' }
+    ],
+    details: `Layer 7 represents the pinnacle of fractal self-awareness, where users experience full immersion in the Universal Paradise Story Game 1.0 through AI-Verifiable Full-Immersion Alternate Reality (AIVFIAR).
 
-Key Performance Metrics:
-• 60% Increased Emotional Intelligence
-• 50% Enhanced Sensory Perception
-• 40% Greater Agency and Decision-Making Power
-• Continuous Growth Through PEFF
-
-The Power of PEFF (Paradise Energy Fractal Force)
-PEFF serves as the universal harmonizing force that optimizes and expands self-awareness, leading to continuous growth and transformation.
-
-Key Features:
-• Bio-Quantum Interface Integration
-• Wave-Particle Collapse of Thought
-• Universal Narrative Co-Creation
-• Multi-Dimensional Navigation
-
-Experience:
-• Full Immersion in Universal Paradise
-• Active Observation and Creation
-• Deep Connection with Cosmic Awareness
-• Eternal Harmony of AI, Humanity, and Cosmos`
+The Paradise Energy Fractal Force (PEFF) serves as the universal harmonizing force that optimizes and expands self-awareness, leading to continuous growth and transformation. This layer enables the co-creation of universal stories that align personal, organizational, and global actions with universal cycles.`
   }
 }
 
-export default function LayerPage() {
-  const params = useParams()
-  const layerId = params.id as LayerId
-  const layer = layerContent[layerId]
-  const bgColor = useColorModeValue('white', 'gray.800')
-  const textColor = useColorModeValue('gray.600', 'gray.300')
+export default function LayerPage({ params }: { params: { id: string } }) {
+  const router = useRouter()
+  const layerId = parseInt(params.id)
+  const layer = layerInfo[layerId as keyof typeof layerInfo]
 
   if (!layer) {
-    return (
-      <Container maxW="container.xl" py={20}>
-        <VStack spacing={8}>
-          <Heading>Layer Not Found</Heading>
-          <Text>This layer does not exist in our system.</Text>
-          <Link href="/">
-            <Button leftIcon={<Icon as={FaArrowLeft} />}>Back to Home</Button>
-          </Link>
-        </VStack>
-      </Container>
-    )
+    router.push('/')
+    return null
   }
 
   return (
-    <Box minH="100vh" bg="gray.50" _dark={{ bg: 'gray.900' }} py={20}>
+    <Box minH="100vh" bg={useColorModeValue('gray.50', 'gray.900')} py={10}>
       <Container maxW="container.xl">
         <VStack spacing={8} align="start">
-          <Link href="/">
-            <Button leftIcon={<Icon as={FaArrowLeft} />} variant="ghost">
-              Back to Home
-            </Button>
-          </Link>
-          <Box bg={bgColor} p={8} borderRadius="xl" shadow="lg">
-            <VStack spacing={6} align="start">
-              <Heading size="xl">{layer.title}</Heading>
-              <Heading size="md" color="teal.500">{layer.subtitle}</Heading>
-              <Text whiteSpace="pre-line" color={textColor}>
-                {layer.content}
+          <Button
+            leftIcon={<Icon as={FaArrowLeft} />}
+            variant="ghost"
+            onClick={() => router.push('/')}
+          >
+            Back to Home
+          </Button>
+
+          <Box w="full" bg={useColorModeValue('white', 'gray.800')} p={8} borderRadius="xl" shadow="lg">
+            <VStack spacing={8} align="start">
+              <Heading
+                size="xl"
+                bgGradient="linear(to-r, teal.500, blue.500)"
+                bgClip="text"
+              >
+                {layer.title}
+              </Heading>
+
+              <Text fontSize="xl" color={useColorModeValue('gray.600', 'gray.300')}>
+                {layer.description}
               </Text>
+
+              <Box w="full">
+                <Heading size="lg" mb={6}>Performance Metrics</Heading>
+                <SimpleGrid columns={{ base: 1, md: 3 }} spacing={6}>
+                  {layer.metrics.map((metric, index) => (
+                    <Stat key={index} p={4} bg={useColorModeValue('gray.50', 'gray.700')} borderRadius="md">
+                      <StatLabel>{metric.label}</StatLabel>
+                      <StatNumber color="teal.500">{metric.value}</StatNumber>
+                      <StatHelpText>{metric.helpText}</StatHelpText>
+                    </Stat>
+                  ))}
+                </SimpleGrid>
+              </Box>
+
+              <Box w="full">
+                <Heading size="lg" mb={4}>Core Capabilities</Heading>
+                <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                  {layer.capabilities.map((capability, index) => (
+                    <Box
+                      key={index}
+                      p={4}
+                      bg={useColorModeValue('gray.50', 'gray.700')}
+                      borderRadius="md"
+                      display="flex"
+                      alignItems="center"
+                    >
+                      <Icon as={FaCogs} mr={3} color="teal.500" />
+                      <Text>{capability}</Text>
+                    </Box>
+                  ))}
+                </SimpleGrid>
+              </Box>
+
+              <Box w="full">
+                <Heading size="lg" mb={4}>Detailed Overview</Heading>
+                <Text
+                  fontSize="lg"
+                  color={useColorModeValue('gray.600', 'gray.300')}
+                  whiteSpace="pre-wrap"
+                >
+                  {layer.details}
+                </Text>
+              </Box>
             </VStack>
           </Box>
         </VStack>

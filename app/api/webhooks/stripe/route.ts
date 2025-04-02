@@ -3,62 +3,59 @@ import { stripe } from '@/app/lib/stripe';
 import prisma from '@/lib/prisma';
 import { headers } from 'next/headers';
 import { TokenTier } from '@/app/lib/stripe';
+import Stripe from 'stripe';
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
+const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2023-10-16'
+});
+
 export const dynamic = 'force-dynamic'
 
-export async function POST(request: Request) {
+async function addTokensToUser(userId: string, tokenAmount: number) {
+  return prisma.$transaction(async (tx) => {
+    // Update user's token balance
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: {
+        tokenBalance: {
+          increment: tokenAmount
+        }
+      }
+    });
+
+    // Create transaction record
+    await tx.transaction.create({
+      data: {
+        userId,
+        type: 'PURCHASE',
+        amount: tokenAmount,
+        description: `Purchased ${tokenAmount} tokens`,
+        status: 'COMPLETED'
+      }
+    });
+
+    return user;
+  });
+}
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  const signature = headers().get('stripe-signature')!;
+
   try {
-    const body = await request.text();
-    const signature = headers().get('stripe-signature');
-
-    if (!webhookSecret) {
-      throw new Error('Missing Stripe webhook secret');
-    }
-
-    if (!signature) {
-      return NextResponse.json(
-        { error: 'Missing stripe-signature header' },
-        { status: 400 }
-      );
-    }
-
-    const event = stripe.webhooks.constructEvent(
+    const event = stripeInstance.webhooks.constructEvent(
       body,
       signature,
-      webhookSecret
+      process.env.STRIPE_WEBHOOK_SECRET!
     );
 
-    if (event.type === 'payment_intent.succeeded') {
-      const paymentIntent = event.data.object;
-      const userId = paymentIntent.metadata.userId;
-      const tokens = parseInt(paymentIntent.metadata.tokens);
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object as Stripe.Checkout.Session;
+      const { userId, tokenAmount } = session.metadata!;
 
-      // Update user's token balance
-      await prisma.user.update({
-        where: { id: userId },
-        data: {
-          tokenBalance: {
-            increment: tokens
-          }
-        }
-      });
-
-      // Record the transaction
-      await prisma.transaction.create({
-        data: {
-          userId,
-          type: 'PURCHASE',
-          amount: paymentIntent.amount,
-          status: 'COMPLETED',
-          description: `Purchased ${tokens} FractiTokens`,
-          metadata: {
-            paymentIntentId: paymentIntent.id,
-            tokens: tokens
-          }
-        }
-      });
+      await addTokensToUser(userId, parseInt(tokenAmount));
     } else if (event.type === 'payment_intent.payment_failed') {
       const paymentIntent = event.data.object;
       const userId = paymentIntent.metadata.userId;
@@ -69,24 +66,19 @@ export async function POST(request: Request) {
         data: {
           userId,
           type: 'PURCHASE',
-          amount: paymentIntent.amount,
+          amount: tokens,
           status: 'FAILED',
-          description: `Failed purchase of ${tokens} FractiTokens`,
-          metadata: {
-            paymentIntentId: paymentIntent.id,
-            tokens: tokens,
-            error: paymentIntent.last_payment_error?.message
-          }
+          description: `Failed purchase of ${tokens} FractiTokens - ${paymentIntent.last_payment_error?.message || 'Unknown error'}`
         }
       });
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error('Stripe webhook error:', error);
     return NextResponse.json(
       { error: 'Webhook handler failed' },
-      { status: 500 }
+      { status: 400 }
     );
   }
 } 
