@@ -16,14 +16,31 @@ import {
   Link as ChakraLink,
   VStack,
   Container,
+  Spinner,
 } from '@chakra-ui/react'
-import { FaUser, FaHome, FaCog } from 'react-icons/fa'
+import { FaUser, FaHome, FaCog, FaSignOutAlt } from 'react-icons/fa'
 import Link from 'next/link'
+import { useAuth } from '@/app/context/AuthContext'
+import SignInButton from './SignInButton'
 
 export function Header() {
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
   const textColor = useColorModeValue('gray.600', 'gray.200')
+  const { user, signOut, loading } = useAuth()
+
+  const getUserDisplayName = () => {
+    if (!user) return 'Guest'
+    return user.user_metadata?.name || user.email?.split('@')[0] || 'Guest'
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
 
   return (
     <Box
@@ -52,35 +69,50 @@ export function Header() {
           </Heading>
 
           <HStack spacing={4}>
-            <ChakraLink as={Link} href="/dashboard">
-              <IconButton
-                aria-label="Home"
-                icon={<FaHome />}
-                variant="ghost"
-                colorScheme="teal"
-              />
-            </ChakraLink>
-            <Menu>
-              <MenuButton
-                as={IconButton}
-                icon={<Avatar size="sm" icon={<FaUser />} />}
-                variant="ghost"
-                aria-label="Profile menu"
-              />
-              <MenuList>
-                <MenuItem>
-                  <HStack>
-                    <Avatar size="sm" icon={<FaUser />} />
-                    <VStack align="start" spacing={0}>
-                      <Text fontWeight="medium">John Doe</Text>
-                    </VStack>
-                  </HStack>
-                </MenuItem>
-                <MenuItem icon={<FaCog />}>
-                  Settings
-                </MenuItem>
-              </MenuList>
-            </Menu>
+            {!loading && (
+              <ChakraLink as={Link} href="/dashboard">
+                <IconButton
+                  aria-label="Home"
+                  icon={<FaHome />}
+                  variant="ghost"
+                  colorScheme="teal"
+                />
+              </ChakraLink>
+            )}
+            
+            {loading ? (
+              <Spinner size="sm" color="teal.500" />
+            ) : user ? (
+              <Menu>
+                <MenuButton
+                  as={IconButton}
+                  icon={<Avatar size="sm" icon={<FaUser />} />}
+                  variant="ghost"
+                  aria-label="Profile menu"
+                />
+                <MenuList>
+                  <MenuItem>
+                    <HStack>
+                      <Avatar size="sm" icon={<FaUser />} />
+                      <VStack align="start" spacing={0}>
+                        <Text fontWeight="medium">{getUserDisplayName()}</Text>
+                        {user?.email && (
+                          <Text fontSize="sm" color="gray.500">{user.email}</Text>
+                        )}
+                      </VStack>
+                    </HStack>
+                  </MenuItem>
+                  <MenuItem as={Link} href="/settings" icon={<FaCog />}>
+                    Settings
+                  </MenuItem>
+                  <MenuItem onClick={handleSignOut} icon={<FaSignOutAlt />} color="red.500">
+                    Sign Out
+                  </MenuItem>
+                </MenuList>
+              </Menu>
+            ) : (
+              <SignInButton />
+            )}
           </HStack>
         </Flex>
       </Container>

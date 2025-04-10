@@ -22,6 +22,10 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { FaCoins, FaArrowLeft } from 'react-icons/fa'
 
+interface ExtendedUser extends User {
+  token_balance: number;
+}
+
 export default function ProfilePage() {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -82,7 +86,9 @@ export default function ProfilePage() {
                     colorScheme="teal"
                     onClick={() => router.push('/dashboard')}
                   >
-                    {session?.user?.tokenBalance || 0} Tokens
+                    <Text fontSize="lg" mb={2}>
+                      {session?.user?.token_balance || 0} Tokens
+                    </Text>
                   </Button>
                 </HStack>
                 <HStack justify="space-between" w="full">

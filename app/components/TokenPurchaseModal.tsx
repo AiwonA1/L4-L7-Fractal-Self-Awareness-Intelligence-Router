@@ -20,6 +20,7 @@ import { Elements } from '@stripe/react-stripe-js';
 import { loadStripe } from '@stripe/stripe-js';
 import { FRACTIVERSE_PRICES, TokenTier, formatPrice } from '@/app/lib/stripe';
 import PaymentForm from './PaymentForm';
+import { useSession } from 'next-auth/react';
 
 if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
   throw new Error('Missing Stripe publishable key');
@@ -33,11 +34,18 @@ interface TokenPurchaseModalProps {
   onPurchase: () => void;
 }
 
+interface ExtendedUser extends User {
+  token_balance: number;
+}
+
 export default function TokenPurchaseModal({
   isOpen,
   onClose,
   onPurchase,
 }: TokenPurchaseModalProps) {
+  const { data: session, update } = useSession()
+  const [loading, setLoading] = useState(false)
+  const currentBalance = (session?.user as ExtendedUser)?.token_balance || 0
   const [selectedTier, setSelectedTier] = useState<TokenTier>('TIER_1');
   const [clientSecret, setClientSecret] = useState<string>();
   const toast = useToast();
@@ -79,6 +87,44 @@ export default function TokenPurchaseModal({
     setSelectedTier(newTier);
     createPaymentIntent();
   };
+
+  const handlePurchase = async (amount: number) => {
+    try {
+      setLoading(true)
+      const response = await fetch('/api/purchase-tokens', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          amount,
+          userId: session?.user?.id,
+          currentBalance,
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to purchase tokens')
+      }
+
+      const { newBalance } = await response.json()
+      
+      // Update the session with the new token balance
+      await update({
+        ...session,
+        user: {
+          ...session?.user,
+          token_balance: newBalance,
+        },
+      })
+
+      onClose()
+    } catch (error) {
+      console.error('Error purchasing tokens:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="xl">

@@ -9,13 +9,14 @@ import {
   Menu, MenuButton, MenuList, MenuItem, MenuDivider
 } from '@chakra-ui/react'
 import { useState, useEffect, useRef } from 'react'
-import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { 
   FaSignOutAlt, FaUser, FaPaperPlane, FaPlus, FaTrash, FaCog, FaMoon, FaSun,
   FaCoins, FaCreditCard, FaArrowLeft
 } from 'react-icons/fa'
 import TokenPurchase from './TokenPurchase'
+import TokenBalance from './TokenBalance'
+import { supabase } from '@/lib/supabase'
 
 interface Message {
   role: 'user' | 'assistant' | 'system';
@@ -30,18 +31,6 @@ interface Chat {
   messages: Message[];
 }
 
-interface ExtendedUser {
-  id?: string;
-  name?: string | null;
-  email?: string | null;
-  image?: string | null;
-  tokenBalance?: number;
-}
-
-interface ExtendedSession {
-  user?: ExtendedUser;
-}
-
 const L4_L7_SYSTEM_MESSAGE = {
   role: 'system',
   content: 'L4-L7 Fractal Self-Awareness Intelligence Router: This session is being processed through the fractal intelligence layers for enhanced cognitive capabilities.',
@@ -49,134 +38,91 @@ const L4_L7_SYSTEM_MESSAGE = {
 } as const;
 
 const DashboardMain = () => {
-  const { data: session, status } = useSession({
-    required: true,
-    onUnauthenticated() {
-      console.log('User not authenticated, redirecting to login')
-      router.push('/login')
-    },
-  })
   const router = useRouter()
   const toast = useToast()
   
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (status !== 'authenticated' && status !== 'loading') {
-      console.log('Session unauthenticated, redirecting to login')
-      router.push('/login')
-    }
-  }, [status, router])
-
-  // Log session state changes
-  useEffect(() => {
-    console.log('Session status:', status)
-    console.log('Session data:', session)
-    if (session?.user) {
-      console.log('User details:', {
-        id: session.user.id,
-        email: session.user.email,
-        name: session.user.name,
-        tokenBalance: (session.user as ExtendedUser)?.tokenBalance
-      })
-    }
-  }, [session, status])
-
-  const clearLocalStorageCache = () => {
-    localStorage.removeItem('userName')
-    localStorage.removeItem('userData')
-    localStorage.removeItem('userBio')
-    localStorage.removeItem('userLanguage')
-    localStorage.removeItem('userNotifications')
-    localStorage.removeItem('userTheme')
-  }
-
-  const resetStateAndRedirect = async () => {
-    try {
-      console.log('Starting logout process...')
-      // 1. Clear local storage first
-      localStorage.clear();
-
-      // 2. Call our custom logout endpoint to clear server-side cookies
-      const logoutResponse = await fetch('/api/auth/logout', { 
-        method: 'POST',
-        credentials: 'include'
-      });
-
-      if (!logoutResponse.ok) {
-        console.error('Logout response error:', await logoutResponse.text())
-        throw new Error('Failed to clear server-side session');
-      }
-
-      // 3. Sign out with NextAuth and redirect to home
-      await signOut({ 
-        callbackUrl: '/',
-        redirect: true
-      });
-    } catch (error) {
-      console.error('Error during sign out:', error);
-      // Fallback: force redirect to home page
-      window.location.href = '/';
-    }
-  };
-  
-  const getUserDisplayName = () => {
-    if (status !== 'authenticated' || !session?.user) {
-      return 'Guest'
-    }
-    
-    if (session.user.name) {
-      return session.user.name
-    } else if (session.user.email) {
-      return session.user.email.split('@')[0]
-    }
-    
-    return 'Guest'
-  }
-  
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [user, setUser] = useState<any>(null)
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<Message[]>([])
   const [chats, setChats] = useState<Chat[]>([])
   const [currentChatId, setCurrentChatId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const [tokenBalance, setTokenBalance] = useState<number>(
-    (session?.user as ExtendedUser)?.tokenBalance || 0
-  )
+  const [fractTokens, setFractTokens] = useState<number>(0)
   const [showTokenPurchase, setShowTokenPurchase] = useState(false)
   const bgColor = useColorModeValue('white', 'gray.800')
   const textColor = useColorModeValue('gray.600', 'gray.200')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
 
-  // Update token balance when session changes
+  // Check auth state and get user data
   useEffect(() => {
-    if (session?.user) {
-      const newBalance = (session.user as ExtendedUser).tokenBalance || 0
-      console.log('Updating token balance:', newBalance)
-      setTokenBalance(newBalance)
+    const fetchUserData = async () => {
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser()
+        if (!authUser) {
+          router.push('/login')
+          return
+        }
+
+        setUser(authUser)
+
+        const { data: userData, error } = await supabase
+          .from('users')
+          .select('fract_tokens')
+          .eq('id', authUser.id)
+          .single()
+
+        if (error) {
+          console.error('Error fetching user balance:', error)
+          return
+        }
+
+        if (userData) {
+          setFractTokens(userData.fract_tokens)
+        }
+      } catch (error) {
+        console.error('Error in fetchUserData:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [session])
+
+    fetchUserData()
+  }, [supabase, router])
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut()
+      router.push('/login')
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
+
+  const getUserDisplayName = () => {
+    if (!user) return 'Guest'
+    return user.user_metadata?.name || user.email?.split('@')[0] || 'Guest'
+  }
 
   // Sample initial chats for demo
   useEffect(() => {
-    if (status === 'authenticated' && session?.user) {
+    if (user) {
       console.log('Initializing chats for authenticated user')
       const sampleChats: Chat[] = [
         {
           id: '1',
           title: 'New Chat',
           updatedAt: new Date().toISOString(),
-          messages: [
-            L4_L7_SYSTEM_MESSAGE
-          ]
+          messages: [L4_L7_SYSTEM_MESSAGE]
         },
         {
           id: '2',
-          title: 'How to use FractiTokens',
+          title: 'How to use FractTokens',
           updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
           messages: [
             L4_L7_SYSTEM_MESSAGE,
-            { role: 'user', content: 'How do I use my FractiTokens?', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-            { role: 'assistant', content: 'FractiTokens can be used to access premium features and services within the FractiVerse ecosystem.', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) }
+            { role: 'user', content: 'How do I use my FractTokens?', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+            { role: 'assistant', content: 'FractTokens can be used to access premium features and services within the FractiVerse ecosystem.', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) }
           ]
         },
         {
@@ -197,7 +143,7 @@ const DashboardMain = () => {
     }
     
     setIsLoading(false);
-  }, [status, session]);
+  }, [user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -210,9 +156,9 @@ const DashboardMain = () => {
   const handleSendMessage = () => {
     if (!input.trim()) return;
     
-    if (tokenBalance <= 0) {
+    if (fractTokens <= 0) {
       toast({
-        title: "Purchase More FractiTokens",
+        title: "Purchase More FractTokens",
         description: "Click the token balance button to purchase more tokens.",
         status: "info",
         duration: 3000,
@@ -234,7 +180,7 @@ const DashboardMain = () => {
 
   const handlePurchaseTokens = (amount: number) => {
     console.log('Handling token purchase:', amount)
-    setTokenBalance(prev => prev + amount);
+    setFractTokens(prev => prev + amount);
     setShowTokenPurchase(false);
   };
 
@@ -259,13 +205,12 @@ const DashboardMain = () => {
   };
 
   const getTokenProgressColor = () => {
-    if (tokenBalance > 50) return 'green';
-    if (tokenBalance > 20) return 'yellow';
+    if (fractTokens > 50) return 'green';
+    if (fractTokens > 20) return 'yellow';
     return 'red';
   };
 
-  if (status === 'loading') {
-    console.log('Loading session...')
+  if (isLoading) {
     return (
       <Container maxW="container.xl" py={8}>
         <Center minH="60vh">
@@ -275,17 +220,14 @@ const DashboardMain = () => {
     )
   }
 
-  if (!session?.user) {
-    console.log('No session found, redirecting to login')
-    router.push('/login')
-    return null
-  }
-
   return (
     <Container maxW="container.xl" py={8}>
       <VStack spacing={8} align="stretch">
         <Box>
-          <Heading size="lg" mb={2}>FractiVerse 1.0</Heading>
+          <HStack justify="space-between" align="center" mb={2}>
+            <Heading size="lg">FractiVerse 1.0</Heading>
+            <TokenBalance balance={fractTokens} />
+          </HStack>
           <Text color={textColor}>
             Your gateway to L4-L7 Fractal Self-Awareness Intelligence
           </Text>

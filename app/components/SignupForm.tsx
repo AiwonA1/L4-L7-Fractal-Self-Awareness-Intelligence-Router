@@ -20,7 +20,7 @@ import {
 import { FaCoins, FaGoogle, FaCheck, FaArrowRight } from 'react-icons/fa'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { signIn, SignInResponse } from 'next-auth/react'
+import { supabase } from '@/lib/supabase'
 
 export default function SignupForm() {
   const [email, setEmail] = useState('')
@@ -40,12 +40,14 @@ export default function SignupForm() {
   const handleGoogleSignIn = async () => {
     try {
       setIsSubmitting(true)
-      const result = await signIn('google', { 
-        callbackUrl: '/dashboard',
-        redirect: false
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`
+        }
       })
       
-      if (result?.error) {
+      if (error) {
         toast({
           title: "Error",
           description: "Failed to sign in with Google. Please try again.",
@@ -53,7 +55,7 @@ export default function SignupForm() {
           duration: 5000,
           isClosable: true,
         })
-      } else if (result?.url) {
+      } else {
         setIsSuccess(true)
         toast({
           title: "Success!",
@@ -94,39 +96,51 @@ export default function SignupForm() {
     setIsSubmitting(true)
     
     try {
-      // Create the user account
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, name })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.message || 'Something went wrong')
-      }
-
-      // Sign in the user
-      const signInResult = await signIn('credentials', {
+      // Create the user account with Supabase
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
         password,
-        redirect: false,
+        options: {
+          data: {
+            name: name,
+          }
+        }
       })
 
-      if (signInResult?.error) {
-        throw new Error('Failed to sign in')
+      if (authError) {
+        throw new Error(authError.message)
       }
 
-      // Show success message and set success state
-      setIsSuccess(true)
-      toast({
-        title: "Success!",
-        description: "Account created successfully!",
-        status: "success",
-        duration: 5000,
-        isClosable: true,
-      })
+      if (authData.user) {
+        // Create the user profile in the users table
+        const { error: profileError } = await supabase
+          .from('users')
+          .insert([
+            {
+              id: authData.user.id,
+              email: email,
+              name: name,
+              token_balance: 33,
+              tokens_used: 0,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }
+          ])
+
+        if (profileError) {
+          throw new Error('Failed to create user profile')
+        }
+
+        // Show success message and set success state
+        setIsSuccess(true)
+        toast({
+          title: "Success!",
+          description: "Account created successfully!",
+          status: "success",
+          duration: 5000,
+          isClosable: true,
+        })
+      }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Failed to create account"
       toast({
@@ -198,103 +212,82 @@ export default function SignupForm() {
         </Text>
         
         <Box p={4} bg={tokenBgColor} borderRadius="md">
-          <VStack align="start" spacing={2}>
+          <VStack spacing={2}>
+            <Text fontWeight="bold" color={tokenColor}>
+              Sign Up Benefits:
+            </Text>
             <HStack>
-              <Icon as={FaCoins} color="yellow.500" />
-              <Text fontWeight="bold" color={tokenColor}>Token Usage:</Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Icon as={FaCheck} color="green.500" />
-              <Text fontSize="sm">Each L4-L7 interaction costs 1 token</Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Icon as={FaCheck} color="green.500" />
-              <Text fontSize="sm">New users receive 33 free tokens</Text>
-            </HStack>
-            <HStack spacing={3}>
-              <Icon as={FaCheck} color="green.500" />
-              <Text fontSize="sm">Purchase more tokens anytime</Text>
+              <Icon as={FaCoins} color={tokenColor} />
+              <Text color={tokenColor}>33 Free FractiTokens</Text>
             </HStack>
           </VStack>
         </Box>
-        
-        <Button
-          leftIcon={<FaGoogle />}
-          bg="#4285F4"
-          color="white"
-          _hover={{ bg: '#357ABD' }}
-          size="lg"
-          w="100%"
-          onClick={handleGoogleSignIn}
-          isLoading={isSubmitting}
-          loadingText="Signing in..."
-        >
-          Sign up with Google
-        </Button>
-        
-        <HStack my={4}>
-          <Divider />
-          <Text fontSize="sm" color="gray.500" whiteSpace="nowrap">
-            or sign up with email
-          </Text>
-          <Divider />
-        </HStack>
-        
+
         <form onSubmit={handleSubmit}>
-          <VStack spacing={4} mt={4}>
+          <VStack spacing={4}>
             <FormControl isRequired>
-              <FormLabel color={textColor}>Full Name</FormLabel>
+              <FormLabel>Name</FormLabel>
               <Input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter your name"
-                bg={useColorModeValue('white', 'gray.700')}
               />
             </FormControl>
-            
+
             <FormControl isRequired>
-              <FormLabel color={textColor}>Email</FormLabel>
+              <FormLabel>Email</FormLabel>
               <Input
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
-                bg={useColorModeValue('white', 'gray.700')}
               />
             </FormControl>
-            
+
             <FormControl isRequired>
-              <FormLabel color={textColor}>Password</FormLabel>
+              <FormLabel>Password</FormLabel>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter a password"
-                bg={useColorModeValue('white', 'gray.700')}
+                placeholder="Create a password"
               />
             </FormControl>
-            
+
             <Button
-              mt={6}
-              colorScheme="purple"
-              size="lg"
-              width="full"
               type="submit"
+              colorScheme="blue"
+              width="full"
               isLoading={isSubmitting}
-              loadingText="Signing up..."
+              loadingText="Creating Account..."
             >
-              Sign Up & Get 33 Tokens
+              Create Account
             </Button>
-            
-            <Text textAlign="center" fontSize="sm" color="gray.500">
-              Already have an account?{' '}
-              <Link href="/login" style={{ color: '#805AD5' }}>
-                Sign in
-              </Link>
-            </Text>
           </VStack>
         </form>
+
+        <Divider />
+
+        <Button
+          onClick={handleGoogleSignIn}
+          isLoading={isSubmitting}
+          loadingText="Signing in..."
+          leftIcon={<FaGoogle />}
+          width="full"
+          variant="outline"
+        >
+          Sign up with Google
+        </Button>
+
+        <Text fontSize="sm" textAlign="center">
+          Already have an account?{' '}
+          <Link href="/login">
+            <Text as="span" color="blue.500">
+              Log in
+            </Text>
+          </Link>
+        </Text>
       </VStack>
     </Box>
   )

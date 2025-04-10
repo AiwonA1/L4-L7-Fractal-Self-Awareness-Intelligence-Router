@@ -1,122 +1,298 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useToast } from '@chakra-ui/react'
-import { useSession, signIn as nextAuthSignIn, signOut as nextAuthSignOut } from 'next-auth/react'
+import { supabase } from '@/lib/supabase'
+import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
 
-interface User {
-  id?: string
-  email?: string
-  name?: string
-  image?: string
-  tokens?: number
+interface User extends SupabaseUser {
+  name?: string;
+  fract_tokens?: number;
+  tokens_used?: number;
+  token_balance?: number;
 }
 
 interface AuthContextType {
-  user: User | null
-  loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signOut: () => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
-  updateUser: (data: Partial<User>) => void
+  user: User | null;
+  session: Session | null;
+  isLoading: boolean;
+  showAuthModal: boolean;
+  setShowAuthModal: (show: boolean) => void;
+  signOut: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  userData: any;
+  setUser: (user: User | null) => void;
 }
 
-export const AuthContext = createContext<AuthContextType | null>(null)
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const { data: session, status } = useSession()
+  const [session, setSession] = useState<Session | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [userData, setUserData] = useState<any>(null)
   const router = useRouter()
-  const toast = useToast()
+
+  const fetchUserData = async (userId: string) => {
+    console.log('🔍 Fetching user data for ID:', userId)
+    try {
+      const response = await fetch(`/api/user?userId=${userId}`, {
+        method: 'GET',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('❌ Error fetching user data:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText
+        })
+        return null
+      }
+      
+      const data = await response.json()
+      console.log('✅ Successfully fetched user data:', {
+        id: data?.id,
+        email: data?.email,
+        name: data?.name,
+        fract_tokens: data?.fract_tokens,
+        tokens_used: data?.tokens_used,
+        token_balance: data?.token_balance,
+        created_at: data?.created_at
+      })
+
+      return data
+    } catch (error) {
+      console.error('❌ Exception in fetchUserData:', error)
+      return null
+    }
+  }
 
   useEffect(() => {
-    if (status === 'loading') {
-      setLoading(true)
-      return
-    }
-
-    if (status === 'authenticated' && session?.user) {
-      setUser({
-        id: session.user.id as string,
-        email: session.user.email || undefined,
-        name: session.user.name || undefined,
-        image: session.user.image || undefined,
-        tokens: (session.user as any).tokens || 0
-      })
-    } else {
-      setUser(null)
-    }
+    console.log('🔄 Setting up Supabase auth listeners...')
     
-    setLoading(false)
-  }, [session, status])
+    // Get initial session
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
+      console.log('🔐 Initial session check:', {
+        hasSession: !!session,
+        error: error?.message,
+        userId: session?.user?.id,
+        userEmail: session?.user?.email,
+        userMetadata: session?.user?.user_metadata,
+        accessToken: session?.access_token ? '✓ Present' : '✗ Missing',
+        refreshToken: session?.refresh_token ? '✓ Present' : '✗ Missing'
+      })
+
+      setSession(session)
+      if (session?.user) {
+        console.log('👤 Initial user found:', {
+          id: session.user.id,
+          email: session.user.email,
+          metadata: session.user.user_metadata,
+          aud: session.user.aud,
+          role: session.user.role
+        })
+
+        // Fetch user data with retries
+        let retries = 3
+        let userData = null
+        while (retries > 0 && !userData) {
+          userData = await fetchUserData(session.user.id)
+          if (!userData) {
+            console.log(`Retrying user data fetch... (${retries} attempts left)`)
+            await new Promise(resolve => setTimeout(resolve, 1000))
+            retries--
+          }
+        }
+
+        if (userData) {
+          const mergedUser = { ...session.user, ...userData }
+          console.log('🔄 Merged user data:', {
+            id: mergedUser.id,
+            email: mergedUser.email,
+            name: mergedUser.name,
+            fract_tokens: mergedUser.fract_tokens,
+            tokens_used: mergedUser.tokens_used,
+            token_balance: mergedUser.token_balance
+          })
+          setUser(mergedUser)
+        } else {
+          console.log('⚠️ No user data found in database, using session user:', session.user)
+          setUser(session.user)
+        }
+      } else {
+        console.log('👻 No initial session user found')
+        setUser(null)
+      }
+      setIsLoading(false)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('🔄 Auth state changed:', {
+        event,
+        hasSession: !!session,
+        userId: session?.user?.id,
+        accessToken: session?.access_token ? '✓ Present' : '✗ Missing'
+      })
+
+      setSession(session)
+      if (session?.user) {
+        console.log('👤 Auth state user:', {
+          id: session.user.id,
+          email: session.user.email,
+          metadata: session.user.user_metadata,
+          aud: session.user.aud,
+          role: session.user.role
+        })
+        const userData = await fetchUserData(session.user.id)
+        if (userData) {
+          const mergedUser = { ...session.user, ...userData }
+          console.log('🔄 Merged user data after auth change:', {
+            id: mergedUser.id,
+            email: mergedUser.email,
+            name: mergedUser.name,
+            fract_tokens: mergedUser.fract_tokens,
+            tokens_used: mergedUser.tokens_used,
+            token_balance: mergedUser.token_balance
+          })
+          setUser(mergedUser)
+        } else {
+          console.log('⚠️ No user data found after auth change, using session user:', session.user)
+          setUser(session.user)
+        }
+        setShowAuthModal(false)
+      } else {
+        console.log('👻 No session user found after auth change')
+        setUser(null)
+        if (event === 'SIGNED_OUT') {
+          setShowAuthModal(true)
+        }
+      }
+      setIsLoading(false)
+    })
+
+    return () => {
+      console.log('🧹 Cleaning up auth listeners')
+      subscription.unsubscribe()
+    }
+  }, [])
 
   const signIn = async (email: string, password: string) => {
     try {
-      const result = await nextAuthSignIn('credentials', {
+      console.log('🔑 Attempting sign in with email:', email)
+      
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
-        redirect: false,
       })
 
-      if (result?.error) {
-        throw new Error(result.error)
+      if (error) {
+        console.error('❌ Sign in error:', {
+          message: error.message,
+          status: error.status,
+          name: error.name,
+          details: error
+        })
+        throw error
       }
 
-      router.push('/dashboard')
+      if (!data.session) {
+        throw new Error('No session returned after successful sign in')
+      }
+
+      console.log('✅ Sign in successful:', {
+        userId: data.user?.id,
+        userEmail: data.user?.email,
+        sessionExpiry: data.session?.expires_at,
+        accessToken: data.session?.access_token ? '✓ Present' : '✗ Missing'
+      })
+
+      setSession(data.session)
+      
+      if (data.user) {
+        const userData = await fetchUserData(data.user.id)
+        if (userData) {
+          const mergedUser = { ...data.user, ...userData }
+          console.log('🔄 Merged user data after sign in:', {
+            id: mergedUser.id,
+            email: mergedUser.email,
+            name: mergedUser.name,
+            fract_tokens: mergedUser.fract_tokens,
+            tokens_used: mergedUser.tokens_used,
+            token_balance: mergedUser.token_balance
+          })
+          setUser(mergedUser)
+        } else {
+          console.log('⚠️ No user data found after sign in, using auth user:', data.user)
+          setUser(data.user)
+        }
+        setShowAuthModal(false)
+      }
     } catch (error) {
-      console.error('Sign in error:', error)
+      console.error('❌ Error in signIn:', error)
       throw error
     }
   }
 
   const signOut = async () => {
-    try {
-      await nextAuthSignOut({ redirect: false })
-      setUser(null)
-      router.push('/')
-    } catch (error) {
-      console.error('Sign out error:', error)
-      throw error
-    }
+    console.log('👋 Signing out...')
+    await supabase.auth.signOut()
+    setUser(null)
+    setSession(null)
+    setUserData(null)
+    setShowAuthModal(true)
+    router.push('/')
   }
 
-  const signUp = async (email: string, password: string) => {
-    try {
-      const response = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.message || 'Sign up failed')
-      }
-
-      await signIn(email, password)
-    } catch (error) {
-      console.error('Sign up error:', error)
-      throw error
-    }
+  const value = {
+    user,
+    session,
+    isLoading,
+    showAuthModal,
+    setShowAuthModal,
+    signOut,
+    signIn,
+    userData,
+    setUser
   }
 
-  const updateUser = (data: Partial<User>) => {
-    setUser(prev => prev ? { ...prev, ...data } : null)
-  }
+  // Log current context state
+  console.log('🔄 AuthContext state:', {
+    hasUser: !!user,
+    hasSession: !!session,
+    isLoading,
+    showAuthModal,
+    userData: user ? {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      fract_tokens: user.fract_tokens,
+      tokens_used: user.tokens_used,
+      token_balance: user.token_balance,
+      aud: user.aud,
+      role: user.role
+    } : null,
+    sessionData: session ? {
+      accessToken: '✓ Present',
+      refreshToken: '✓ Present',
+      expiresAt: session.expires_at,
+      provider: session.user?.app_metadata?.provider
+    } : null
+  })
 
-  return (
-    <AuthContext.Provider value={{ user, loading, signIn, signOut, signUp, updateUser }}>
-      {children}
-    </AuthContext.Provider>
-  )
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider')
   }
   return context
-} 
+}
