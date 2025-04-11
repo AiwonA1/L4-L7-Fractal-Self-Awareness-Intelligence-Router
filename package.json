@@ -16,7 +16,8 @@
     "db:reset": "prisma migrate reset --force && prisma migrate deploy && prisma generate && npm run build:seed && npm run db:seed",
     "lint": "next lint",
     "test-supabase": "node scripts/test-supabase.js",
-    "start-and-test": "node scripts/start-and-test.js"
+    "start-and-test": "node scripts/start-and-test.js",
+    "test:stripe": "node scripts/test-stripe.js"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.8.0",
@@ -49,11 +50,11 @@
     "react-icons": "^5.5.0",
     "react-katex": "^3.0.1",
     "stripe": "^14.25.0",
-    "ts-node": "^10.9.2",
     "uuid": "^9.0.1"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/dotenv": "^8.2.3",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/node": "^20.17.28",
     "@types/nodemailer": "^6.4.14",
@@ -61,7 +62,9 @@
     "@types/react-dom": "^18.2.19",
     "@types/react-katex": "^3.0.4",
     "@types/uuid": "^9.0.8",
+    "dotenv": "^16.5.0",
     "prisma": "^5.10.0",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   }
 }

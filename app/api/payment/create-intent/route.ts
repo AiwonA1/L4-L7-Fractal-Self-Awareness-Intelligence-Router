@@ -1,15 +1,54 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/lib/auth';
-import { stripe, getPriceFromTier, getTokensFromTier, TokenTier } from '@/app/lib/stripe';
-import prisma from '@/app/lib/prisma';
+import { createClient } from '@supabase/supabase-js';
+import { cookies } from 'next/headers';
+import { stripe, getPriceFromTier, getTokensFromTier } from '@/app/lib/stripe';
+import { TokenTier } from '@/app/lib/stripe-client';
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+  throw new Error('Missing Supabase environment variables');
+}
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
 export async function POST(request: Request) {
   try {
-    // Check authentication
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    // Get the authenticated user from Supabase
+    const cookieStore = cookies();
+    const accessToken = cookieStore.get('sb-access-token')?.value;
+
+    if (!accessToken) {
+      return NextResponse.json(
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    // Get user from Supabase auth
+    const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
+
+    if (userError || !user) {
+      return NextResponse.json(
+        { error: 'Invalid session' },
+        { status: 401 }
+      );
+    }
+
+    // Get user data from users table
+    const { data: userData, error: dbError } = await supabase
+      .from('users')
+      .select('id, email, stripe_customer_id')
+      .eq('id', user.id)
+      .single();
+
+    if (dbError || !userData) {
+      return NextResponse.json(
+        { error: 'Failed to fetch user data' },
+        { status: 500 }
+      );
     }
 
     // Get the tier from request body
@@ -18,29 +57,25 @@ export async function POST(request: Request) {
     const tokens = getTokensFromTier(tier);
 
     // Get or create Stripe customer
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, email: true, stripeCustomerId: true }
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    let customerId = user.stripeCustomerId;
+    let customerId = userData.stripe_customer_id;
     if (!customerId) {
       const customer = await stripe.customers.create({
-        email: user.email!,
+        email: userData.email,
         metadata: {
-          userId: user.id
+          userId: userData.id
         }
       });
       customerId = customer.id;
       
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { stripeCustomerId: customerId }
-      });
+      // Update user with Stripe customer ID
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ stripe_customer_id: customerId })
+        .eq('id', userData.id);
+
+      if (updateError) {
+        console.error('Error updating user with Stripe customer ID:', updateError);
+      }
     }
 
     // Create payment intent
@@ -49,7 +84,7 @@ export async function POST(request: Request) {
       currency: 'usd',
       customer: customerId,
       metadata: {
-        userId: user.id,
+        userId: userData.id,
         tokens: tokens,
         tier: tier
       }

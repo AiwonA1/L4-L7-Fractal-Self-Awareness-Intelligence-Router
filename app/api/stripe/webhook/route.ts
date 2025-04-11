@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
 import { stripe } from '@/app/lib/stripe'
-import { prisma } from '@/lib/prisma'
 import { headers } from 'next/headers'
 import Stripe from 'stripe'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 // Stripe webhook handler
 export async function POST(req: Request) {
@@ -38,26 +38,32 @@ export async function POST(req: Request) {
       // Add tokens to user's balance
       const tokens = parseInt(tokenAmount, 10)
       
-      // Update user's token balance
-      const user = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          tokenBalance: {
-            increment: tokens
-          }
-        }
-      })
+      // Update user's token balance using Supabase
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({
+          fract_tokens: supabaseAdmin.rpc('increment_tokens', { amount: tokens }),
+          token_balance: supabaseAdmin.rpc('increment_tokens', { amount: tokens })
+        })
+        .eq('id', userId)
+
+      if (updateError) {
+        throw new Error(`Failed to update user balance: ${updateError.message}`)
+      }
       
-      // Create a transaction record
-      await prisma.transaction.create({
-        data: {
-          userId: userId,
-          type: 'PURCHASE',
-          amount: tokens,
-          description: `Purchased ${tokens} FractiTokens`,
+      // Update transaction status to completed
+      const { error: transactionError } = await supabaseAdmin
+        .from('transactions')
+        .update({
           status: 'COMPLETED',
-        }
-      })
+          completed_at: new Date().toISOString()
+        })
+        .eq('stripe_session_id', session.id)
+
+      if (transactionError) {
+        console.error('Error updating transaction:', transactionError)
+        // Continue even if transaction update fails
+      }
       
       console.log(`Added ${tokens} tokens to user ${userId}`)
     }
@@ -70,4 +76,6 @@ export async function POST(req: Request) {
       { status: 500 }
     )
   }
-} 
+}
+
+export const runtime = 'nodejs' 

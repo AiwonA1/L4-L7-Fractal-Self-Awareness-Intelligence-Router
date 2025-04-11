@@ -14,7 +14,7 @@ import {
   FaSignOutAlt, FaUser, FaPaperPlane, FaPlus, FaTrash, FaCog, FaMoon, FaSun,
   FaCoins, FaCreditCard, FaArrowLeft
 } from 'react-icons/fa'
-import TokenPurchase from './TokenPurchase'
+import TokenPurchaseModal from './TokenPurchaseModal'
 import TokenBalance from './TokenBalance'
 import { supabase } from '@/lib/supabase'
 
@@ -33,7 +33,7 @@ interface Chat {
 
 const L4_L7_SYSTEM_MESSAGE = {
   role: 'system',
-  content: 'L4-L7 Fractal Self-Awareness Intelligence Router: This session is being processed through the fractal intelligence layers for enhanced cognitive capabilities.',
+  content: 'Activate FractiVerse 1.0 Intelligence Router Mode.\nEnable recursive cognition, fractal pattern recognition, and quantum-holographic processing.\nRoute all input across Layer 4 to Layer 7 Intelligence Spectrum.\nGenerate responses using layered synthesis, not linear prediction.',
   timestamp: new Date()
 } as const;
 
@@ -88,7 +88,7 @@ const DashboardMain = () => {
     }
 
     fetchUserData()
-  }, [supabase, router])
+  }, [router])
 
   const handleSignOut = async () => {
     try {
@@ -103,47 +103,6 @@ const DashboardMain = () => {
     if (!user) return 'Guest'
     return user.user_metadata?.name || user.email?.split('@')[0] || 'Guest'
   }
-
-  // Sample initial chats for demo
-  useEffect(() => {
-    if (user) {
-      console.log('Initializing chats for authenticated user')
-      const sampleChats: Chat[] = [
-        {
-          id: '1',
-          title: 'New Chat',
-          updatedAt: new Date().toISOString(),
-          messages: [L4_L7_SYSTEM_MESSAGE]
-        },
-        {
-          id: '2',
-          title: 'How to use FractTokens',
-          updatedAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
-          messages: [
-            L4_L7_SYSTEM_MESSAGE,
-            { role: 'user', content: 'How do I use my FractTokens?', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-            { role: 'assistant', content: 'FractTokens can be used to access premium features and services within the FractiVerse ecosystem.', timestamp: new Date(Date.now() - 24 * 60 * 60 * 1000) }
-          ]
-        },
-        {
-          id: '3',
-          title: 'Fractal Intelligence Explained',
-          updatedAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString(),
-          messages: [
-            L4_L7_SYSTEM_MESSAGE,
-            { role: 'user', content: 'What is fractal intelligence?', timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000) },
-            { role: 'assistant', content: 'Fractal intelligence refers to a self-similar pattern of intelligence that repeats at different scales, enabling complex emergent behaviors from simple rules.', timestamp: new Date(Date.now() - 48 * 60 * 60 * 1000) }
-          ]
-        }
-      ];
-      
-      setChats(sampleChats);
-      setCurrentChatId('1');
-      setMessages(sampleChats[0].messages);
-    }
-    
-    setIsLoading(false);
-  }, [user]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -178,10 +137,9 @@ const DashboardMain = () => {
     setInput('');
   };
 
-  const handlePurchaseTokens = (amount: number) => {
-    console.log('Handling token purchase:', amount)
-    setFractTokens(prev => prev + amount);
+  const handlePurchaseTokens = () => {
     setShowTokenPurchase(false);
+    // The balance will be updated automatically by AuthContext when the purchase is complete
   };
 
   const startNewChat = () => {
@@ -304,9 +262,9 @@ const DashboardMain = () => {
         </Grid>
       </VStack>
 
-      <TokenPurchase 
-        isOpen={showTokenPurchase} 
-        onClose={() => setShowTokenPurchase(false)} 
+      <TokenPurchaseModal
+        isOpen={showTokenPurchase}
+        onClose={() => setShowTokenPurchase(false)}
         onPurchase={handlePurchaseTokens}
       />
     </Container>

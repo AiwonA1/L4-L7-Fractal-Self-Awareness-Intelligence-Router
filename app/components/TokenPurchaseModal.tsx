@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from 'react';
+'use client'
+
+import React, { useState } from 'react';
 import {
   Modal,
   ModalOverlay,
@@ -12,21 +14,15 @@ import {
   Text,
   Box,
   useToast,
-  Radio,
-  RadioGroup,
-  Divider,
+  Card,
+  CardBody,
+  Icon,
+  Heading,
+  SimpleGrid,
 } from '@chakra-ui/react';
-import { Elements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
-import { FRACTIVERSE_PRICES, TokenTier, formatPrice } from '@/app/lib/stripe';
-import PaymentForm from './PaymentForm';
-import { useSession } from 'next-auth/react';
-
-if (!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY) {
-  throw new Error('Missing Stripe publishable key');
-}
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+import { FaCoins, FaRocket, FaCrown } from 'react-icons/fa';
+import { useAuth } from '@/app/context/AuthContext';
+import { FRACTIVERSE_PRICES, TokenTier, formatPrice } from '@/app/lib/stripe-client';
 
 interface TokenPurchaseModalProps {
   isOpen: boolean;
@@ -34,140 +30,139 @@ interface TokenPurchaseModalProps {
   onPurchase: () => void;
 }
 
-interface ExtendedUser extends User {
-  token_balance: number;
-}
+const pricingTiers = [
+  {
+    tier: 'TIER_1' as TokenTier,
+    name: 'Basic Package',
+    icon: FaCoins,
+    color: 'teal',
+  },
+  {
+    tier: 'TIER_2' as TokenTier,
+    name: 'Popular Package',
+    icon: FaRocket,
+    color: 'purple',
+  },
+  {
+    tier: 'TIER_3' as TokenTier,
+    name: 'Pro Package',
+    icon: FaCrown,
+    color: 'yellow',
+  },
+];
 
-export default function TokenPurchaseModal({
-  isOpen,
-  onClose,
-  onPurchase,
-}: TokenPurchaseModalProps) {
-  const { data: session, update } = useSession()
-  const [loading, setLoading] = useState(false)
-  const currentBalance = (session?.user as ExtendedUser)?.token_balance || 0
-  const [selectedTier, setSelectedTier] = useState<TokenTier>('TIER_1');
-  const [clientSecret, setClientSecret] = useState<string>();
+export default function TokenPurchaseModal({ isOpen, onClose, onPurchase }: TokenPurchaseModalProps) {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState<{ [key in TokenTier]?: boolean }>({});
   const toast = useToast();
 
-  useEffect(() => {
-    if (isOpen && selectedTier) {
-      createPaymentIntent();
-    }
-  }, [isOpen, selectedTier]);
-
-  const createPaymentIntent = async () => {
-    try {
-      const response = await fetch('/api/payment/create-intent', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ tier: selectedTier }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create payment intent');
-      }
-
-      const data = await response.json();
-      setClientSecret(data.clientSecret);
-    } catch (error) {
+  const handlePurchase = async (tier: TokenTier) => {
+    if (!user) {
       toast({
-        title: 'Error',
-        description: 'Failed to initialize payment',
+        title: 'Authentication Required',
+        description: 'Please sign in to purchase tokens',
         status: 'error',
         duration: 5000,
         isClosable: true,
       });
+      return;
     }
-  };
 
-  const handleTierChange = (newTier: TokenTier) => {
-    setSelectedTier(newTier);
-    createPaymentIntent();
-  };
-
-  const handlePurchase = async (amount: number) => {
     try {
-      setLoading(true)
-      const response = await fetch('/api/purchase-tokens', {
+      setLoading(prev => ({ ...prev, [tier]: true }));
+
+      const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          amount,
-          userId: session?.user?.id,
-          currentBalance,
-        }),
-      })
+        body: JSON.stringify({ tier }),
+        credentials: 'include',
+      });
+
+      const data = await response.json();
 
       if (!response.ok) {
-        throw new Error('Failed to purchase tokens')
+        throw new Error(data.error || 'Failed to create checkout session');
       }
 
-      const { newBalance } = await response.json()
-      
-      // Update the session with the new token balance
-      await update({
-        ...session,
-        user: {
-          ...session?.user,
-          token_balance: newBalance,
-        },
-      })
+      if (!data.url) {
+        throw new Error('No checkout URL received');
+      }
 
-      onClose()
+      // Redirect to Stripe Checkout
+      window.location.href = data.url;
     } catch (error) {
-      console.error('Error purchasing tokens:', error)
+      console.error('Purchase error:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to start checkout process',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
     } finally {
-      setLoading(false)
+      setLoading(prev => ({ ...prev, [tier]: false }));
     }
-  }
+  };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} size="6xl">
       <ModalOverlay />
-      <ModalContent>
-        <ModalHeader>Purchase FractiTokens</ModalHeader>
-        <ModalCloseButton />
-        <ModalBody pb={6}>
-          <VStack spacing={6} align="stretch">
-            <RadioGroup value={selectedTier} onChange={handleTierChange}>
-              <VStack spacing={4} align="stretch">
-                <Radio value="TIER_1">
-                  {FRACTIVERSE_PRICES.TIER_1.tokens} FractiTokens - {formatPrice(FRACTIVERSE_PRICES.TIER_1.price)}
-                </Radio>
-                <Radio value="TIER_2">
-                  {FRACTIVERSE_PRICES.TIER_2.tokens} FractiTokens - {formatPrice(FRACTIVERSE_PRICES.TIER_2.price)}
-                </Radio>
-                <Radio value="TIER_3">
-                  {FRACTIVERSE_PRICES.TIER_3.tokens} FractiTokens - {formatPrice(FRACTIVERSE_PRICES.TIER_3.price)}
-                </Radio>
-              </VStack>
-            </RadioGroup>
-
-            <Divider />
-
-            <Text fontSize="sm" color="gray.600">
-              Each FractiToken grants access to the router.
+      <ModalContent maxW="7xl">
+        <ModalHeader py={6}>
+          <VStack spacing={2} align="center">
+            <Heading size="lg">Purchase FractiTokens</Heading>
+            <Text color="gray.600">
+              Power up your AI with L4-L7 Fractal Intelligence
             </Text>
-
-            {clientSecret && (
-              <Elements
-                stripe={stripePromise}
-                options={{
-                  clientSecret,
-                  appearance: {
-                    theme: 'stripe',
-                  },
-                }}
-              >
-                <PaymentForm onSuccess={onPurchase} />
-              </Elements>
-            )}
           </VStack>
+        </ModalHeader>
+        <ModalCloseButton />
+        <ModalBody p={8}>
+          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={8} mb={8}>
+            {pricingTiers.map((tierInfo) => {
+              const price = FRACTIVERSE_PRICES[tierInfo.tier];
+              return (
+                <Card
+                  key={tierInfo.tier}
+                  border="2px"
+                  borderColor="gray.200"
+                  borderRadius="xl"
+                  _hover={{ transform: 'translateY(-4px)', shadow: 'lg' }}
+                  transition="all 0.2s"
+                >
+                  <CardBody p={6}>
+                    <VStack spacing={4} align="stretch">
+                      <HStack spacing={3}>
+                        <Icon as={tierInfo.icon} w={6} h={6} color={`${tierInfo.color}.400`} />
+                        <Heading size="md">{tierInfo.name}</Heading>
+                      </HStack>
+                      <Text fontSize="3xl" fontWeight="bold">
+                        {formatPrice(price.price)}
+                      </Text>
+                      <Text>
+                        {price.tokens} FractiTokens
+                      </Text>
+                      <Button
+                        colorScheme={tierInfo.color}
+                        size="lg"
+                        onClick={() => handlePurchase(tierInfo.tier)}
+                        isLoading={loading[tierInfo.tier]}
+                        loadingText="Processing..."
+                        isDisabled={!user}
+                      >
+                        {user ? 'Purchase Now' : 'Sign in to Purchase'}
+                      </Button>
+                    </VStack>
+                  </CardBody>
+                </Card>
+              );
+            })}
+          </SimpleGrid>
+          <Text fontSize="sm" color="gray.600" textAlign="center">
+            All purchases are processed securely through Stripe. Tokens are non-refundable.
+          </Text>
         </ModalBody>
       </ModalContent>
     </Modal>

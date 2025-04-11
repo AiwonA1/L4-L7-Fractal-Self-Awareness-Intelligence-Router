@@ -1,4 +1,10 @@
 import Stripe from 'stripe';
+import { FRACTIVERSE_PRICES, TokenTier } from './stripe-client';
+
+// This file should only be imported on the server side
+if (typeof window !== 'undefined') {
+  throw new Error('This file should only be imported on the server side');
+}
 
 if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error('STRIPE_SECRET_KEY is not defined');
@@ -9,44 +15,27 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   typescript: true,
 });
 
-export const FRACTIVERSE_PRICES = {
-  TIER_1: {
-    tokens: 100,
-    price: 2000, // $20.00
-    priceId: process.env.STRIPE_PRICE_100_TOKENS,
-    description: 'Starter Pack - 100 FractiTokens',
-  },
-  TIER_2: {
-    tokens: 500,
-    price: 9000, // $90.00
-    priceId: process.env.STRIPE_PRICE_500_TOKENS,
-    description: 'Power Pack - 500 FractiTokens',
-  },
-  TIER_3: {
-    tokens: 1000,
-    price: 16000, // $160.00
-    priceId: process.env.STRIPE_PRICE_1000_TOKENS,
-    description: 'Pro Pack - 1000 FractiTokens',
-  },
-} as const;
+// Maps tier to Stripe price ID from environment variables
+export const getPriceIdFromTier = (tier: TokenTier): string => {
+  const priceId = {
+    TIER_1: process.env.STRIPE_PRICE_100_TOKENS,
+    TIER_2: process.env.STRIPE_PRICE_500_TOKENS,
+    TIER_3: process.env.STRIPE_PRICE_1000_TOKENS,
+  }[tier];
 
-export type TokenTier = keyof typeof FRACTIVERSE_PRICES;
+  if (!priceId) {
+    throw new Error(`No Stripe price ID configured for tier ${tier}`);
+  }
 
+  return priceId;
+};
+
+// Get price amount in cents for a tier
 export const getPriceFromTier = (tier: TokenTier): number => {
   return FRACTIVERSE_PRICES[tier].price;
 };
 
+// Get token amount for a tier
 export const getTokensFromTier = (tier: TokenTier): number => {
   return FRACTIVERSE_PRICES[tier].tokens;
-};
-
-export const formatPrice = (price: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-  }).format(price / 100);
-};
-
-export function getPriceIdFromTier(tier: TokenTier): string | undefined {
-  return FRACTIVERSE_PRICES[tier].priceId;
-} 
+}; 

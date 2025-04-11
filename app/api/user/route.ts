@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { supabaseAdmin } from '../../../lib/supabase-admin'
 
 interface UserData {
   id: string;
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const userId = searchParams.get('userId')
 
-  console.log('GET /api/user - Fetching user:', userId)
+  console.log('GET /api/user - Fetching user by ID:', userId)
 
   if (!userId) {
     console.log('GET /api/user - No userId provided')
@@ -33,34 +33,70 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Get auth user data first to ensure we have the correct email
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId)
+    // First get the user's email from auth
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.admin.getUserById(userId)
     
-    if (authError) {
+    if (authError || !user) {
       console.error('Error fetching auth user:', authError)
-      return NextResponse.json({ error: authError.message }, { status: 500 })
+      return NextResponse.json({ error: 'User not found in auth' }, { status: 404 })
     }
 
-    if (!authData.user) {
-      console.error('User not found in auth')
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
+    console.log('Found auth user with email:', user.email)
 
-    // Fetch user data by email since we know they exist
+    // Get user data by email
     const { data: userData, error: userError } = await supabaseAdmin
       .from('users')
       .select('*')
-      .eq('email', authData.user.email)
+      .eq('email', user.email)
       .single()
+
+    if (userError && userError.code === 'PGRST116') {
+      // Create new user record
+      const newUser = {
+        id: userId, // Use the new auth ID
+        email: user.email,
+        name: user.user_metadata?.name || null,
+        fract_tokens: 0,
+        tokens_used: 0,
+        token_balance: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+
+      const { data: createdUser, error: createError } = await supabaseAdmin
+        .from('users')
+        .insert([newUser])
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('Error creating user:', createError)
+        return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
+      }
+
+      console.log('Created new user:', createdUser)
+      return NextResponse.json(createdUser)
+    }
 
     if (userError) {
       console.error('Error fetching user data:', userError)
       return NextResponse.json({ error: userError.message }, { status: 500 })
     }
 
-    if (!userData) {
-      console.error('User data not found for email:', authData.user.email)
-      return NextResponse.json({ error: 'User data not found' }, { status: 404 })
+    // Update the user ID if it's different
+    if (userData.id !== userId) {
+      const { error: updateError } = await supabaseAdmin
+        .from('users')
+        .update({ id: userId, updated_at: new Date().toISOString() })
+        .eq('email', user.email)
+
+      if (updateError) {
+        console.error('Error updating user ID:', updateError)
+        // Continue anyway since we have the user data
+      } else {
+        console.log('Updated user ID from', userData.id, 'to', userId)
+        userData.id = userId
+      }
     }
 
     console.log('Found user data:', {

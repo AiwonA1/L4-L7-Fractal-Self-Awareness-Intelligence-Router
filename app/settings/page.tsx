@@ -27,19 +27,13 @@ import {
   ModalCloseButton,
   useDisclosure,
 } from '@chakra-ui/react'
-import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { FaCoins } from 'react-icons/fa'
-import TokenPurchase from '@/app/components/TokenPurchase'
+import TokenPurchaseModal from '@/app/components/TokenPurchaseModal'
+import { useAuth } from '@/app/context/AuthContext'
 
 export default function SettingsPage() {
-  const { data: session, status } = useSession({
-    required: true,
-    onUnauthenticated() {
-      console.log('User not authenticated, redirecting to login')
-      router.push('/login')
-    },
-  })
+  const { user, userData } = useAuth()
   const router = useRouter()
   const toast = useToast()
   const { isOpen, onOpen, onClose } = useDisclosure()
@@ -56,20 +50,22 @@ export default function SettingsPage() {
   const textColor = useColorModeValue('gray.600', 'gray.300')
 
   useEffect(() => {
-    console.log('Session status:', status)
-    console.log('Session data:', session)
-    
-    if (session?.user) {
-      console.log('Session user details:', {
-        email: session.user.email,
-        name: session.user.name,
-        tokenBalance: (session.user as any)?.tokenBalance
-      })
-      setFormData({
-        displayName: session.user.name || '',
-      })
+    if (!user) {
+      console.log('No user found, redirecting to login')
+      router.push('/login')
+      return
     }
-  }, [session, status])
+
+    console.log('User details:', {
+      email: user.email,
+      name: user.user_metadata?.name,
+      tokenBalance: userData?.token_balance
+    })
+
+    setFormData({
+      displayName: user.user_metadata?.name || '',
+    })
+  }, [user, userData])
 
   const validateForm = () => {
     const newErrors = {
@@ -92,9 +88,8 @@ export default function SettingsPage() {
     try {
       setIsLoading(true)
       console.log('Saving settings with data:', formData)
-      console.log('Current session:', session)
 
-      if (!session?.user?.email) {
+      if (!user?.email) {
         throw new Error('No authenticated user found')
       }
 
@@ -105,7 +100,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify({
           displayName: formData.displayName,
-          email: session.user.email
+          email: user.email
         }),
       })
 
@@ -126,7 +121,7 @@ export default function SettingsPage() {
         isClosable: true,
       })
 
-      // Refresh the session to update the displayed name
+      // Refresh the page to update the displayed name
       router.refresh()
     } catch (error) {
       console.error('Error saving settings:', error)
@@ -142,16 +137,12 @@ export default function SettingsPage() {
     }
   }
 
-  const handlePurchase = (amount: number) => {
-    console.log('Handling purchase for amount:', amount)
-    console.log('Current session:', session)
-    // Refresh the session to update the token balance
-    router.refresh()
+  const handlePurchase = () => {
+    // The balance will be updated automatically by AuthContext
     onClose()
   }
 
-  if (status === 'loading') {
-    console.log('Loading session...')
+  if (!user) {
     return (
       <Container maxW="container.md" py={8}>
         <Box display="flex" justifyContent="center" alignItems="center" minH="200px">
@@ -159,12 +150,6 @@ export default function SettingsPage() {
         </Box>
       </Container>
     )
-  }
-
-  if (!session?.user) {
-    console.log('No session found, redirecting to login')
-    router.push('/login')
-    return null
   }
 
   return (
@@ -187,7 +172,7 @@ export default function SettingsPage() {
               <FormControl>
                 <FormLabel>Email</FormLabel>
                 <Input
-                  value={session.user.email || ''}
+                  value={user.email || ''}
                   isReadOnly
                   bg={useColorModeValue('gray.100', 'gray.700')}
                   color={useColorModeValue('gray.800', 'white')}
@@ -199,45 +184,43 @@ export default function SettingsPage() {
                 </Text>
               </FormControl>
 
-              <Box 
-                p={4} 
-                bg={useColorModeValue('gray.50', 'gray.700')} 
-                borderRadius="md"
-                cursor="pointer"
-                onClick={onOpen}
-                _hover={{ bg: useColorModeValue('gray.100', 'gray.600') }}
-                transition="background-color 0.2s"
-              >
-                <HStack spacing={2}>
-                  <Icon as={FaCoins} color="yellow.500" />
-                  <Text fontSize="lg" fontWeight="bold">
-                    Current FractiToken Balance: {(session.user as any)?.tokenBalance || 0}
-                  </Text>
-                </HStack>
-                <Text fontSize="sm" color={textColor} mt={1}>
-                  Click to purchase more tokens
-                </Text>
-              </Box>
-
               <Button
                 colorScheme="blue"
                 onClick={handleSaveSettings}
                 isLoading={isLoading}
-                loadingText="Saving..."
-                mt={4}
               >
                 Save Changes
               </Button>
             </VStack>
           </CardBody>
         </Card>
-      </VStack>
 
-      <TokenPurchase 
-        isOpen={isOpen} 
-        onClose={onClose} 
-        onPurchase={handlePurchase}
-      />
+        <Card bg={bgColor} borderWidth="1px" borderColor={borderColor}>
+          <CardBody>
+            <VStack spacing={4} align="stretch">
+              <HStack justify="space-between">
+                <Box>
+                  <Heading size="md">FractiTokens</Heading>
+                  <Text color={textColor}>Current Balance: {userData?.token_balance || 0}</Text>
+                </Box>
+                <Button
+                  leftIcon={<Icon as={FaCoins} />}
+                  colorScheme="yellow"
+                  onClick={onOpen}
+                >
+                  Buy More Tokens
+                </Button>
+              </HStack>
+            </VStack>
+          </CardBody>
+        </Card>
+
+        <TokenPurchaseModal
+          isOpen={isOpen}
+          onClose={onClose}
+          onPurchase={handlePurchase}
+        />
+      </VStack>
     </Container>
   )
 } 

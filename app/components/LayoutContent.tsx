@@ -1,10 +1,11 @@
 'use client'
 
-import { Box, Flex, Heading, IconButton, Menu, MenuButton, MenuList, MenuItem, Avatar, Text, Container, HStack, Divider, Button, useToast } from '@chakra-ui/react'
-import { FaUser, FaSignOutAlt, FaCoins, FaCreditCard } from 'react-icons/fa'
+import { Box, Flex, Heading, IconButton, Menu, MenuButton, MenuItem, Avatar, Text, Container, HStack, Divider, Button, useToast, MenuList } from '@chakra-ui/react'
+import { FaUser, FaSignOutAlt, FaCoins } from 'react-icons/fa'
 import Link from 'next/link'
 import { useAuth } from '@/app/context/AuthContext'
 import SignInButton from './SignInButton'
+import { FRACTIVERSE_PRICES, formatPrice, TokenTier } from '@/app/lib/stripe-client'
 
 export function LayoutContent({ children }: { children: React.ReactNode }) {
   const { user, signOut } = useAuth()
@@ -23,30 +24,43 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const handleBuyTokens = async (amount: '100' | '500' | '1000') => {
+  const handleBuyTokens = async (tier: TokenTier) => {
     try {
+      console.log('🛒 Starting purchase flow for tier:', tier)
+      console.log('👤 Current user:', {
+        id: user?.id,
+        email: user?.email,
+        tokenBalance: user?.token_balance
+      })
+
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ amount })
+        body: JSON.stringify({ tier }),
+        credentials: 'include',
       })
 
+      console.log('📡 API Response status:', response.status)
       const data = await response.json()
+      console.log('📦 API Response data:', data)
 
-      if (data.error) {
-        throw new Error(data.error)
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create checkout session')
       }
 
       if (data.url) {
+        console.log('✅ Redirecting to Stripe checkout:', data.url)
         window.location.href = data.url
+      } else {
+        throw new Error('No checkout URL received')
       }
     } catch (error) {
-      console.error('Error creating checkout session:', error)
+      console.error('❌ Error creating checkout session:', error)
       toast({
         title: 'Error',
-        description: 'Failed to start checkout process. Please try again.',
+        description: error instanceof Error ? error.message : 'Failed to start checkout process',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -107,22 +121,22 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
                         </Text>
                       </HStack>
                     </MenuItem>
-                    <MenuItem onClick={() => handleBuyTokens('100')} icon={<FaCoins />}>
+                    <MenuItem onClick={() => handleBuyTokens('TIER_1')} icon={<FaCoins />}>
                       <HStack justify="space-between" width="100%">
-                        <Text>Buy 100 Tokens</Text>
-                        <Text fontSize="sm" color="gray.500">$1.00</Text>
+                        <Text>Buy 100 FractiTokens</Text>
+                        <Text fontSize="sm" color="gray.500">{formatPrice(FRACTIVERSE_PRICES.TIER_1.price)}</Text>
                       </HStack>
                     </MenuItem>
-                    <MenuItem onClick={() => handleBuyTokens('500')} icon={<FaCoins />}>
+                    <MenuItem onClick={() => handleBuyTokens('TIER_2')} icon={<FaCoins />}>
                       <HStack justify="space-between" width="100%">
-                        <Text>Buy 500 Tokens</Text>
-                        <Text fontSize="sm" color="gray.500">$5.00</Text>
+                        <Text>Buy 500 FractiTokens</Text>
+                        <Text fontSize="sm" color="gray.500">{formatPrice(FRACTIVERSE_PRICES.TIER_2.price)}</Text>
                       </HStack>
                     </MenuItem>
-                    <MenuItem onClick={() => handleBuyTokens('1000')} icon={<FaCoins />}>
+                    <MenuItem onClick={() => handleBuyTokens('TIER_3')} icon={<FaCoins />}>
                       <HStack justify="space-between" width="100%">
-                        <Text>Buy 1000 Tokens</Text>
-                        <Text fontSize="sm" color="gray.500">$10.00</Text>
+                        <Text>Buy 1000 FractiTokens</Text>
+                        <Text fontSize="sm" color="gray.500">{formatPrice(FRACTIVERSE_PRICES.TIER_3.price)}</Text>
                       </HStack>
                     </MenuItem>
                     <Divider my={2} />

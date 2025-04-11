@@ -128,7 +128,7 @@ export async function PUT(
       }
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4-0125-preview",
+        model: "gpt-4-turbo-preview",
         messages: apiMessages,
         temperature: 0.7,
         max_tokens: 1000,

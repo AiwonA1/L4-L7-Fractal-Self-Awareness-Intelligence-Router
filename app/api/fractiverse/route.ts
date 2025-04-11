@@ -35,11 +35,26 @@ Always strive to:
 - Frame responses in a way that promotes understanding and growth`
 
 export async function POST(req: Request) {
+  if (!process.env.OPENAI_API_KEY) {
+    console.error('OpenAI API key is not configured')
+    return NextResponse.json(
+      { error: 'OpenAI API key is not configured' },
+      { status: 500 }
+    )
+  }
+
   try {
     const { message } = await req.json()
 
+    if (!message || typeof message !== 'string') {
+      return NextResponse.json(
+        { error: 'Invalid message format' },
+        { status: 400 }
+      )
+    }
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-4-turbo-preview",  // Using GPT-4 Turbo (mini version)
       messages: [
         {
           role: "system",
@@ -54,14 +69,19 @@ export async function POST(req: Request) {
       max_tokens: 1000,
     })
 
+    if (!completion.choices[0]?.message?.content) {
+      throw new Error('No response from OpenAI')
+    }
+
     return NextResponse.json({
       role: 'assistant',
       content: completion.choices[0].message.content
     })
   } catch (error) {
     console.error('Error in FractiVerse API:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to process request' },
+      { error: `Failed to process request: ${errorMessage}` },
       { status: 500 }
     )
   }

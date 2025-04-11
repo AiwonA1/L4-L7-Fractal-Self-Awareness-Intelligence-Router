@@ -98,11 +98,7 @@ export default function Dashboard() {
   const [chatHistory, setChatHistory] = useState<Array<{ role: string; content: string }>>([])
   const [selectedChat, setSelectedChat] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [pastChats, setPastChats] = useState([
-    { id: 1, title: 'Quantum Mechanics Discussion', date: '2024-03-20' },
-    { id: 2, title: 'Fractal Patterns Analysis', date: '2024-03-19' },
-    { id: 3, title: 'Self-Awareness Exploration', date: '2024-03-18' },
-  ])
+  const [pastChats, setPastChats] = useState<Array<{ id: number; title: string; date: string }>>([])
   const toast = useToast()
   const bgColor = useColorModeValue('white', 'gray.800')
   const textColor = useColorModeValue('gray.600', 'gray.200')
@@ -252,6 +248,14 @@ export default function Dashboard() {
                           alignSelf={msg.role === 'user' ? 'flex-end' : 'flex-start'}
                           maxW="80%"
                           boxShadow="sm"
+                          overflowX="auto"
+                          sx={{
+                            '& pre': {
+                              whiteSpace: 'pre-wrap',
+                              wordBreak: 'break-word',
+                              overflowWrap: 'break-word'
+                            }
+                          }}
                         >
                           <HStack spacing={2} mb={2}>
                             <Icon
@@ -262,7 +266,13 @@ export default function Dashboard() {
                               {msg.role === 'user' ? 'You' : 'FractiAI'}
                             </Text>
                           </HStack>
-                          <Text whiteSpace="pre-wrap">{msg.content}</Text>
+                          <Text 
+                            whiteSpace="pre-wrap" 
+                            wordBreak="break-word"
+                            overflowWrap="break-word"
+                          >
+                            {msg.content}
+                          </Text>
                         </Box>
                       ))
                     )}

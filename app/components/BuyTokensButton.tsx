@@ -1,12 +1,12 @@
+'use client'
+
 import { Button, useDisclosure } from '@chakra-ui/react'
 import TokenPurchaseModal from './TokenPurchaseModal'
+import { useAuth } from '@/app/context/AuthContext'
 
 export default function BuyTokensButton() {
   const { isOpen, onOpen, onClose } = useDisclosure()
-
-  const handlePurchaseSuccess = () => {
-    onClose()
-  }
+  const { user } = useAuth()
 
   return (
     <>
@@ -15,13 +15,12 @@ export default function BuyTokensButton() {
         onClick={onOpen}
         size="sm"
       >
-        Buy FractiTokens
+        {user ? 'Buy FractiTokens' : 'Sign in to Buy Tokens'}
       </Button>
 
       <TokenPurchaseModal
         isOpen={isOpen}
         onClose={onClose}
-        onPurchase={handlePurchaseSuccess}
       />
     </>
   )
