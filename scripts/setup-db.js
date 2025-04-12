@@ -1,4 +1,6 @@
-const { PrismaClient } = require('@prisma/client')
+import { PrismaClient } from '@prisma/client'
+import { execSync } from 'child_process'
+
 const prisma = new PrismaClient()
 
 async function setupDatabase() {
@@ -10,7 +12,6 @@ async function setupDatabase() {
     console.log('✅ Database connection successful')
 
     // Run migrations
-    const { execSync } = require('child_process')
     execSync('npx prisma migrate deploy', { stdio: 'inherit' })
     console.log('✅ Migrations applied successfully')
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { useAuth } from '@/app/context/AuthContext'
 import {
   Box,
   Container,
@@ -11,50 +12,92 @@ import {
   Code,
   Button,
   useToast,
+  Input,
+  FormControl,
+  FormLabel,
 } from '@chakra-ui/react'
 
 export default function TestSupabase() {
+  const { user, session, signIn, isLoading: authLoading } = useAuth()
   const [sessionData, setSessionData] = useState<any>(null)
   const [profilesData, setProfilesData] = useState<any>(null)
-  const [chatsData, setChatsData] = useState<any>(null)
+  const [chatHistoryData, setChatHistoryData] = useState<any>(null)
   const [messagesData, setMessagesData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const toast = useToast()
+
+  const handleSignIn = async () => {
+    try {
+      await signIn(email, password)
+      toast({
+        title: 'Signed in successfully',
+        status: 'success',
+        duration: 3000,
+      })
+    } catch (err) {
+      toast({
+        title: 'Sign in failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        status: 'error',
+        duration: 5000,
+      })
+    }
+  }
 
   const runTests = async () => {
     setLoading(true)
     setError(null)
     try {
+      console.log('🔍 Starting Supabase connection tests...')
+      
       // Test 1: Session
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      if (sessionError) throw new Error(`Session error: ${sessionError.message}`)
+      console.log('🔐 Testing session...')
+      if (!session) {
+        console.log('⚠️ No active session')
+        setSessionData({ status: 'unauthenticated', message: 'Please sign in to run tests' })
+        return
+      }
+      
+      console.log('✅ Session test passed:', session)
       setSessionData(session)
       
       // Test 2: Profiles
+      console.log('👤 Testing profiles...')
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
-        .limit(5)
+        .eq('id', user?.id)
+        .single()
       if (profilesError) throw new Error(`Profiles error: ${profilesError.message}`)
+      console.log('✅ Profiles test passed:', profiles)
       setProfilesData(profiles)
 
-      // Test 3: Chats
-      const { data: chats, error: chatsError } = await supabase
-        .from('chats')
+      // Test 3: Chat History
+      console.log('💬 Testing chat history...')
+      const { data: chatHistory, error: chatHistoryError } = await supabase
+        .from('chat_history')
         .select('*')
+        .eq('user_id', user?.id)
         .limit(5)
-      if (chatsError) throw new Error(`Chats error: ${chatsError.message}`)
-      setChatsData(chats)
+      if (chatHistoryError) throw new Error(`Chat History error: ${chatHistoryError.message}`)
+      console.log('✅ Chat History test passed:', chatHistory)
+      setChatHistoryData(chatHistory)
 
       // Test 4: Messages
+      console.log('📨 Testing messages...')
       const { data: messages, error: messagesError } = await supabase
         .from('messages')
         .select('*')
+        .eq('user_id', user?.id)
         .limit(5)
       if (messagesError) throw new Error(`Messages error: ${messagesError.message}`)
+      console.log('✅ Messages test passed:', messages)
       setMessagesData(messages)
 
+      console.log('✨ All tests completed successfully')
       toast({
         title: 'Tests completed successfully',
         status: 'success',
@@ -62,6 +105,7 @@ export default function TestSupabase() {
         isClosable: true,
       })
     } catch (err) {
+      console.error('❌ Test failed:', err)
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred'
       setError(errorMessage)
       toast({
@@ -77,8 +121,10 @@ export default function TestSupabase() {
   }
 
   useEffect(() => {
-    runTests()
-  }, [])
+    if (session) {
+      runTests()
+    }
+  }, [session])
 
   const DataSection = ({ title, data }: { title: string; data: any }) => (
     <Box p={4} borderWidth={1} borderRadius="md" w="100%">
@@ -94,28 +140,60 @@ export default function TestSupabase() {
       <VStack spacing={6} align="stretch">
         <Heading>Supabase Connection Test</Heading>
         
-        <Button
-          onClick={runTests}
-          colorScheme="blue"
-          isLoading={loading}
-          mb={4}
-        >
-          Run Tests Again
-        </Button>
-
-        {error && (
-          <Box p={4} bg="red.100" color="red.700" borderRadius="md">
-            <Text fontWeight="bold">Error:</Text>
-            <Text>{error}</Text>
+        {!session ? (
+          <Box p={4} borderWidth={1} borderRadius="md">
+            <VStack spacing={4}>
+              <FormControl>
+                <FormLabel>Email</FormLabel>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </FormControl>
+              <FormControl>
+                <FormLabel>Password</FormLabel>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </FormControl>
+              <Button
+                onClick={handleSignIn}
+                colorScheme="blue"
+                isLoading={authLoading}
+              >
+                Sign In
+              </Button>
+            </VStack>
           </Box>
-        )}
-
-        {!loading && !error && (
+        ) : (
           <>
-            <DataSection title="Session Data" data={sessionData} />
-            <DataSection title="Profiles Data" data={profilesData} />
-            <DataSection title="Chats Data" data={chatsData} />
-            <DataSection title="Messages Data" data={messagesData} />
+            <Button
+              onClick={runTests}
+              colorScheme="blue"
+              isLoading={loading}
+              mb={4}
+            >
+              Run Tests Again
+            </Button>
+
+            {error && (
+              <Box p={4} bg="red.100" color="red.700" borderRadius="md">
+                <Text fontWeight="bold">Error:</Text>
+                <Text>{error}</Text>
+              </Box>
+            )}
+
+            {!loading && !error && (
+              <>
+                <DataSection title="Session Data" data={sessionData} />
+                <DataSection title="Profiles Data" data={profilesData} />
+                <DataSection title="Chat History Data" data={chatHistoryData} />
+                <DataSection title="Messages Data" data={messagesData} />
+              </>
+            )}
           </>
         )}
       </VStack>

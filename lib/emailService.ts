@@ -1,7 +1,9 @@
 import nodemailer from 'nodemailer'
 import { sign } from 'jsonwebtoken'
 import jwt from 'jsonwebtoken'
-import prisma from './prisma'
+import { supabaseAdmin } from './supabase-admin'
+import { sendEmail } from './sendEmail'
+import { User, PasswordReset } from './types'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
@@ -47,29 +49,55 @@ export async function sendVerificationEmail(email: string) {
   }
 }
 
-export async function sendPasswordResetEmail(email: string): Promise<boolean> {
+export async function sendPasswordResetEmail(email: string) {
   try {
-    const token = await createResetToken(email)
-    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`
+    // Get user
+    const { data: user, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single()
 
-    const mailOptions = {
-      from: process.env.SMTP_FROM,
-      to: email,
-      subject: 'Reset Your Password',
-      html: `
-        <h1>Reset Your Password</h1>
-        <p>You requested to reset your password. Click the link below to set a new password:</p>
-        <a href="${resetUrl}">Reset Password</a>
-        <p>This link will expire in 1 hour.</p>
-        <p>If you didn't request this, please ignore this email.</p>
-      `
+    if (userError || !user) {
+      console.error('Error finding user:', userError)
+      return { error: 'User not found' }
     }
 
-    await transporter.sendMail(mailOptions)
-    return true
+    // Create password reset token
+    const token = crypto.randomUUID()
+    const expires = new Date(Date.now() + 3600000) // 1 hour from now
+
+    const { error: resetError } = await supabaseAdmin
+      .from('password_resets')
+      .insert([
+        {
+          user_id: user.id,
+          token,
+          expires_at: expires.toISOString()
+        }
+      ])
+
+    if (resetError) {
+      console.error('Error creating password reset:', resetError)
+      return { error: 'Failed to create password reset' }
+    }
+
+    // Send email
+    const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password?token=${token}`
+    await sendEmail({
+      to: email,
+      subject: 'Reset your password',
+      html: `
+        <p>Click the link below to reset your password:</p>
+        <a href="${resetUrl}">${resetUrl}</a>
+        <p>This link will expire in 1 hour.</p>
+      `
+    })
+
+    return { success: true }
   } catch (error) {
-    console.error('Error sending password reset email:', error)
-    return false
+    console.error('Error in sendPasswordResetEmail:', error)
+    return { error: 'Internal server error' }
   }
 }
 

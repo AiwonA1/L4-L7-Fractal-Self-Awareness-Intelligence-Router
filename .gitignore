@@ -36,10 +36,6 @@ build/
 *.swp
 *.swo
 
-# Prisma
-.prisma/
-prisma/migrations/
-
 # Logs
 logs
 *.log

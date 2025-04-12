@@ -2,8 +2,8 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import prisma from '@/lib/prisma'
 
-export async function POST(request: Request) {
-  console.log('📥 [API] POST /api/chat')
+export async function POST(req: Request) {
+  console.log("We Are Here: app/api/chat/route.ts - Handling chat request");
   try {
     const session = await getServerSession()
     console.log('🔑 [API] Session:', session?.user?.email)
@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { title, messages } = await request.json()
+    const { title, messages } = await req.json()
     console.log('📝 [API] Creating chat:', { title, messageCount: messages.length })
 
     const user = await prisma.user.findUnique({

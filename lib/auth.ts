@@ -5,6 +5,8 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import { User } from "@prisma/client";
 import { JWT } from "next-auth/jwt";
+import { supabaseAdmin } from './supabase-admin'
+import { User as SupabaseUser } from './types'
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -109,4 +111,93 @@ export async function getCurrentUser(userId: string) {
       name: true,
     }
   });
+}
+
+export async function getUserByEmail(email: string): Promise<SupabaseUser | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .single()
+
+    if (error) {
+      console.error('Error fetching user by email:', error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error in getUserByEmail:', error)
+    return null
+  }
+}
+
+export async function getUserById(id: string): Promise<SupabaseUser | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', id)
+      .single()
+
+    if (error) {
+      console.error('Error fetching user by ID:', error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error in getUserById:', error)
+    return null
+  }
+}
+
+export async function createUser(email: string, password: string): Promise<SupabaseUser | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .insert([
+        {
+          email,
+          password,
+          fract_tokens: 0,
+          tokens_used: 0,
+          token_balance: 0
+        }
+      ])
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error creating user:', error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error in createUser:', error)
+    return null
+  }
+}
+
+export async function updateUser(id: string, updates: Partial<SupabaseUser>): Promise<SupabaseUser | null> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('users')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) {
+      console.error('Error updating user:', error)
+      return null
+    }
+
+    return data
+  } catch (error) {
+    console.error('Error in updateUser:', error)
+    return null
+  }
 } 

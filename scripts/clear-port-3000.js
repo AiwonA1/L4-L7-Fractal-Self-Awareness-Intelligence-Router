@@ -1,19 +1,17 @@
-import { execSync } from 'child_process';
-import { platform } from 'os';
+const { execSync } = require('child_process');
 
 console.log('Checking if port 3000 is in use...');
 
 try {
-  if (platform() === 'win32') {
-    execSync('netstat -ano | findstr :3000 | findstr LISTENING');
-    execSync('for /f "tokens=5" %a in (\'netstat -ano ^| findstr :3000 ^| findstr LISTENING\') do taskkill /F /PID %a');
-  } else {
-    execSync('lsof -i :3000 | grep LISTEN');
-    execSync('lsof -i :3000 | grep LISTEN | awk \'{print $2}\' | xargs kill -9');
-  }
+  // Check if port 3000 is in use
+  execSync('lsof -i :3000', { stdio: 'ignore' });
+  
+  // If we get here, port is in use, so kill the process
+  console.log('Port 3000 is in use, killing process...');
+  execSync('kill -9 $(lsof -t -i:3000)');
 } catch (error) {
-  // Port is not in use, which is fine
-  console.log('Error checking port:', error.message);
+  // If we get here, port is not in use
+  console.log('Port 3000 is not in use');
 }
 
 console.log('Done checking port 3000.'); 

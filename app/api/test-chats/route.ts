@@ -1,25 +1,22 @@
 import { NextResponse } from 'next/server'
-import { supabase } from '@/lib/supabase'
 import { supabaseAdmin } from '@/lib/supabase-admin'
-import { PostgrestError } from '@supabase/supabase-js'
 
 export async function GET() {
   try {
-    console.log('🔍 Testing Supabase connection')
+    console.log('🔍 Testing Supabase chats')
     
-    // Test connection by querying chats table
+    // Get all chats
     const { data: chats, error } = await supabaseAdmin
       .from('chats')
       .select('*')
-      .limit(5)
+      .order('created_at', { ascending: false })
 
     if (error) {
       console.error('❌ Supabase error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    console.log('✅ Supabase connection successful')
-    console.log('📊 Chats data:', chats)
+    console.log('✅ Found chats:', chats)
     
     return NextResponse.json({ success: true, chats })
   } catch (error) {

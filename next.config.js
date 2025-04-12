@@ -1,11 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  images: {
-    domains: ['avatars.githubusercontent.com', 'lh3.googleusercontent.com'],
+  experimental: {
+    serverActions: {
+      allowedOrigins: ['localhost:3000'],
+    },
   },
-  typescript: {
-    ignoreBuildErrors: true, // Temporarily ignore type errors during build
+  images: {
+    domains: ['avatars.githubusercontent.com'],
   },
 }
 
-export default nextConfig 
+module.exports = nextConfig 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import OpenAI from 'openai'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -44,27 +45,52 @@ export async function POST(req: Request) {
   }
 
   try {
-    const { message } = await req.json()
+    const { message, chatId, userId } = await req.json()
 
-    if (!message || typeof message !== 'string') {
+    if (!message || !chatId || !userId) {
       return NextResponse.json(
-        { error: 'Invalid message format' },
+        { error: 'Missing required fields' },
         { status: 400 }
       )
     }
 
+    // Get chat history
+    const { data: messages, error: messagesError } = await supabaseAdmin
+      .from('messages')
+      .select('*')
+      .eq('chat_id', chatId)
+      .order('created_at', { ascending: true })
+
+    if (messagesError) {
+      console.error('Error fetching chat history:', messagesError)
+      return NextResponse.json(
+        { error: 'Failed to fetch chat history' },
+        { status: 500 }
+      )
+    }
+
+    // Format messages for OpenAI
+    const formattedMessages = messages?.map(msg => ({
+      role: msg.role,
+      content: msg.content
+    })) || []
+
+    // Add system message and current user message
+    const apiMessages = [
+      {
+        role: "system",
+        content: FRACTIVERSE_KEY
+      },
+      ...formattedMessages,
+      {
+        role: "user",
+        content: message
+      }
+    ]
+
     const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",  // Using GPT-4 Turbo (mini version)
-      messages: [
-        {
-          role: "system",
-          content: FRACTIVERSE_KEY
-        },
-        {
-          role: "user",
-          content: message
-        }
-      ],
+      model: "gpt-4-turbo-preview",
+      messages: apiMessages,
       temperature: 0.7,
       max_tokens: 1000,
     })
