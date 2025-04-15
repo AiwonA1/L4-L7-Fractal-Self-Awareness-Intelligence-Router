@@ -23,7 +23,7 @@ import {
   Tooltip,
 } from '@chakra-ui/react'
 import Link from 'next/link'
-import { FaRobot, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaUser, FaEdit } from 'react-icons/fa'
+import { FaRobot, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaUser, FaEdit, FaCopy } from 'react-icons/fa'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { useAuth } from '@/app/context/AuthContext'
 
@@ -135,7 +135,11 @@ export default function Dashboard() {
         
         const chats = await response.json()
         console.log('✅ Loaded chats:', chats)
-        setPastChats(chats)
+        // Sort chats by created_at in descending order (most recent first)
+        const sortedChats = chats.sort((a: { created_at: string }, b: { created_at: string }) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+        setPastChats(sortedChats)
       } catch (error) {
         console.error('❌ Error loading chats:', error)
         toast({
@@ -183,6 +187,39 @@ export default function Dashboard() {
     loadChatHistory()
   }, [selectedChat, user?.id])
 
+  const handleCopyMessage = (content: string) => {
+    navigator.clipboard.writeText(content)
+    toast({
+      title: 'Copied!',
+      description: 'Message copied to clipboard',
+      status: 'success',
+      duration: 2000,
+    })
+  }
+
+  const deductToken = async (userId: string) => {
+    try {
+      const response = await fetch('/api/tokens/use', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          amount: 1,
+          description: 'Chat interaction'
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to deduct token')
+      }
+
+      return true
+    } catch (error) {
+      console.error('Error deducting token:', error)
+      return false
+    }
+  }
+
   const handleSendMessage = async () => {
     if (!message.trim() || !user?.id) {
       toast({
@@ -194,6 +231,18 @@ export default function Dashboard() {
       return
     }
     if (isLoading) return
+
+    // Attempt to deduct token first
+    const deductionSuccess = await deductToken(user.id)
+    if (!deductionSuccess) {
+      toast({
+        title: 'Error',
+        description: 'Insufficient FractiTokens',
+        status: 'error',
+        duration: 3000,
+      })
+      return
+    }
 
     setIsLoading(true)
     const userMessage = message.trim()
@@ -218,7 +267,12 @@ export default function Dashboard() {
         const newChat = await response.json()
         currentChatId = newChat.id
         setSelectedChat(currentChatId)
-        setPastChats(prev => [newChat, ...prev])
+        setPastChats(prev => {
+          const newChats = [newChat, ...prev]
+          return newChats.sort((a, b) => 
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          )
+        })
         setChatHistory([])
       }
 
@@ -277,26 +331,38 @@ export default function Dashboard() {
       // Add AI response to chat locally
       setChatHistory(prev => [...prev, { role: 'assistant', content: aiData.content }])
 
-      // Update chat title if it's the first message
+      // Update chat timestamp and title if needed
+      const updateData: any = {
+        chatId: currentChatId,
+        userId: user.id,
+        created_at: new Date().toISOString()
+      }
+
+      // Add title if it's the first message
       if (chatHistory.length === 0) {
         const title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '')
-        const updateResponse = await fetch('/api/chat/update', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chatId: currentChatId,
-            userId: user.id,
-            title
-          })
-        })
+        updateData.title = title
+      }
 
-        if (!updateResponse.ok) {
-          console.error('Failed to update chat title')
-        } else {
-          setPastChats(prev => prev.map(chat => 
-            chat.id === currentChatId ? { ...chat, title } : chat
-          ))
-        }
+      const updateResponse = await fetch('/api/chat/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      })
+
+      if (!updateResponse.ok) {
+        console.error('Failed to update chat')
+      } else {
+        // Update local state with new timestamp and title if applicable
+        setPastChats(prev => prev.map(chat => 
+          chat.id === currentChatId 
+            ? { 
+                ...chat, 
+                created_at: updateData.created_at,
+                ...(updateData.title ? { title: updateData.title } : {})
+              } 
+            : chat
+        ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))
       }
     } catch (error) {
       console.error('❌ Error in handleSendMessage:', error)
@@ -337,7 +403,12 @@ export default function Dashboard() {
       const chat = await response.json()
       console.log('✅ Chat created successfully:', chat)
 
-      setPastChats(prev => [chat, ...prev])
+      setPastChats(prev => {
+        const newChats = [chat, ...prev]
+        return newChats.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        )
+      })
       setSelectedChat(chat.id)
       setChatHistory([])
       
@@ -543,37 +614,34 @@ export default function Dashboard() {
                       chatHistory.map((msg, index) => (
                         <Box
                           key={index}
-                          bg={msg.role === 'user' ? userMessageBg : assistantMessageBg}
                           p={4}
-                          borderRadius="lg"
-                          alignSelf={msg.role === 'user' ? 'flex-end' : 'flex-start'}
-                          maxW="80%"
+                          bg={msg.role === 'user' ? userMessageBg : assistantMessageBg}
+                          borderRadius="md"
                           boxShadow="sm"
-                          overflowX="auto"
-                          sx={{
-                            '& pre': {
-                              whiteSpace: 'pre-wrap',
-                              wordBreak: 'break-word',
-                              overflowWrap: 'break-word'
-                            }
-                          }}
                         >
-                          <HStack spacing={2} mb={2}>
-                            <Icon
-                              as={msg.role === 'user' ? FaUser : FaRobot}
-                              color={msg.role === 'user' ? 'teal.500' : 'gray.500'}
-                            />
-                            <Text fontWeight="medium" fontSize="sm">
-                              {msg.role === 'user' ? 'You' : 'FractiVerse'}
-                            </Text>
-                          </HStack>
-                          <Text 
-                            whiteSpace="pre-wrap" 
-                            wordBreak="break-word"
-                            overflowWrap="break-word"
-                          >
-                            {msg.content}
-                          </Text>
+                          <Flex direction="column" gap={2}>
+                            <HStack spacing={2} mb={2}>
+                              <Icon
+                                as={msg.role === 'user' ? FaUser : FaRobot}
+                                color={msg.role === 'user' ? 'teal.500' : 'purple.500'}
+                              />
+                              <Text fontWeight="bold">
+                                {msg.role === 'user' ? 'You' : 'FractiVerse AI'}
+                              </Text>
+                            </HStack>
+                            <Text whiteSpace="pre-wrap">{msg.content}</Text>
+                            {msg.role === 'assistant' && (
+                              <Flex justify="flex-end" mt={2}>
+                                <IconButton
+                                  icon={<FaCopy />}
+                                  aria-label="Copy response"
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleCopyMessage(msg.content)}
+                                />
+                              </Flex>
+                            )}
+                          </Flex>
                         </Box>
                       ))
                     )}

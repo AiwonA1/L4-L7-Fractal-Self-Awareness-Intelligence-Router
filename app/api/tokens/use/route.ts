@@ -1,38 +1,34 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
-import { verify } from 'jsonwebtoken'
-import prisma from '@/lib/prisma'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
-
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    // Verify authentication
-    const token = cookies().get('next-auth.session-token')?.value
-    if (!token) {
+    const { userId, amount, description } = await req.json()
+
+    if (!userId || !amount || !description) {
       return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
+        { error: 'Missing required fields' },
+        { status: 400 }
       )
     }
 
-    // Get user ID from token
-    const decoded = verify(token, JWT_SECRET) as { userId: string }
-    
-    // Get user data
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId }
-    })
+    // Get current token balance
+    const { data: userData, error: userError } = await supabaseAdmin
+      .from('users')
+      .select('token_balance')
+      .eq('id', userId)
+      .single()
 
-    if (!user) {
+    if (userError || !userData) {
+      console.error('Error fetching user data:', userError)
       return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
+        { error: 'Failed to fetch user data' },
+        { status: 500 }
       )
     }
 
     // Check if user has enough tokens
-    if (user.tokenBalance < 1) {
+    if (userData.token_balance < amount) {
       return NextResponse.json(
         { error: 'Insufficient tokens' },
         { status: 400 }
@@ -40,32 +36,46 @@ export async function POST(request: Request) {
     }
 
     // Update token balance
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        tokenBalance: user.tokenBalance - 1
-      }
-    })
+    const { error: updateError } = await supabaseAdmin
+      .from('users')
+      .update({ 
+        token_balance: userData.token_balance - amount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', userId)
 
-    // Create transaction record
-    await prisma.transaction.create({
-      data: {
-        userId: user.id,
+    if (updateError) {
+      console.error('Error updating token balance:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update token balance' },
+        { status: 500 }
+      )
+    }
+
+    // Record transaction
+    const { error: transactionError } = await supabaseAdmin
+      .from('transactions')
+      .insert({
+        user_id: userId,
         type: 'USE',
-        amount: 1,
-        description: 'Token used for service',
+        amount: amount,
+        description: description,
         status: 'COMPLETED'
-      }
-    })
+      })
+
+    if (transactionError) {
+      console.error('Error recording transaction:', transactionError)
+      // Don't return error here as the token deduction was successful
+    }
 
     return NextResponse.json({
-      message: 'Token used successfully',
-      tokenBalance: updatedUser.tokenBalance
+      success: true,
+      newBalance: userData.token_balance - amount
     })
   } catch (error) {
-    console.error('Token use error:', error)
+    console.error('Error in token deduction:', error)
     return NextResponse.json(
-      { error: 'Failed to use token' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
