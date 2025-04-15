@@ -1,48 +1,39 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { type CookieOptions } from '@supabase/ssr'
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
+  const cookieStore = cookies()
 
   if (code) {
-    const supabase = createRouteHandlerClient({ cookies })
-    await supabase.auth.exchangeCodeForSession(code)
-    
-    // Check if we have a session
-    const session = await supabase.auth.getSession()
-
-    if (session) {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (user) {
-        // Check if user exists in users table
-        const { data: existingUser } = await supabase
-          .from('users')
-          .select()
-          .eq('id', user.id)
-          .single()
-
-        if (!existingUser) {
-          // Create new user record
-          const { error: insertError } = await supabase
-            .from('users')
-            .insert([
-              {
-                id: user.id,
-                email: user.email,
-                full_name: user.user_metadata.full_name,
-                avatar_url: user.user_metadata.avatar_url
-              }
-            ])
-
-          if (insertError) throw insertError
-        }
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            cookieStore.set({ name, value, ...options })
+          },
+          remove(name: string, options: CookieOptions) {
+            cookieStore.set({ name, value: '', ...options })
+          },
+        },
       }
+    )
+
+    const { error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      return NextResponse.redirect(requestUrl.origin)
     }
   }
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(requestUrl.origin)
+  // Return the user to an error page with instructions
+  return NextResponse.redirect(`${requestUrl.origin}/auth/auth-code-error`)
 } 

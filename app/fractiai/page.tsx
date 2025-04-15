@@ -98,11 +98,22 @@ export default function FractiAIPage() {
                  Join us in pioneering this exciting new world of infinite possibilities!
               </Text>
               {/* Add a CTA button if desired */}
-              {/* 
               <Box textAlign="center" pt={4}>
+                 <Box 
+                   bg="teal.500" 
+                   color="white" 
+                   px={6} 
+                   py={3} 
+                   borderRadius="lg" 
+                   fontSize="xl"
+                   fontWeight="bold"
+                   mb={4}
+                   display="inline-block"
+                 >
+                   We Are Here: FractiAI About Page
+                 </Box>
                  <Button as={ChakraLink} href="/signup" colorScheme="teal" size="lg">Get Started with FractiVerse 1.0</Button>
-              </Box> 
-              */}
+              </Box>
           </Section>
 
           {/* Evolution / History */}

@@ -2,7 +2,7 @@
 create table if not exists public.chats (
   id uuid default gen_random_uuid() primary key,
   title text not null,
-  user_id uuid references public.profiles(id) on delete cascade not null,
+  user_id uuid references public.users(id) on delete cascade not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
@@ -63,7 +63,7 @@ create policy "Users can create messages in their chats"
 -- Create token_transactions table
 create table if not exists public.token_transactions (
   id uuid default gen_random_uuid() primary key,
-  user_id uuid references public.profiles(id) on delete cascade not null,
+  user_id uuid references public.users(id) on delete cascade not null,
   type text not null,
   amount integer not null,
   description text not null,
