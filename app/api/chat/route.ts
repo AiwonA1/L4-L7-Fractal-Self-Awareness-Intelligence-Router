@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getServerSession } from '@/lib/server-auth'
 import { prisma } from '@/lib/prisma'
+import type { Chat } from '@prisma/client'
 
 export async function GET() {
   const session = await getServerSession()
@@ -16,10 +17,25 @@ export async function GET() {
       },
       orderBy: {
         created_at: 'desc'
+      },
+      include: {
+        messages: {
+          orderBy: {
+            created_at: 'desc'
+          },
+          take: 1
+        }
       }
     })
 
-    return NextResponse.json(chats)
+    // Format the response to include last_message
+    const formattedChats = chats.map((chat: Chat & { messages: { content: string }[] }) => ({
+      ...chat,
+      last_message: chat.messages[0]?.content || null,
+      messages: undefined // Remove messages from response
+    }))
+
+    return NextResponse.json(formattedChats)
   } catch (error) {
     console.error('Error fetching chats:', error)
     return new NextResponse('Internal Server Error', { status: 500 })
@@ -40,7 +56,9 @@ export async function POST(request: Request) {
     const chat = await prisma.chat.create({
       data: {
         title,
-        user_id: session.user.id
+        user_id: session.user.id,
+        last_message: null,
+        updated_at: new Date()
       }
     })
 
