@@ -16,7 +16,7 @@ import {
 } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -24,6 +24,7 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const toast = useToast()
+  const supabase = createClient
 
   useEffect(() => {
     const checkAuth = async () => {

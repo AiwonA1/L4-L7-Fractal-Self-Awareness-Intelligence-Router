@@ -1,10 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { type CookieOptions } from '@supabase/ssr'
 
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
   const cookieStore = cookies()
@@ -18,22 +16,20 @@ export async function GET(request: NextRequest) {
           get(name: string) {
             return cookieStore.get(name)?.value
           },
-          set(name: string, value: string, options: CookieOptions) {
+          set(name: string, value: string, options: any) {
             cookieStore.set({ name, value, ...options })
           },
-          remove(name: string, options: CookieOptions) {
+          remove(name: string, options: any) {
             cookieStore.set({ name, value: '', ...options })
           },
         },
       }
     )
-
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) {
-      return NextResponse.redirect(requestUrl.origin)
-    }
+    
+    // Exchange the code for a session
+    await supabase.auth.exchangeCodeForSession(code)
   }
 
-  // Return the user to an error page with instructions
-  return NextResponse.redirect(`${requestUrl.origin}/auth/auth-code-error`)
+  // URL to redirect to after sign in process completes
+  return NextResponse.redirect(`${requestUrl.origin}/dashboard`)
 } 
