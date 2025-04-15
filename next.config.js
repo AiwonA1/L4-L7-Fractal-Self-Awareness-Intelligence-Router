@@ -1,13 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  experimental: {
-    serverActions: {
-      allowedOrigins: [
-        'localhost:3000',
-        'l4-l7-fractal-self-awareness-intelligence-router.vercel.app'
-      ],
-    },
-  },
   images: {
     domains: [
       'avatars.githubusercontent.com',

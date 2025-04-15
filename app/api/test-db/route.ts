@@ -7,12 +7,12 @@ export async function GET() {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError) throw new Error(`Session error: ${sessionError.message}`)
 
-    // 2. Test Profiles Table
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
+    // 2. Test Users Table
+    const { data: users, error: usersError } = await supabase
+      .from('users')
       .select('*')
       .limit(5)
-    if (profilesError) throw new Error(`Profiles error: ${profilesError.message}`)
+    if (usersError) throw new Error(`Users error: ${usersError.message}`)
 
     // 3. Test Chats Table
     const { data: chats, error: chatsError } = await supabase
@@ -40,9 +40,9 @@ export async function GET() {
       success: true,
       data: {
         session: session ? 'Active' : 'No active session',
-        profiles: {
-          count: profiles?.length || 0,
-          sample: profiles
+        users: {
+          count: users?.length || 0,
+          sample: users
         },
         chats: {
           count: chats?.length || 0,

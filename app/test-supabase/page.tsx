@@ -97,6 +97,14 @@ export default function TestSupabase() {
       console.log('✅ Messages test passed:', messages)
       setMessagesData(messages)
 
+      // Test Users Table
+      const { data: users, error: usersError } = await supabase
+        .from('users')
+        .select('*')
+        .limit(5)
+
+      if (usersError) throw new Error(`Users error: ${usersError.message}`)
+
       console.log('✨ All tests completed successfully')
       toast({
         title: 'Tests completed successfully',
@@ -192,6 +200,13 @@ export default function TestSupabase() {
                 <DataSection title="Profiles Data" data={profilesData} />
                 <DataSection title="Chat History Data" data={chatHistoryData} />
                 <DataSection title="Messages Data" data={messagesData} />
+                <Box>
+                  <Heading size="md" mb={2}>Users Table</Heading>
+                  <Text>Count: {users?.length || 0}</Text>
+                  <Code p={4} rounded="md" display="block" whiteSpace="pre">
+                    {JSON.stringify(users, null, 2)}
+                  </Code>
+                </Box>
               </>
             )}
           </>
