@@ -1,6 +1,22 @@
 'use client'
 
-import { Box, Flex, Heading, IconButton, Menu, MenuButton, MenuItem, Avatar, Text, Container, HStack, Divider, Button, useToast, MenuList } from '@chakra-ui/react'
+import {
+  Box,
+  Flex,
+  Heading,
+  IconButton,
+  Text,
+  Container,
+  HStack,
+  Button,
+  Menu,
+  MenuButton,
+  MenuList,
+  MenuItem,
+  MenuDivider,
+  Avatar,
+  useToast,
+} from '@chakra-ui/react'
 import { FaUser, FaSignOutAlt, FaCoins } from 'react-icons/fa'
 import Link from 'next/link'
 import { useAuth } from '@/app/context/AuthContext'
@@ -96,13 +112,13 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
                 <Menu>
                   <MenuButton
                     as={IconButton}
-                    icon={<Avatar size="sm" icon={<FaUser />} />}
-                    variant="ghost"
                     aria-label="Profile menu"
+                    variant="ghost"
+                    icon={<Avatar size="sm" icon={<FaUser />} />}
                   />
                   <MenuList>
-                    <MenuItem>
-                      <HStack spacing={3}>
+                    <MenuItem value="profile">
+                      <HStack gap={3}>
                         <Avatar size="sm" icon={<FaUser />} />
                         <Box>
                           <Text fontWeight="medium">{getUserDisplayName()}</Text>
@@ -112,8 +128,8 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
                         </Box>
                       </HStack>
                     </MenuItem>
-                    <Divider my={2} />
-                    <MenuItem>
+                    <MenuDivider />
+                    <MenuItem value="balance">
                       <HStack justify="space-between" width="100%">
                         <Text>FractiTokens</Text>
                         <Text fontWeight="bold" color="yellow.500">
@@ -121,27 +137,39 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
                         </Text>
                       </HStack>
                     </MenuItem>
-                    <MenuItem onClick={() => handleBuyTokens('TIER_1')} icon={<FaCoins />}>
+                    <MenuItem value="buy-100" onClick={() => handleBuyTokens('TIER_1')}>
                       <HStack justify="space-between" width="100%">
-                        <Text>Buy 100 FractiTokens</Text>
+                        <HStack>
+                          <FaCoins />
+                          <Text>Buy 100 FractiTokens</Text>
+                        </HStack>
                         <Text fontSize="sm" color="gray.500">{formatPrice(FRACTIVERSE_PRICES.TIER_1.price)}</Text>
                       </HStack>
                     </MenuItem>
-                    <MenuItem onClick={() => handleBuyTokens('TIER_2')} icon={<FaCoins />}>
+                    <MenuItem value="buy-500" onClick={() => handleBuyTokens('TIER_2')}>
                       <HStack justify="space-between" width="100%">
-                        <Text>Buy 500 FractiTokens</Text>
+                        <HStack>
+                          <FaCoins />
+                          <Text>Buy 500 FractiTokens</Text>
+                        </HStack>
                         <Text fontSize="sm" color="gray.500">{formatPrice(FRACTIVERSE_PRICES.TIER_2.price)}</Text>
                       </HStack>
                     </MenuItem>
-                    <MenuItem onClick={() => handleBuyTokens('TIER_3')} icon={<FaCoins />}>
+                    <MenuItem value="buy-1000" onClick={() => handleBuyTokens('TIER_3')}>
                       <HStack justify="space-between" width="100%">
-                        <Text>Buy 1000 FractiTokens</Text>
+                        <HStack>
+                          <FaCoins />
+                          <Text>Buy 1000 FractiTokens</Text>
+                        </HStack>
                         <Text fontSize="sm" color="gray.500">{formatPrice(FRACTIVERSE_PRICES.TIER_3.price)}</Text>
                       </HStack>
                     </MenuItem>
-                    <Divider my={2} />
-                    <MenuItem onClick={handleSignOut} icon={<FaSignOutAlt />} color="red.500">
-                      Sign Out
+                    <MenuDivider />
+                    <MenuItem value="sign-out" onClick={handleSignOut}>
+                      <HStack>
+                        <FaSignOutAlt />
+                        <Text color="red.500">Sign Out</Text>
+                      </HStack>
                     </MenuItem>
                   </MenuList>
                 </Menu>

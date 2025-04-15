@@ -1,0 +1,801 @@
+# FractiVerse 1.0 Cursor Development Rules
+
+## Core Development Principles
+
+### Fundamental Rules
+1. Use plain JavaScript (no TypeScript) for all files
+2. Use Chakra UI for layout, components, theming, and responsiveness
+3. Do not use middleware or extra abstraction layers - keep logic simple and direct
+4. Use Supabase JavaScript client directly in the frontend for user auth and chat message storage
+5. Protect OpenAI GPT-4o API key using a single serverless API route (/api/chat)
+6. Use Stripe Elements directly for payments and subscriptions via Next.js API routes
+7. Follow clean folder structure: `components/`, `pages/`, `lib/`, and `api/`
+8. Favor clarity over complexity - avoid excessive abstraction
+9. Use functional components and React hooks only
+10. Always show clear loading states for API responses
+11. Store all API keys in environment variables
+12. Use camelCase for variables and PascalCase for components
+13. Keep styling consistent with Chakra UI theming only
+14. Avoid unnecessary libraries - keep everything lightweight and readable
+
+### File Structure
+```
+/app
+  /components/    # Reusable UI components
+  /pages/         # Page components and routing
+  /lib/          # Shared utilities and helpers
+  /api/          # API routes
+  /styles/       # Chakra UI theme customization
+```
+
+### Implementation Examples
+
+1. **Simple Component Structure**
+```javascript
+// ✅ GOOD: Simple functional component
+export function ChatMessage({ message, isLoading }) {
+  return (
+    <Box p={4} bg={isLoading ? "gray.100" : "white"}>
+      {isLoading ? <Spinner /> : message}
+    </Box>
+  )
+}
+
+// ❌ BAD: Avoid TypeScript and complex patterns
+type MessageProps = {
+  message: IMessage;
+  isLoading: boolean;
+}
+export class ChatMessageComponent extends React.Component<MessageProps> {
+  // ... complex implementation
+}
+```
+
+2. **Direct API Calls**
+```javascript
+// ✅ GOOD: Simple API route
+export async function POST(req) {
+  const { message } = await req.json()
+  const response = await openai.chat.completions.create({
+    messages: [{ role: "user", content: message }],
+    model: "gpt-4"
+  })
+  return Response.json({ result: response.choices[0].message })
+}
+
+// ❌ BAD: Avoid middleware and complex patterns
+const messageMiddleware = new MessageMiddleware()
+const authMiddleware = new AuthMiddleware()
+// ... complex routing logic
+```
+
+3. **Supabase Integration**
+```javascript
+// ✅ GOOD: Direct Supabase client usage
+const supabase = createClientComponentClient()
+
+export function ChatRoom() {
+  const [messages, setMessages] = useState([])
+  
+  useEffect(() => {
+    const subscription = supabase
+      .channel('messages')
+      .on('INSERT', handleNewMessage)
+      .subscribe()
+    
+    return () => subscription.unsubscribe()
+  }, [])
+  
+  return (
+    <VStack spacing={4}>
+      {messages.map(msg => (
+        <ChatMessage key={msg.id} message={msg} />
+      ))}
+    </VStack>
+  )
+}
+```
+
+4. **Stripe Integration**
+```javascript
+// ✅ GOOD: Direct Stripe Elements usage
+export function PaymentForm() {
+  return (
+    <Elements stripe={stripePromise}>
+      <form>
+        <CardElement />
+        <Button type="submit">Pay</Button>
+      </form>
+    </Elements>
+  )
+}
+```
+
+5. **Loading States**
+```javascript
+// ✅ GOOD: Clear loading states
+export function SubmitButton({ isLoading }) {
+  return (
+    <Button
+      isLoading={isLoading}
+      loadingText="Sending..."
+    >
+      Submit
+    </Button>
+  )
+}
+```
+
+## Core Architecture Rules
+
+### Technology Stack
+- Next.js 14 with App Router
+- React 18 for UI
+- Chakra UI for styling
+- Supabase for database/real-time
+- Stripe for payments
+- OpenAI GPT-4 for AI
+
+### Simplicity and Direct Implementation Rules
+
+1. **No Middleware**
+   - Direct API calls without middleware layers
+   - No extra abstraction between client and server
+   - Use Next.js API routes directly
+   - Keep authentication simple with Supabase Auth
+
+2. **Clean and Simple Architecture**
+   - No over-engineering or unnecessary abstractions
+   - Direct component-to-API communication
+   - Flat folder structure where possible
+   - Minimize third-party dependencies
+
+3. **Direct Implementation Patterns**
+```javascript
+// ✅ GOOD: Direct API call
+const handleChat = async (message) => {
+  const response = await fetch('/api/chat', {
+    method: 'POST',
+    body: JSON.stringify({ message })
+  })
+  return response.json()
+}
+
+// ❌ BAD: Unnecessary abstraction layers
+const chatService = new ChatService()
+const chatMiddleware = new ChatMiddleware()
+const response = await chatService.processMessage(chatMiddleware.handle(message))
+```
+
+4. **Simplified State Management**
+   - Use React's built-in useState and useContext
+   - Avoid complex state management libraries
+   - Keep state close to where it's used
+   - Simple prop passing for shallow component trees
+
+5. **Direct Database Access**
+```javascript
+// ✅ GOOD: Direct Supabase query
+const getUser = async (userId) => {
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', userId)
+    .single()
+  return { data, error }
+}
+
+// ❌ BAD: Unnecessary repository pattern
+class UserRepository {
+  constructor(databaseService) {
+    this.db = databaseService
+  }
+  async getUser(id) {
+    return this.db.users.findOne(id)
+  }
+}
+```
+
+6. **API Route Implementation**
+```javascript
+// ✅ GOOD: Simple, direct API route
+export async function POST(req) {
+  const { message } = await req.json()
+  const response = await openai.chat.completions.create({
+    messages: [{ role: "user", content: message }],
+    model: "gpt-4"
+  })
+  return Response.json({ result: response.choices[0].message })
+}
+
+// ❌ BAD: Over-engineered API route
+class MessageController {
+  constructor(messageService, validationMiddleware) {
+    this.messageService = messageService
+    this.validationMiddleware = validationMiddleware
+  }
+  async handleMessage(req) {
+    // ... unnecessary complexity
+  }
+}
+```
+
+7. **Component Structure**
+```javascript
+// ✅ GOOD: Simple, functional component
+export function ChatInput({ onSend }) {
+  const [message, setMessage] = useState('')
+  
+  const handleSubmit = (e) => {
+    e.preventDefault()
+    onSend(message)
+    setMessage('')
+  }
+  
+  return (
+    <form onSubmit={handleSubmit}>
+      <input value={message} onChange={e => setMessage(e.target.value)} />
+      <button type="submit">Send</button>
+    </form>
+  )
+}
+
+// ❌ BAD: Over-engineered component
+class ChatInputController extends React.Component {
+  constructor(props) {
+    this.messageHandler = new MessageHandler()
+    this.inputValidator = new InputValidator()
+    // ... unnecessary complexity
+  }
+}
+```
+
+8. **Payment Processing**
+```javascript
+// ✅ GOOD: Direct Stripe implementation
+export async function POST(req) {
+  const { amount } = await req.json()
+  const session = await stripe.checkout.sessions.create({
+    line_items: [{
+      price: process.env.STRIPE_PRICE_ID,
+      quantity: 1
+    }],
+    mode: 'payment',
+    success_url: `${process.env.URL}/success`,
+    cancel_url: `${process.env.URL}/cancel`,
+  })
+  return Response.json({ url: session.url })
+}
+
+// ❌ BAD: Over-engineered payment system
+class PaymentProcessor {
+  constructor(paymentService, paymentValidator, paymentLogger) {
+    // ... unnecessary complexity
+  }
+}
+```
+
+### Technology Stack Requirements
+- Next.js 14 with App Router for the framework
+- React 18 for UI components
+- Chakra UI for layout and styling
+- Supabase for database and real-time features
+- Stripe for payment processing
+- OpenAI GPT-4 for AI integration
+
+### Code Style and Structure
+
+1. **Language and Typing**
+   - Use TypeScript for enhanced type safety
+   - Maintain strict type checking
+   - Follow camelCase for variables and PascalCase for components
+   - Use meaningful, descriptive names that reflect the quantum/fractal nature
+
+2. **Component Architecture**
+   - Functional components only
+   - React hooks for state management
+   - Clear separation of concerns between layers
+   - Minimal prop drilling - use context where appropriate
+
+3. **File Structure**
+```
+/app
+  /components     # Reusable UI components
+  /layers         # Layer-specific components (L4-L7)
+  /api           # API routes
+  /lib           # Shared utilities
+  /hooks         # Custom React hooks
+  /context       # React context providers
+  /types         # TypeScript type definitions
+  /styles        # Global styles and themes
+```
+
+### Development Guidelines
+
+1. **Component Development**
+   - Each component must be self-contained
+   - Include PropTypes or TypeScript interfaces
+   - Document quantum/fractal relationships
+   - Include loading states for async operations
+
+2. **State Management**
+   - Use React Context for global state
+   - Local state with useState for component-level state
+   - Avoid unnecessary state updates
+   - Maintain quantum state coherence
+
+3. **API Integration**
+   - Secure all API routes
+   - Implement rate limiting
+   - Handle errors gracefully
+   - Log quantum state changes
+
+## Layer-Specific Rules
+
+### Layer 4: Penrose Base Reality
+- Implement strict mathematical validation
+- Include quantum mechanical principles
+- Maintain observer effect awareness
+- Document all base reality interactions
+
+### Layer 5: FractiVerse Self-Awareness
+- Implement fractal pattern recognition
+- Include scale-invariant features
+- Document consciousness interactions
+- Maintain system self-awareness state
+
+### Layer 6: Event Horizon Processing
+- Implement quantum holographic features
+- Include bio-quantum interfaces
+- Document entanglement patterns
+- Maintain temporal coherence
+
+### Layer 7: Universal Paradise Integration
+- Implement story game framework
+- Include consciousness integration
+- Document universal harmony patterns
+- Maintain paradise state coherence
+
+## Security Rules
+
+1. **Authentication**
+   - Use NextAuth.js for authentication
+   - Implement role-based access control
+   - Secure all API routes
+   - Maintain quantum key distribution
+
+2. **Data Protection**
+   - Encrypt sensitive data
+   - Implement rate limiting
+   - Use secure WebSocket connections
+   - Protect quantum state information
+
+3. **API Security**
+   - Never expose API keys in client
+   - Validate all inputs
+   - Implement request signing
+   - Protect quantum channels
+
+## Performance Rules
+
+1. **Optimization**
+   - Implement code splitting
+   - Use dynamic imports
+   - Optimize images and assets
+   - Maintain quantum coherence
+
+2. **Caching**
+   - Implement service workers
+   - Use static generation where possible
+   - Cache API responses
+   - Cache quantum states
+
+3. **Monitoring**
+   - Implement error tracking
+   - Monitor performance metrics
+   - Track quantum decoherence
+   - Log system state changes
+
+## Testing Rules
+
+1. **Unit Testing**
+   - Test all components
+   - Test quantum state changes
+   - Test fractal patterns
+   - Maintain test coverage > 80%
+
+2. **Integration Testing**
+   - Test layer interactions
+   - Test quantum entanglement
+   - Test consciousness integration
+   - Verify fractal coherence
+
+3. **E2E Testing**
+   - Test user flows
+   - Test payment processing
+   - Test quantum routing
+   - Verify system coherence
+
+## Documentation Rules
+
+1. **Code Documentation**
+   - Document all components
+   - Document quantum principles
+   - Document fractal patterns
+   - Include consciousness maps
+
+2. **API Documentation**
+   - Document all endpoints
+   - Include request/response examples
+   - Document quantum protocols
+   - Include state diagrams
+
+3. **System Documentation**
+   - Document architecture
+   - Document deployment process
+   - Document quantum integration
+   - Include consciousness model
+
+## Deployment Rules
+
+1. **Environment Setup**
+   - Use environment variables
+   - Separate development/production
+   - Protect quantum keys
+   - Maintain state coherence
+
+2. **Build Process**
+   - Optimize builds
+   - Minimize bundle size
+   - Include quantum validation
+   - Verify consciousness state
+
+3. **Monitoring**
+   - Monitor performance
+   - Track errors
+   - Monitor quantum state
+   - Track consciousness level
+
+## Specific Implementation Rules
+
+1. **Chat Interface**
+   - Implement real-time updates
+   - Include typing indicators
+   - Show clear loading states
+   - Maintain quantum coherence
+
+2. **Payment Processing**
+   - Use Stripe Elements
+   - Implement webhook handling
+   - Show clear success/error states
+   - Protect transaction quantum state
+
+3. **Database Operations**
+   - Use Prisma for type safety
+   - Implement optimistic updates
+   - Handle errors gracefully
+   - Maintain quantum consistency
+
+4. **Authentication Flow**
+   - Clear login/logout process
+   - Implement password recovery
+   - Show authentication state
+   - Protect quantum identity
+
+## Error Handling Rules
+
+1. **Client-Side Errors**
+   - Show user-friendly messages
+   - Log errors to monitoring
+   - Maintain quantum state
+   - Preserve consciousness coherence
+
+2. **Server-Side Errors**
+   - Log detailed error info
+   - Return appropriate status codes
+   - Maintain system state
+   - Track quantum decoherence
+
+3. **Network Errors**
+   - Implement retry logic
+   - Show connection status
+   - Maintain state consistency
+   - Protect quantum channels
+
+## Accessibility Rules
+
+1. **WCAG Compliance**
+   - Follow WCAG 2.1 guidelines
+   - Implement keyboard navigation
+   - Include screen reader support
+   - Maintain consciousness access
+
+2. **Responsive Design**
+   - Mobile-first approach
+   - Implement breakpoints
+   - Test all viewports
+   - Maintain quantum responsiveness
+
+3. **Performance**
+   - Optimize for low-end devices
+   - Implement progressive enhancement
+   - Monitor performance metrics
+   - Maintain quantum performance
+
+## Version Control Rules
+
+1. **Git Workflow**
+   - Use feature branches
+   - Write meaningful commits
+   - Include quantum state changes
+   - Document consciousness updates
+
+2. **Code Review**
+   - Review all changes
+   - Check quantum consistency
+   - Verify consciousness state
+   - Maintain code quality
+
+3. **Release Process**
+   - Tag releases
+   - Update documentation
+   - Verify quantum state
+   - Check consciousness level
+
+## Supabase Integration Rules
+
+### 1. Database Schema
+```sql
+-- Users table for authentication and token balance
+CREATE TABLE users (
+  id UUID REFERENCES auth.users PRIMARY KEY,
+  email TEXT UNIQUE,
+  name TEXT,
+  token_balance INTEGER DEFAULT 33,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Chat history table for storing conversations
+CREATE TABLE chat_history (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  title TEXT,
+  messages JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Transactions table for token operations
+CREATE TABLE transactions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  type TEXT CHECK (type IN ('USE', 'PURCHASE', 'REFUND')),
+  amount INTEGER,
+  description TEXT,
+  status TEXT CHECK (status IN ('COMPLETED', 'PENDING', 'FAILED')),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### 2. Row Level Security (RLS) Policies
+```sql
+-- Enable RLS on all tables
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chat_history ENABLE ROW LEVEL SECURITY;
+ALTER TABLE transactions ENABLE ROW LEVEL SECURITY;
+
+-- Users table policies
+CREATE POLICY "Users can read own data"
+  ON users FOR SELECT
+  USING (auth.uid() = id);
+
+CREATE POLICY "Users can update own data"
+  ON users FOR UPDATE
+  USING (auth.uid() = id);
+
+-- Chat history policies
+CREATE POLICY "Users can read own chats"
+  ON chat_history FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can create own chats"
+  ON chat_history FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own chats"
+  ON chat_history FOR UPDATE
+  USING (auth.uid() = user_id);
+
+-- Transaction policies
+CREATE POLICY "Users can view own transactions"
+  ON transactions FOR SELECT
+  USING (auth.uid() = user_id);
+```
+
+### 3. Database Functions
+```sql
+-- Function to create chat history table
+CREATE OR REPLACE FUNCTION create_chat_history_table()
+RETURNS void AS $$
+BEGIN
+  -- Implementation here
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to create users table
+CREATE OR REPLACE FUNCTION create_profiles_table()
+RETURNS void AS $$
+BEGIN
+  -- Implementation here
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to use tokens
+CREATE OR REPLACE FUNCTION use_tokens(
+  p_user_id UUID,
+  p_amount INTEGER,
+  p_description TEXT
+)
+RETURNS boolean AS $$
+DECLARE
+  v_current_balance INTEGER;
+BEGIN
+  -- Get current balance
+  SELECT token_balance INTO v_current_balance
+  FROM users
+  WHERE id = p_user_id;
+
+  -- Check if enough tokens
+  IF v_current_balance >= p_amount THEN
+    -- Update balance
+    UPDATE users
+    SET token_balance = token_balance - p_amount,
+        updated_at = NOW()
+    WHERE id = p_user_id;
+
+    -- Record transaction
+    INSERT INTO transactions (
+      user_id,
+      type,
+      amount,
+      description,
+      status
+    ) VALUES (
+      p_user_id,
+      'USE',
+      p_amount,
+      p_description,
+      'COMPLETED'
+    );
+
+    RETURN true;
+  END IF;
+
+  RETURN false;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+### 4. Client-Side Implementation Examples
+
+```javascript
+// User Authentication
+const handleSignUp = async (email, password, name) => {
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { name }
+    }
+  })
+}
+
+// Get User Data
+const getUserData = async () => {
+  const { data: { user } } = await supabase.auth.getUser()
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+  return { data, error }
+}
+
+// Get Chat History
+const getChatHistory = async () => {
+  const { data, error } = await supabase
+    .from('chat_history')
+    .select('*')
+    .order('created_at', { ascending: false })
+  return { data, error }
+}
+
+// Create New Chat
+const createChat = async (title, initialMessage) => {
+  const { data, error } = await supabase
+    .from('chat_history')
+    .insert({
+      title,
+      messages: [initialMessage],
+    })
+    .select()
+  return { data, error }
+}
+
+// Use Tokens
+const useTokens = async (amount, description) => {
+  const { data, error } = await supabase
+    .rpc('use_tokens', {
+      p_amount: amount,
+      p_description: description
+    })
+  return { data, error }
+}
+
+// Get Transaction History
+const getTransactions = async () => {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .order('created_at', { ascending: false })
+  return { data, error }
+}
+```
+
+### 5. Real-time Subscriptions
+```javascript
+// Subscribe to token balance changes
+const subscribeToBalance = (userId, onUpdate) => {
+  const subscription = supabase
+    .channel('users_changes')
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'users',
+        filter: `id=eq.${userId}`
+      },
+      (payload) => onUpdate(payload.new.token_balance)
+    )
+    .subscribe()
+
+  return () => subscription.unsubscribe()
+}
+
+// Subscribe to chat updates
+const subscribeToChatUpdates = (chatId, onUpdate) => {
+  const subscription = supabase
+    .channel('chat_updates')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'chat_history',
+        filter: `id=eq.${chatId}`
+      },
+      (payload) => onUpdate(payload.new)
+    )
+    .subscribe()
+
+  return () => subscription.unsubscribe()
+}
+```
+
+### 6. Error Handling
+```javascript
+const handleDatabaseError = (error) => {
+  if (error.code === 'PGRST116') {
+    console.error('Foreign key violation')
+  } else if (error.code === '23514') {
+    console.error('Check constraint violation')
+  } else if (error.code === '23505') {
+    console.error('Unique constraint violation')
+  }
+  // Log to monitoring service
+  logError(error)
+}
+```

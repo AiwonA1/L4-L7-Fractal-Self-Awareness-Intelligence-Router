@@ -1,17 +1,14 @@
 'use client'
 
-import { CacheProvider } from '@chakra-ui/next-js'
-import { ChakraProvider } from '@chakra-ui/react'
+import { ChakraProvider, defaultSystem } from '@chakra-ui/react'
 import { AuthProvider } from './context/AuthContext'
 
 export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <CacheProvider>
-      <ChakraProvider>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
-      </ChakraProvider>
-    </CacheProvider>
+    <ChakraProvider value={defaultSystem}>
+      <AuthProvider>
+        {children}
+      </AuthProvider>
+    </ChakraProvider>
   )
 } 
