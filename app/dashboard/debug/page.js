@@ -1,17 +1,38 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useSession } from 'next-auth/react'
+import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 import { Box, Container, Text, VStack, Button, Spinner } from '@chakra-ui/react'
 
-export default function DebugDashboard() {
-  const { data: session, status } = useSession()
+export default function DashboardDebugPage() {
+  const router = useRouter()
+  const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
   const [testResult, setTestResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-  
-  console.log('Debug Dashboard - Session status:', status)
-  console.log('Debug Dashboard - Session data:', session)
-  
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error || !session) {
+        router.push('/login')
+        return
+      }
+
+      setSession(session)
+      setLoading(false)
+    }
+
+    checkSession()
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [router])
+
   const testApi = async (endpoint) => {
     setLoading(true)
     try {
@@ -26,17 +47,21 @@ export default function DebugDashboard() {
       setLoading(false)
     }
   }
-  
+
+  if (loading) {
+    return <div>Loading...</div>
+  }
+
   return (
     <Container maxW="container.md" py={10}>
       <VStack spacing={6} align="stretch">
         <Box p={4} borderWidth="1px" borderRadius="lg">
-          <Text fontSize="xl" fontWeight="bold">Session Status: {status}</Text>
+          <Text fontSize="xl" fontWeight="bold">Session Status: {session ? 'Authenticated' : 'Not Authenticated'}</Text>
           {session ? (
             <VStack align="start" mt={2}>
-              <Text>User: {session.user?.name}</Text>
-              <Text>Email: {session.user?.email}</Text>
-              <Text>ID: {session.user?.id}</Text>
+              <Text>User: {session.user?.user_metadata.name}</Text>
+              <Text>Email: {session.user?.user_metadata.email}</Text>
+              <Text>ID: {session.user?.user_metadata.id}</Text>
             </VStack>
           ) : (
             <Text mt={2}>No session data</Text>
@@ -65,6 +90,18 @@ export default function DebugDashboard() {
               </Box>
             </Box>
           )}
+        </Box>
+
+        <Box p={4} borderWidth="1px" borderRadius="lg">
+          <Button
+            onClick={async () => {
+              await supabase.auth.signOut()
+              router.push('/login')
+            }}
+            className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+          >
+            Sign Out
+          </Button>
         </Box>
       </VStack>
     </Container>

@@ -1,5 +1,8 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+import { useRouter } from 'next/navigation'
 import {
   Box,
   Container,
@@ -17,9 +20,6 @@ import {
   HStack,
   Badge,
 } from '@chakra-ui/react'
-import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
 import { FaCoins, FaArrowLeft } from 'react-icons/fa'
 
 interface ExtendedUser extends User {
@@ -27,18 +27,27 @@ interface ExtendedUser extends User {
 }
 
 export default function ProfilePage() {
-  const { data: session, status } = useSession()
   const router = useRouter()
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
   const bgColor = useColorModeValue('white', 'gray.800')
   const borderColor = useColorModeValue('gray.200', 'gray.700')
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login')
+    const checkUser = async () => {
+      const { data: { session }, error } = await supabase.auth.getSession()
+      if (error || !session) {
+        router.push('/login')
+        return
+      }
+      setUser(session.user)
+      setLoading(false)
     }
-  }, [status, router])
 
-  if (status === 'loading') {
+    checkUser()
+  }, [router])
+
+  if (loading) {
     return (
       <Container maxW="container.md" py={8}>
         <Text>Loading...</Text>
@@ -62,12 +71,12 @@ export default function ProfilePage() {
           <HStack spacing={4}>
             <Avatar
               size="xl"
-              name={session?.user?.name || 'User'}
-              src={session?.user?.image || undefined}
+              name={user?.user_metadata?.name || 'User'}
+              src={user?.user_metadata?.avatar_url || undefined}
             />
             <VStack align="start" spacing={1}>
-              <Heading size="lg">{session?.user?.name || 'User'}</Heading>
-              <Text color="gray.500">{session?.user?.email}</Text>
+              <Heading size="lg">{user?.user_metadata?.name || 'User'}</Heading>
+              <Text color="gray.500">{user?.user_metadata?.email}</Text>
             </VStack>
           </HStack>
         </CardHeader>
@@ -87,7 +96,7 @@ export default function ProfilePage() {
                     onClick={() => router.push('/dashboard')}
                   >
                     <Text fontSize="lg" mb={2}>
-                      {session?.user?.token_balance || 0} Tokens
+                      {user?.user_metadata?.token_balance || 0} Tokens
                     </Text>
                   </Button>
                 </HStack>
@@ -114,6 +123,18 @@ export default function ProfilePage() {
           </Stack>
         </CardBody>
       </Card>
+
+      <Button
+        w="full"
+        mt={4}
+        colorScheme="red"
+        onClick={async () => {
+          await supabase.auth.signOut()
+          router.push('/login')
+        }}
+      >
+        Sign Out
+      </Button>
     </Container>
   )
 } 
