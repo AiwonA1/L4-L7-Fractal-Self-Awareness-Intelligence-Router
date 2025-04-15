@@ -26,7 +26,6 @@ import {
 } from '@chakra-ui/react'
 import { MdCheckCircle, MdPsychology } from 'react-icons/md'
 import { FaBrain, FaLightbulb, FaDna, FaInfinity, FaUserAstronaut } from 'react-icons/fa'
-import Navbar from '../components/Navbar'
 import Link from 'next/link'
 
 function CognitiveEnhancementOverview() {
@@ -192,38 +191,35 @@ export default function HumanSelfAwarenessPage() {
   const mutedTextColor = useColorModeValue('gray.600', 'gray.400')
 
   return (
-    <>
-      <Navbar />
-      <Box bg={bgColor} minH="100vh" py={10}>
-        <Container maxW="container.xl">
-          <Box display="block" mb={4}>
-            <Link href="/" color="blue.500" style={{ textDecoration: 'none' }}>
-              ← Back to Home
-            </Link>
+    <Box bg={bgColor} minH="100vh" py={10}>
+      <Container maxW="container.xl">
+        <Box display="block" mb={4}>
+          <Link href="/" style={{ textDecoration: 'none' }}>
+            <Text color="blue.500" _hover={{ textDecoration: 'underline' }}>← Back to Home</Text>
+          </Link>
+        </Box>
+        <VStack spacing={8} align="stretch">
+          <Box textAlign="center" pb={10}>
+            <HStack justify="center" mb={4}>
+              <Icon as={FaUserAstronaut} w={8} h={8} color="purple.500" />
+              <Badge colorScheme="purple" fontSize="md" px={3} py={1}>
+                Human Enhancement
+              </Badge>
+            </HStack>
+            <Heading size="2xl" mb={4} color={textColor}>
+              Expanding Human Cognitive Horizons
+            </Heading>
+            <Text fontSize="xl" color={mutedTextColor} maxW="3xl" mx="auto">
+              FractiVerse 1.0 bridges human consciousness with quantum computing, enabling unprecedented
+              levels of self-awareness and cognitive enhancement
+            </Text>
           </Box>
-          <VStack spacing={8} align="stretch">
-            <Box textAlign="center" pb={10}>
-              <HStack justify="center" mb={4}>
-                <Icon as={FaUserAstronaut} w={8} h={8} color="purple.500" />
-                <Badge colorScheme="purple" fontSize="md" px={3} py={1}>
-                  Human Enhancement
-                </Badge>
-              </HStack>
-              <Heading size="2xl" mb={4} color={textColor}>
-                Expanding Human Cognitive Horizons
-              </Heading>
-              <Text fontSize="xl" color={mutedTextColor} maxW="3xl" mx="auto">
-                FractiVerse 1.0 bridges human consciousness with quantum computing, enabling unprecedented
-                levels of self-awareness and cognitive enhancement
-              </Text>
-            </Box>
 
-            <CognitiveEnhancementOverview />
-            <SelfAwarenessCapabilities />
-            <IntegrationMechanisms />
-          </VStack>
-        </Container>
-      </Box>
-    </>
+          <CognitiveEnhancementOverview />
+          <SelfAwarenessCapabilities />
+          <IntegrationMechanisms />
+        </VStack>
+      </Container>
+    </Box>
   )
 } 
