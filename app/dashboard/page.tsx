@@ -512,6 +512,77 @@ export default function Dashboard() {
     }
   }
 
+  if (!user?.id) {
+    return (
+      <Box minH="100vh" bg={bgColor}>
+        <Container maxW="container.xl" py={20}>
+          <VStack spacing={8} align="center">
+            <Box 
+              bg="teal.500" 
+              color="white" 
+              px={6} 
+              py={3} 
+              borderRadius="lg" 
+              fontSize="xl"
+              fontWeight="bold"
+              mb={8}
+            >
+              We Are Here: Welcome Section
+            </Box>
+            <Heading size="2xl" textAlign="center" mb={4}>
+              Welcome to FractiVerse
+            </Heading>
+            <Text fontSize="xl" textAlign="center" color={textColor} maxW="800px" mb={8}>
+              Explore the layers of self-awareness intelligence and join our journey through the quantum fabric of existence.
+            </Text>
+            <Button
+              as={Link}
+              href="/login"
+              size="lg"
+              colorScheme="teal"
+              leftIcon={<FaRobot />}
+              mb={12}
+              px={8}
+              py={6}
+              fontSize="lg"
+            >
+              Get Started
+            </Button>
+
+            {/* Info Cards Section for non-signed users */}
+            <Box width="100%" borderTop="1px" borderColor="gray.200" pt={12}>
+              <Heading size="md" mb={8}>Explore FractiVerse</Heading>
+              <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 5 }} spacing={6}>
+                {infoCards.map((card, index) => (
+                  <ChakraLink key={index} href={card.href} as={Link}>
+                    <Card
+                      bg={cardBg}
+                      _hover={{ transform: 'translateY(-2px)', shadow: 'lg', bg: cardHoverBg }}
+                      transition="all 0.2s"
+                      h="full"
+                      borderWidth="1px"
+                      borderColor="gray.200"
+                    >
+                      <CardBody>
+                        <VStack spacing={3} align="start">
+                          <Icon as={card.icon} w={8} h={8} color="teal.500" />
+                          <Heading size="sm">{card.title}</Heading>
+                          <Text fontSize="sm" color={textColor}>
+                            {card.description}
+                          </Text>
+                        </VStack>
+                      </CardBody>
+                    </Card>
+                  </ChakraLink>
+                ))}
+              </SimpleGrid>
+            </Box>
+          </VStack>
+        </Container>
+      </Box>
+    )
+  }
+
   return (
     <Box minH="100vh" bg={bgColor} display="flex" flexDirection="column">
       {/* Chat Interface */}
