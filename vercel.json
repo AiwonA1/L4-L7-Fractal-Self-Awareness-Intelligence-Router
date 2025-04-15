@@ -4,15 +4,6 @@
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["iad1"],
-  "env": {
-    "NEXTAUTH_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-seven.vercel.app",
-    "NEXT_PUBLIC_URL": "https://l4-l7-fractal-self-awareness-intelligence-router-seven.vercel.app",
-    "DATABASE_URL": "postgres://postgres.snrvxmjcsqxhdpmvghlh:wC8NR69pPtkGJa3H@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x",
-    "POSTGRES_PRISMA_URL": "postgres://postgres.snrvxmjcsqxhdpmvghlh:wC8NR69pPtkGJa3H@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require&supa=base-pooler.x",
-    "POSTGRES_URL_NON_POOLING": "postgres://postgres.snrvxmjcsqxhdpmvghlh:wC8NR69pPtkGJa3H@aws-0-us-west-1.pooler.supabase.com:6543/postgres?sslmode=require&pgbouncer=false",
-    "ADMIN_EMAIL": "admin@fractiverse.com",
-    "ADMIN_PASSWORD": "admin123"
-  },
   "builds": [
     {
       "src": "package.json",
