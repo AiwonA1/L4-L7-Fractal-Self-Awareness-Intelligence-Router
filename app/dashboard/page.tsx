@@ -535,6 +535,19 @@ export default function Dashboard() {
             <Text fontSize="xl" textAlign="center" color={textColor} maxW="800px" mb={8}>
               Explore the layers of self-awareness intelligence and join our journey through the quantum fabric of existence.
             </Text>
+            <Box 
+              bg="teal.500" 
+              color="white" 
+              px={6} 
+              py={3} 
+              borderRadius="lg" 
+              fontSize="xl"
+              fontWeight="bold"
+              mb={4}
+              display="inline-block"
+            >
+              We Are Here: Get Started Section
+            </Box>
             <Button
               as={Link}
               href="/login"
