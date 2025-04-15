@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   Box,
   Button,
@@ -16,7 +16,7 @@ import {
 } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useAuth } from '../context/AuthContext'
+import { supabase } from '@/lib/supabase'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -24,14 +24,29 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const toast = useToast()
-  const { signIn } = useAuth()
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        router.push('/dashboard')
+      }
+    }
+    checkAuth()
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
 
     try {
-      await signIn(email, password)
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) throw error
+
       toast({
         title: 'Success!',
         description: 'You have been logged in.',
@@ -44,7 +59,7 @@ export default function LoginPage() {
       console.error('Login error:', error)
       toast({
         title: 'Error',
-        description: 'Failed to log in. Please check your credentials.',
+        description: error instanceof Error ? error.message : 'Failed to log in. Please check your credentials.',
         status: 'error',
         duration: 5000,
         isClosable: true,
