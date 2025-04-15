@@ -14,12 +14,12 @@ model User {
   id            String         @id @default(uuid()) @db.Uuid
   email         String         @unique
   name          String?
-  fract_tokens  Int           @default(33)
-  tokens_used   Int           @default(0)
-  token_balance Int           @default(33)
+  fract_tokens  Int?          @default(33)
+  tokens_used   Int?          @default(0)
+  token_balance Int?          @default(33)
   password      String?
-  created_at    DateTime      @default(now()) @db.Timestamptz
-  updated_at    DateTime      @updatedAt @db.Timestamptz
+  created_at    DateTime?     @default(now()) @db.Timestamptz
+  updated_at    DateTime?     @updatedAt @db.Timestamptz
   chats         Chat[]
   chat_history  ChatHistory[]
   transactions  Transaction[]
@@ -35,7 +35,7 @@ model Chat {
   last_message String?
   created_at   DateTime  @default(now()) @db.Timestamptz
   updated_at   DateTime  @updatedAt @db.Timestamptz
-  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user         User      @relation(fields: [user_id], references: [id])
   messages     Message[]
 
   @@map("chats")
@@ -48,20 +48,20 @@ model Message {
   role       String
   content    String
   created_at DateTime @default(now()) @db.Timestamptz
-  chat       Chat     @relation(fields: [chat_id], references: [id], onDelete: Cascade)
+  chat       Chat     @relation(fields: [chat_id], references: [id])
 
   @@map("messages")
   @@schema("public")
 }
 
 model ChatHistory {
-  id         String   @id @default(uuid()) @db.Uuid
-  user_id    String   @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  user_id    String?   @db.Uuid
   title      String
   messages   Json
-  created_at DateTime @default(now()) @db.Timestamptz
-  updated_at DateTime @updatedAt @db.Timestamptz
-  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  created_at DateTime? @default(now()) @db.Timestamptz
+  updated_at DateTime? @updatedAt @db.Timestamptz
+  user       User?     @relation(fields: [user_id], references: [id])
 
   @@map("chat_history")
   @@schema("public")
@@ -72,11 +72,11 @@ model Transaction {
   user_id     String   @db.Uuid
   type        String
   amount      Int
-  description String?
+  description String
   status      String
   created_at  DateTime @default(now()) @db.Timestamptz
   updated_at  DateTime @updatedAt @db.Timestamptz
-  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [user_id], references: [id])
 
   @@map("transactions")
   @@schema("public")
