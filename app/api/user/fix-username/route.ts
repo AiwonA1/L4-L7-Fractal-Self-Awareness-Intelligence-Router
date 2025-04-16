@@ -1,68 +1,73 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 import { prisma } from '@/lib/prisma'
+
+export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    // Get the current session
-    const session = await getServerSession()
+    // Get Supabase session
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+        },
+      }
+    )
     
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not logged in' }, { status: 401 })
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
-    
-    // Find the user by email
+
+    // Get user from database
     const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      select: { id: true, name: true, email: true }
+      where: { email: session.user.email }
     })
-    
+
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
-    
-    // Set name to "Pru" specifically
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: { name: 'Pru' },
-      select: { id: true, name: true, email: true }
+
+    // Update user's name to "Pru"
+    await prisma.user.update({
+      where: { email: session.user.email },
+      data: { name: 'Pru' }
     })
-    
-    // Update localStorage via client-side script
+
+    // Return HTML that updates localStorage and redirects
     const html = `
+      <!DOCTYPE html>
       <html>
         <head>
-          <title>Username Fixed</title>
-          <script>
-            // Save name to localStorage for persistent display
-            localStorage.setItem('userName', 'Pru');
-            localStorage.setItem('userData', JSON.stringify({
-              id: "${updatedUser.id}",
-              name: "Pru",
-              email: "${updatedUser.email}"
-            }));
-            
-            // Show success message
-            document.addEventListener('DOMContentLoaded', function() {
-              document.getElementById('message').textContent = 'Your name has been set to "Pru". Redirecting...';
-              // Redirect back to dashboard
-              setTimeout(() => {
-                window.location.href = '/dashboard';
-              }, 2000);
-            });
-          </script>
+          <title>Updating name...</title>
         </head>
         <body>
-          <h1 id="message">Processing...</h1>
+          <script>
+            localStorage.setItem('userName', 'Pru');
+            alert('Name updated successfully!');
+            window.location.href = '/dashboard';
+          </script>
         </body>
       </html>
-    `;
-    
+    `
+
     return new NextResponse(html, {
       headers: { 'Content-Type': 'text/html' }
-    });
+    })
+
   } catch (error) {
-    console.error('Error fixing username:', error)
-    return NextResponse.json({ error: 'Failed to fix username' }, { status: 500 })
+    console.error('Error updating username:', error)
+    return NextResponse.json(
+      { error: 'Failed to update username. Please try again.' },
+      { status: 500 }
+    )
   }
 } 
