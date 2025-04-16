@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma'
 
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-08-16',
+  apiVersion: '2023-10-16',
 })
 
 export async function POST(request: Request) {
@@ -104,12 +104,8 @@ export async function POST(request: Request) {
           type: 'PURCHASE',
           amount: amount,
           status: 'COMPLETED',
-          description: `Purchased ${amount} FractiTokens`,
-          metadata: { 
-            paymentIntentId: paymentIntent.id,
-            taxAmount: taxAmount.toString()
-          },
-        },
+          description: `Purchased ${amount} FractiTokens (Payment Intent: ${paymentIntent.id}, Tax: ${taxAmount})`
+        }
       })
 
       return NextResponse.json({ 
