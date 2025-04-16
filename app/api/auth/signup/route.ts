@@ -41,7 +41,7 @@ export async function POST(req: Request) {
       password,
       options: {
         data: {
-          name
+          name // Store name in Supabase Auth metadata
         }
       }
     })
@@ -69,7 +69,11 @@ export async function POST(req: Request) {
         id: authData.user.id,
         email,
         name,
-        token_balance: 33, // Initial free tokens
+        fract_tokens: 33, // Initial free tokens
+        tokens_used: 0,
+        token_balance: 33,
+        created_at: new Date(),
+        updated_at: new Date()
       }
     }).catch(e => {
       console.error('Database error creating user:', e)
