@@ -14,6 +14,7 @@ model User {
   id            String         @id @default(uuid()) @db.Uuid
   email         String         @unique
   name          String?
+  image         String?
   fract_tokens  Int?          @default(33)
   tokens_used   Int?          @default(0)
   token_balance Int?          @default(33)
