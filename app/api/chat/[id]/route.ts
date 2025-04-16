@@ -88,8 +88,9 @@ export async function PUT(
     }
 
     // Check token balance
-    if (user.token_balance <= 0) {
-      console.log(`[PUT /api/chat/${params.id}] User out of FractiTokens: ${user.token_balance}`)
+    const currentBalance = user.token_balance ?? 0
+    if (currentBalance <= 0) {
+      console.log(`[PUT /api/chat/${params.id}] User out of FractiTokens: ${currentBalance}`)
       return NextResponse.json(
         { error: 'Insufficient FractiTokens. Please purchase more tokens to continue.' },
         { status: 402 }
@@ -177,17 +178,13 @@ export async function PUT(
           user_id: user.id,
           type: 'CHAT',
           amount: 1,
-          description: 'Chat message',
-          status: 'COMPLETED',
-          input_tokens: usage.prompt_tokens,
-          output_tokens: usage.completion_tokens,
-          total_tokens: usage.total_tokens,
-          cost: llmCost
+          description: `Chat message with ${usage.total_tokens} tokens`,
+          status: 'COMPLETED'
         }
       })
 
       // Deduct 1 FractiToken for the command
-      const newBalance = user.token_balance - 1
+      const newBalance = currentBalance - 1
       await prisma.user.update({
         where: { id: user.id },
         data: { token_balance: newBalance }
@@ -216,7 +213,11 @@ export async function PUT(
 
       return NextResponse.json({
         messages: updatedMessages,
-        token_balance: newBalance
+        token_balance: newBalance,
+        usage: {
+          total_tokens: usage.total_tokens,
+          cost: llmCost
+        }
       })
 
     } catch (error: any) {
