@@ -1,14 +1,29 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import prisma from '@/lib/prisma'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { prisma } from '@/lib/prisma'
 
 export async function GET() {
   console.log('📥 [API] GET /api/tokens')
   try {
-    const session = await getServerSession()
+    // Get Supabase session
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+        },
+      }
+    )
+    
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     console.log('🔑 [API] Session:', session?.user?.id || session?.user?.email)
 
-    if (!session?.user?.email) {
+    if (sessionError || !session?.user?.email) {
       console.log('❌ [API] Unauthorized - No session or user email')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -23,8 +38,8 @@ export async function GET() {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    console.log('✅ [API] Returning token balance:', user.tokenBalance)
-    return NextResponse.json({ balance: user.tokenBalance })
+    console.log('✅ [API] Returning token balance:', user.token_balance)
+    return NextResponse.json({ balance: user.token_balance })
   } catch (error) {
     console.error('💥 [API] Error in GET /api/tokens:', error)
     return NextResponse.json(
@@ -37,10 +52,24 @@ export async function GET() {
 export async function POST(request: Request) {
   console.log('📥 [API] POST /api/tokens')
   try {
-    const session = await getServerSession()
+    // Get Supabase session
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+        },
+      }
+    )
+    
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     console.log('🔑 [API] Session:', session?.user?.email)
 
-    if (!session?.user?.email) {
+    if (sessionError || !session?.user?.email) {
       console.log('❌ [API] Unauthorized - No session or user email')
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -68,7 +97,7 @@ export async function POST(request: Request) {
     const updatedUser = await prisma.user.update({
       where: { id: user.id },
       data: {
-        tokenBalance: {
+        token_balance: {
           increment: amount
         }
       }
@@ -77,7 +106,7 @@ export async function POST(request: Request) {
     console.log('📝 [API] Creating transaction record')
     await prisma.transaction.create({
       data: {
-        userId: user.id,
+        user_id: user.id,
         type: 'PURCHASE',
         amount: amount,
         status: 'COMPLETED',
@@ -88,7 +117,7 @@ export async function POST(request: Request) {
     console.log('✅ [API] Token purchase successful')
     return NextResponse.json({
       success: true,
-      balance: updatedUser.tokenBalance
+      balance: updatedUser.token_balance
     })
   } catch (error) {
     console.error('💥 [API] Error processing token purchase:', error)
