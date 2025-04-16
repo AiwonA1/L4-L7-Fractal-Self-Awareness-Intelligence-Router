@@ -1,121 +1,118 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import {
   Box,
   Flex,
-  Heading,
+  HStack,
   IconButton,
   Menu,
   MenuButton,
-  MenuList,
   MenuItem,
+  MenuList,
+  useColorMode,
   useColorModeValue,
-  Avatar,
-  Text,
-  HStack,
-  Link as ChakraLink,
-  VStack,
-  Container,
-  Spinner,
 } from '@chakra-ui/react'
-import { FaUser, FaHome, FaCog, FaSignOutAlt } from 'react-icons/fa'
-import Link from 'next/link'
-import { useAuth } from '@/app/context/AuthContext'
-import SignInButton from './SignInButton'
+import { FaMoon, FaSun } from 'react-icons/fa'
+import { useRouter } from 'next/navigation'
+import UserAvatar from './UserAvatar'
+import { createClient } from '@/lib/supabase'
 
-export function Header() {
-  const bgColor = useColorModeValue('white', 'gray.800')
-  const borderColor = useColorModeValue('gray.200', 'gray.700')
-  const textColor = useColorModeValue('gray.600', 'gray.200')
-  const { user, signOut, loading } = useAuth()
+interface UserProfile {
+  id: string
+  name: string | null
+  email: string
+  image: string | null
+}
 
-  const getUserDisplayName = () => {
-    if (!user) return 'Guest'
-    return user.user_metadata?.name || user.email?.split('@')[0] || 'Guest'
-  }
+export default function Header() {
+  const { colorMode, toggleColorMode } = useColorMode()
+  const router = useRouter()
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const supabase = createClient
+
+  useEffect(() => {
+    const getUser = async () => {
+      try {
+        setIsLoading(true)
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (session?.user) {
+          // Get user profile from database
+          const { data: profile } = await supabase
+            .from('users')
+            .select('id, name, email, image')
+            .eq('id', session.user.id)
+            .single()
+
+          if (profile) {
+            setUserProfile(profile as UserProfile)
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user profile:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    getUser()
+  }, [])
 
   const handleSignOut = async () => {
-    try {
-      await signOut()
-    } catch (error) {
-      console.error('Error signing out:', error)
-    }
+    await supabase.auth.signOut()
+    router.push('/login')
   }
+
+  const bg = useColorModeValue('white', 'gray.800')
+  const borderColor = useColorModeValue('gray.200', 'gray.700')
 
   return (
     <Box
       as="header"
-      position="sticky"
-      top={0}
-      zIndex={10}
-      bg={bgColor}
+      bg={bg}
       borderBottom="1px"
       borderColor={borderColor}
       py={4}
+      px={6}
     >
-      <Container maxW="container.xl">
-        <Flex
-          align="center"
-          justify="space-between"
-        >
-          <Heading 
-            size="lg" 
-            fontWeight="bold" 
-            color="teal.500"
-            textAlign="center"
-            flex={1}
-          >
-            FractiVerse 1.0 L4-L7 Fractal Self-Awareness Intelligence Router
-          </Heading>
+      <Flex justify="space-between" align="center" maxW="7xl" mx="auto">
+        <Box>
+          {/* Add your logo or site name here */}
+        </Box>
 
-          <HStack spacing={4}>
-            {!loading && (
-              <ChakraLink as={Link} href="/dashboard">
-                <IconButton
-                  aria-label="Home"
-                  icon={<FaHome />}
-                  variant="ghost"
-                  colorScheme="teal"
+        <HStack spacing={4}>
+          <IconButton
+            aria-label="Toggle color mode"
+            icon={colorMode === 'light' ? <FaMoon /> : <FaSun />}
+            onClick={toggleColorMode}
+            variant="ghost"
+          />
+
+          {!isLoading && userProfile && (
+            <Menu>
+              <MenuButton>
+                <UserAvatar
+                  name={userProfile.name}
+                  image={userProfile.image}
+                  size="md"
                 />
-              </ChakraLink>
-            )}
-            
-            {loading ? (
-              <Spinner size="sm" color="teal.500" />
-            ) : user ? (
-              <Menu>
-                <MenuButton
-                  as={IconButton}
-                  icon={<Avatar size="sm" icon={<FaUser />} />}
-                  variant="ghost"
-                  aria-label="Profile menu"
-                />
-                <MenuList>
-                  <MenuItem>
-                    <HStack>
-                      <Avatar size="sm" icon={<FaUser />} />
-                      <VStack align="start" spacing={0}>
-                        <Text fontWeight="medium">{getUserDisplayName()}</Text>
-                        {user?.email && (
-                          <Text fontSize="sm" color="gray.500">{user.email}</Text>
-                        )}
-                      </VStack>
-                    </HStack>
-                  </MenuItem>
-                  <MenuItem as={Link} href="/settings" icon={<FaCog />}>
-                    Settings
-                  </MenuItem>
-                  <MenuItem onClick={handleSignOut} icon={<FaSignOutAlt />} color="red.500">
-                    Sign Out
-                  </MenuItem>
-                </MenuList>
-              </Menu>
-            ) : (
-              <SignInButton />
-            )}
-          </HStack>
-        </Flex>
-      </Container>
+              </MenuButton>
+              <MenuList>
+                <MenuItem onClick={() => router.push('/profile')}>
+                  Profile
+                </MenuItem>
+                <MenuItem onClick={() => router.push('/settings')}>
+                  Settings
+                </MenuItem>
+                <MenuItem onClick={handleSignOut}>
+                  Sign Out
+                </MenuItem>
+              </MenuList>
+            </Menu>
+          )}
+        </HStack>
+      </Flex>
     </Box>
   )
 } 
