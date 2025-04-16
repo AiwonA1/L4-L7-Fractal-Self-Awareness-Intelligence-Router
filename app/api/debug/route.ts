@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth/next'
+import { createServerClient } from '@supabase/ssr'
 import { PrismaClient } from '@prisma/client'
-import { authOptions } from '@/lib/auth'
 import { cookies } from 'next/headers'
-import { getToken } from 'next-auth/jwt'
-import { headers } from 'next/headers'
 
 const prisma = new PrismaClient()
 
@@ -14,7 +11,19 @@ export async function GET(request: Request) {
     const cookieStore = cookies()
     const cookieList = cookieStore.getAll()
     const cookieNames = cookieList.map(c => c.name)
-    const sessionCookie = cookieStore.get('next-auth.session-token')
+    
+    // Create Supabase client
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+        },
+      }
+    )
     
     // Check if we can connect to the database with a more selective query
     const dbCheck = await prisma.user.findFirst({
@@ -22,40 +31,19 @@ export async function GET(request: Request) {
         id: true,
         email: true,
         name: true,
-        tokenBalance: true,
-        createdAt: true
+        token_balance: true,
+        created_at: true
       }
     })
     
-    // Get the session with authOptions
-    const session = await getServerSession(authOptions)
+    // Get the Supabase session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     
-    // Try to decode the JWT token
-    let tokenStatus = "Not found"
-    try {
-      // Create a headers object for token verification
-      const headersList = headers()
-      const cookie = headersList.get('cookie') || ''
-      
-      // The request parameter in getToken requires specific properties
-      // We'll use a simpler approach by passing just what it needs
-      const token = await getToken({ 
-        secret: process.env.NEXTAUTH_SECRET,
-        raw: true,
-        req: { headers: { cookie } } as any
-      })
-      
-      tokenStatus = token ? "Valid token: " + JSON.stringify(token) : "No token found"
-    } catch (error) {
-      tokenStatus = "Error decoding token: " + (error instanceof Error ? error.message : String(error))
-    }
-    
-    // Check NextAuth configuration
-    const authConfig = {
-      secret: process.env.NEXTAUTH_SECRET ? "Set" : "Not set",
-      url: process.env.NEXTAUTH_URL,
-      providers: authOptions.providers.map(p => p.id || 'unknown').join(', '),
-      secretLength: process.env.NEXTAUTH_SECRET ? process.env.NEXTAUTH_SECRET.length : 0
+    // Check Supabase configuration
+    const supabaseConfig = {
+      url: process.env.NEXT_PUBLIC_SUPABASE_URL ? "Set" : "Not set",
+      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Set" : "Not set",
+      serviceRole: process.env.SUPABASE_SERVICE_ROLE_KEY ? "Set" : "Not set",
     }
     
     return NextResponse.json({
@@ -64,13 +52,11 @@ export async function GET(request: Request) {
       dbFirstUser: dbCheck,
       sessionExists: !!session,
       session: session,
-      nextAuthConfig: authConfig,
+      supabaseConfig,
       cookieStatus: {
         cookieNames,
-        sessionCookie: sessionCookie ? "Found" : "Not found",
-        sessionCookieValue: sessionCookie ? sessionCookie.value.substring(0, 20) + "..." : "N/A"
+        sbSession: cookieStore.get('sb-access-token') ? "Found" : "Not found",
       },
-      tokenStatus,
       timestamp: new Date().toISOString()
     })
   } catch (error) {

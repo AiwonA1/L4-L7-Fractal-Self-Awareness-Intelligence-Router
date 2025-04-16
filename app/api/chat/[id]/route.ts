@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import prisma from '@/lib/prisma'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import fs from 'fs'
 import path from 'path'
@@ -54,9 +55,24 @@ export async function PUT(
     if (messages.length === 0) {
       return NextResponse.json({ error: 'No valid messages found' }, { status: 400 })
     }
+
+    // Get Supabase session
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+        },
+      }
+    )
     
-    const session = await getServerSession()
-    if (!session?.user?.email) {
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session?.user?.email) {
       console.log(`[PUT /api/chat/${params.id}] Unauthorized - no session`)
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
@@ -72,8 +88,8 @@ export async function PUT(
     }
 
     // Check token balance
-    if (user.tokenBalance <= 0) {
-      console.log(`[PUT /api/chat/${params.id}] User out of FractiTokens: ${user.tokenBalance}`)
+    if (user.token_balance <= 0) {
+      console.log(`[PUT /api/chat/${params.id}] User out of FractiTokens: ${user.token_balance}`)
       return NextResponse.json(
         { error: 'Insufficient FractiTokens. Please purchase more tokens to continue.' },
         { status: 402 }
@@ -84,7 +100,7 @@ export async function PUT(
     const chat = await prisma.chat.findUnique({
       where: {
         id: params.id,
-        userId: user.id
+        user_id: user.id
       }
     })
 
@@ -156,23 +172,25 @@ export async function PUT(
       const llmCost = (usage.prompt_tokens * 0.03 + usage.completion_tokens * 0.06) / 1000
 
       // Create usage record with both LLM tokens and FractiToken
-      await prisma.usage.create({
+      await prisma.transaction.create({
         data: {
-          userId: user.id,
-          chatId: chat.id,
-          inputTokens: usage.prompt_tokens,
-          outputTokens: usage.completion_tokens,
-          totalTokens: usage.total_tokens,
-          cost: llmCost,
-          fractiTokensUsed: 1
+          user_id: user.id,
+          type: 'CHAT',
+          amount: 1,
+          description: 'Chat message',
+          status: 'COMPLETED',
+          input_tokens: usage.prompt_tokens,
+          output_tokens: usage.completion_tokens,
+          total_tokens: usage.total_tokens,
+          cost: llmCost
         }
       })
 
       // Deduct 1 FractiToken for the command
-      const newBalance = user.tokenBalance - 1
+      const newBalance = user.token_balance - 1
       await prisma.user.update({
         where: { id: user.id },
-        data: { tokenBalance: newBalance }
+        data: { token_balance: newBalance }
       })
 
       // Add assistant's response to messages
@@ -188,8 +206,8 @@ export async function PUT(
       await prisma.chat.update({
         where: { id: params.id },
         data: { 
-          messages: JSON.stringify(updatedMessages),
-          updatedAt: new Date()
+          last_message: completion.choices[0].message.content.slice(0, 100),
+          updated_at: new Date()
         }
       })
 
@@ -198,37 +216,24 @@ export async function PUT(
 
       return NextResponse.json({
         messages: updatedMessages,
-        usage: {
-          inputTokens: usage.prompt_tokens,
-          outputTokens: usage.completion_tokens,
-          totalTokens: usage.total_tokens,
-          llmCost: llmCost,
-          fractiTokensUsed: 1
-        },
-        balance: newBalance
+        token_balance: newBalance
       })
-    } catch (error) {
+
+    } catch (error: any) {
       clearTimeout(timeoutId)
+      console.error(`[PUT /api/chat/${params.id}] Error:`, error)
       throw error
     }
-  } catch (error) {
-    console.error(`[PUT /api/chat/${params.id}] Error:`, error)
-    if (error instanceof Error) {
-      if (error.name === 'AbortError') {
-        return NextResponse.json(
-          { error: 'Request timed out. Please try again.' },
-          { status: 504 }
-        )
-      }
-      return NextResponse.json(
-        { error: error.message || 'Failed to process chat request' },
-        { status: 500 }
-      )
-    }
-    return NextResponse.json(
-      { error: 'Failed to process chat request' },
-      { status: 500 }
-    )
+
+  } catch (error: any) {
+    console.error(`[PUT /api/chat/${params.id}] Error:`, {
+      message: error.message,
+      stack: error.stack
+    })
+    
+    return NextResponse.json({
+      error: error.message || 'An error occurred',
+    }, { status: 500 })
   }
 }
 
@@ -237,88 +242,23 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await getServerSession()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: params.id },
-      include: { user: true }
-    })
-
-    if (!chat) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    if (chat.user.email !== session.user.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    await prisma.chat.delete({
-      where: { id: params.id }
-    })
-
-    return NextResponse.json({ success: true })
-  } catch (error) {
-    console.error('Error deleting chat:', error)
-    return NextResponse.json(
-      { error: 'Failed to delete chat' },
-      { status: 500 }
+    // Get Supabase session
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+        },
+      }
     )
-  }
-}
-
-export async function PATCH(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const session = await getServerSession()
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { title } = await request.json()
-
-    const chat = await prisma.chat.findUnique({
-      where: { id: params.id },
-      include: { user: true }
-    })
-
-    if (!chat) {
-      return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
-    }
-
-    if (chat.user.email !== session.user.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const updatedChat = await prisma.chat.update({
-      where: { id: params.id },
-      data: { title }
-    })
-
-    return NextResponse.json(updatedChat)
-  } catch (error) {
-    console.error('Error updating chat:', error)
-    return NextResponse.json(
-      { error: 'Failed to update chat' },
-      { status: 500 }
-    )
-  }
-}
-
-export async function GET(
-  request: Request,
-  { params }: { params: { id: string } }
-) {
-  try {
-    console.log(`[GET /api/chat/${params.id}] Starting request`)
     
-    const session = await getServerSession()
-    if (!session?.user?.email) {
-      console.log(`[GET /api/chat/${params.id}] Unauthorized - no session`)
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -328,61 +268,125 @@ export async function GET(
     })
 
     if (!user) {
-      console.log(`[GET /api/chat/${params.id}] User not found: ${session.user.email}`)
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // Get chat with messages
-    console.log(`[GET /api/chat/${params.id}] Fetching chat`)
+    // Delete chat
+    await prisma.chat.delete({
+      where: {
+        id: params.id,
+        user_id: user.id
+      }
+    })
+
+    return NextResponse.json({ message: 'Chat deleted successfully' })
+  } catch (error: any) {
+    console.error('Error deleting chat:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const body = await request.json()
+    
+    // Get Supabase session
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+        },
+      }
+    )
+    
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email }
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    // Update chat
+    const updatedChat = await prisma.chat.update({
+      where: {
+        id: params.id,
+        user_id: user.id
+      },
+      data: body
+    })
+
+    return NextResponse.json(updatedChat)
+  } catch (error: any) {
+    console.error('Error updating chat:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+export async function GET(
+  request: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    // Get Supabase session
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+        },
+      }
+    )
+    
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    
+    if (sessionError || !session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get user
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email }
+    })
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    }
+
+    // Get chat
     const chat = await prisma.chat.findUnique({
       where: {
         id: params.id,
-        userId: user.id
+        user_id: user.id
       }
     })
 
     if (!chat) {
-      console.log(`[GET /api/chat/${params.id}] Chat not found`)
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
 
-    // Parse messages if they're stored as a string
-    let messages: ChatMessage[] = []
-    if (typeof chat.messages === 'string') {
-      try {
-        messages = JSON.parse(chat.messages)
-      } catch (error) {
-        console.error(`[GET /api/chat/${params.id}] Error parsing messages:`, error)
-      }
-    } else if (Array.isArray(chat.messages)) {
-      // Apply proper type validation to ensure they are ChatMessages
-      const jsonMessages = chat.messages as any[];
-      messages = jsonMessages.filter(msg => 
-        typeof msg === 'object' && 
-        msg !== null &&
-        'role' in msg && 
-        'content' in msg &&
-        typeof msg.role === 'string' &&
-        typeof msg.content === 'string'
-      ) as ChatMessage[];
-    }
-
-    console.log(`[GET /api/chat/${params.id}] Chat found, messages count:`, messages.length)
-    console.log(`[GET /api/chat/${params.id}] First message:`, messages[0] ? JSON.stringify(messages[0]).slice(0, 100) + '...' : 'No messages')
-
-    // Return formatted chat data
-    return NextResponse.json({
-      id: chat.id,
-      title: chat.title,
-      messages: messages,
-      createdAt: chat.createdAt,
-      updatedAt: chat.updatedAt
-    })
-  } catch (error) {
-    console.error(`[GET /api/chat/${params.id}] Error:`, error)
-    return NextResponse.json(
-      { error: 'Failed to fetch chat' },
-      { status: 500 }
-    )
+    return NextResponse.json(chat)
+  } catch (error: any) {
+    console.error('Error getting chat:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 } 

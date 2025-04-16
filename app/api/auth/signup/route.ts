@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { hashPassword } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { createClient } from '@supabase/supabase-js'
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export async function POST(req: Request) {
   try {
@@ -30,38 +35,41 @@ export async function POST(req: Request) {
       )
     }
 
-    console.log('Checking for existing user...')
-    // Check if user already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { email }
-    }).catch(e => {
-      console.error('Database error checking existing user:', e)
-      throw new Error('Database error checking existing user')
+    // Sign up user with Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          name
+        }
+      }
     })
 
-    if (existingUser) {
-      console.log('User already exists:', email)
+    if (authError) {
+      console.error('Supabase Auth error:', authError)
       return NextResponse.json(
-        { message: 'User already exists' },
+        { message: authError.message },
         { status: 400 }
       )
     }
 
-    console.log('Hashing password...')
-    // Hash password
-    const hashedPassword = await hashPassword(password).catch(e => {
-      console.error('Failed to hash password:', e)
-      throw new Error('Failed to hash password')
-    })
+    if (!authData.user) {
+      console.error('No user data returned from Supabase')
+      return NextResponse.json(
+        { message: 'Failed to create user' },
+        { status: 500 }
+      )
+    }
 
-    console.log('Creating new user...')
-    // Create user
+    console.log('Creating user in database...')
+    // Create user in our database
     const user = await prisma.user.create({
       data: {
+        id: authData.user.id,
         email,
         name,
-        password: hashedPassword,
-        tokenBalance: 33, // Initial free tokens
+        token_balance: 33, // Initial free tokens
       }
     }).catch(e => {
       console.error('Database error creating user:', e)
@@ -88,7 +96,6 @@ export async function POST(req: Request) {
       cause: error.cause
     })
     
-    // Return a more specific error message
     return NextResponse.json(
       { 
         message: 'Internal server error',
