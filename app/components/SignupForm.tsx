@@ -20,7 +20,13 @@ import {
 import { FaCoins, FaGoogle, FaCheck, FaArrowRight } from 'react-icons/fa'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@supabase/supabase-js'
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function SignupForm() {
   const [email, setEmail] = useState('')
@@ -50,7 +56,7 @@ export default function SignupForm() {
       if (error) {
         toast({
           title: "Error",
-          description: "Failed to sign in with Google. Please try again.",
+          description: error.message,
           status: "error",
           duration: 5000,
           isClosable: true,
@@ -64,6 +70,7 @@ export default function SignupForm() {
           duration: 5000,
           isClosable: true,
         })
+        router.push('/dashboard')
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "An unexpected error occurred"
@@ -96,51 +103,55 @@ export default function SignupForm() {
     setIsSubmitting(true)
     
     try {
-      // Create the user account with Supabase
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      // Sign up with Supabase Auth
+      const { data: signupData, error: signupError } = await supabase.auth.signUp({
         email,
         password,
         options: {
           data: {
-            name: name,
+            name,
+            fract_tokens: 33,
+            tokens_used: 0,
+            token_balance: 33,
           }
         }
       })
 
-      if (authError) {
-        throw new Error(authError.message)
+      if (signupError) {
+        throw new Error(signupError.message)
       }
 
-      if (authData.user) {
-        // Create the user profile in the users table
-        const { error: profileError } = await supabase
-          .from('users')
-          .insert([
-            {
-              id: authData.user.id,
-              email: email,
-              name: name,
-              token_balance: 33,
-              tokens_used: 0,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }
-          ])
-
-        if (profileError) {
-          throw new Error('Failed to create user profile')
-        }
-
-        // Show success message and set success state
-        setIsSuccess(true)
-        toast({
-          title: "Success!",
-          description: "Account created successfully!",
-          status: "success",
-          duration: 5000,
-          isClosable: true,
-        })
+      if (!signupData.user) {
+        throw new Error('No user data returned from signup')
       }
+
+      // Show success message and set success state
+      setIsSuccess(true)
+      toast({
+        title: "Success!",
+        description: "Account created successfully! Please check your email to verify your account.",
+        status: "success",
+        duration: 5000,
+        isClosable: true,
+      })
+
+      // Sign in immediately after signup
+      const { data: signinData, error: signinError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+
+      if (signinError) {
+        throw new Error(signinError.message)
+      }
+
+      if (!signinData.user || !signinData.session) {
+        throw new Error('No user or session data returned from signin')
+      }
+
+      // Redirect to dashboard
+      router.push('/dashboard')
+
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "Failed to create account"
       toast({
@@ -150,6 +161,7 @@ export default function SignupForm() {
         duration: 5000,
         isClosable: true,
       })
+      setIsSuccess(false)
     } finally {
       setIsSubmitting(false)
     }
@@ -173,7 +185,7 @@ export default function SignupForm() {
             Welcome to FractiVerse!
           </Heading>
           <Text textAlign="center" color={textColor}>
-            Your account has been created successfully. You have 33 free FractiTokens ready to use!
+            Your account has been created successfully. Please check your email to verify your account.
           </Text>
           <Button
             rightIcon={<FaArrowRight />}
@@ -232,6 +244,7 @@ export default function SignupForm() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter your name"
+                isDisabled={isSubmitting}
               />
             </FormControl>
 
@@ -242,6 +255,7 @@ export default function SignupForm() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Enter your email"
+                isDisabled={isSubmitting}
               />
             </FormControl>
 
@@ -252,12 +266,14 @@ export default function SignupForm() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="Create a password"
+                isDisabled={isSubmitting}
               />
             </FormControl>
 
             <Button
               type="submit"
               colorScheme="blue"
+              size="lg"
               width="full"
               isLoading={isSubmitting}
               loadingText="Creating Account..."
@@ -270,20 +286,21 @@ export default function SignupForm() {
         <Divider />
 
         <Button
-          onClick={handleGoogleSignIn}
-          isLoading={isSubmitting}
-          loadingText="Signing in..."
           leftIcon={<FaGoogle />}
-          width="full"
+          onClick={handleGoogleSignIn}
           variant="outline"
+          size="lg"
+          width="full"
+          isLoading={isSubmitting}
+          loadingText="Connecting..."
         >
           Sign up with Google
         </Button>
 
-        <Text fontSize="sm" textAlign="center">
+        <Text textAlign="center" fontSize="sm">
           Already have an account?{' '}
-          <Link href="/login">
-            <Text as="span" color="blue.500">
+          <Link href="/login" passHref>
+            <Text as="span" color="blue.500" _hover={{ textDecoration: 'underline' }}>
               Log in
             </Text>
           </Link>
