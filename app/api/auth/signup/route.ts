@@ -1,11 +1,8 @@
 import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   try {
@@ -35,13 +32,35 @@ export async function POST(req: Request) {
       )
     }
 
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            cookieStore.set(name, value, options)
+          },
+          remove(name: string, options: any) {
+            cookieStore.set(name, '', { ...options, maxAge: 0 })
+          },
+        },
+      }
+    )
+
     // Sign up user with Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
-          name // Store name in Supabase Auth metadata
+          name,
+          fract_tokens: 33,
+          tokens_used: 0,
+          token_balance: 33,
         }
       }
     })
@@ -62,49 +81,34 @@ export async function POST(req: Request) {
       )
     }
 
-    console.log('Creating user in database...')
-    // Create user in our database
-    const user = await prisma.user.create({
-      data: {
-        id: authData.user.id,
-        email,
-        name,
-        fract_tokens: 33, // Initial free tokens
-        tokens_used: 0,
-        token_balance: 33,
-        created_at: new Date(),
-        updated_at: new Date()
-      }
-    }).catch(e => {
-      console.error('Database error creating user:', e)
-      throw new Error('Database error creating user')
-    })
-
-    console.log('User created successfully:', { id: user.id, email: user.email })
-    return NextResponse.json(
-      { 
-        message: 'User created successfully',
-        user: {
-          id: user.id,
-          email: user.email,
-          name: user.name
+    // Create user profile in database
+    const { error: profileError } = await supabase
+      .from('users')
+      .insert([
+        {
+          id: authData.user.id,
+          email: authData.user.email,
+          name,
+          fract_tokens: 33,
+          tokens_used: 0,
+          token_balance: 33,
         }
-      },
-      { status: 201 }
-    )
+      ])
 
-  } catch (error: any) {
-    console.error('Signup error:', {
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
+    if (profileError) {
+      console.error('Error creating user profile:', profileError)
+      // Don't return error to client as auth was successful
+      // The profile can be created later if needed
+    }
+
+    return NextResponse.json({
+      user: authData.user,
+      session: authData.session
     })
-    
+  } catch (error) {
+    console.error('Signup error:', error)
     return NextResponse.json(
-      { 
-        message: 'Internal server error',
-        details: error.message
-      },
+      { message: 'Internal server error' },
       { status: 500 }
     )
   }

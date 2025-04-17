@@ -1,12 +1,23 @@
 import { NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
 import { createServerClient } from '@supabase/ssr'
-
-if (!process.env.JWT_SECRET) {
-  throw new Error('JWT_SECRET is not set in environment variables')
-}
+import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
+
+export async function POST(req: Request) {
+  try {
+    const body = await req.json()
+    console.log('Auth log:', body)
+    
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Auth log error:', error)
+    return NextResponse.json(
+      { message: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
 
 export async function GET() {
   try {
@@ -26,44 +37,25 @@ export async function GET() {
             cookieStore.set(name, '', { ...options, maxAge: 0 })
           },
         },
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-          detectSessionInUrl: true,
-        }
       }
     )
 
     const { data: { session }, error } = await supabase.auth.getSession()
 
     if (error) {
-      console.error('Session error:', error)
+      console.error('Auth log session error:', error)
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    if (!session) {
-      return NextResponse.json({ user: null })
-    }
-
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', session.user.id)
-      .single()
-
-    if (userError) {
-      console.error('User data fetch error:', userError)
-      return NextResponse.json({ user: session.user })
-    }
-
-    const user = {
-      ...session.user,
-      ...userData
-    }
-
-    return NextResponse.json({ user })
+    return NextResponse.json({
+      authenticated: !!session,
+      session: session
+    })
   } catch (error) {
-    console.error('Session check failed:', error)
-    return NextResponse.json({ user: null })
+    console.error('Auth log error:', error)
+    return NextResponse.json(
+      { message: 'Internal server error' },
+      { status: 500 }
+    )
   }
 } 
