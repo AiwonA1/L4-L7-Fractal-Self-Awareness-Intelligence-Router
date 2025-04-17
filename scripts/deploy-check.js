@@ -40,13 +40,14 @@ console.log();
 // Required environment variables
 const requiredEnvVars = [
   { name: 'NEXT_PUBLIC_URL', description: 'Public URL of the application' },
-  { name: 'DATABASE_URL', description: 'PostgreSQL connection string' },
-  { name: 'NEXTAUTH_URL', description: 'URL for NextAuth.js' },
-  { name: 'NEXTAUTH_SECRET', description: 'Secret for NextAuth.js' },
-  { name: 'STRIPE_SECRET_KEY', description: 'Stripe secret API key' },
-  { name: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', description: 'Stripe publishable API key' },
-  { name: 'STRIPE_WEBHOOK_SECRET', description: 'Stripe webhook signing secret' },
-  { name: 'OPENAI_API_KEY', description: 'OpenAI API key' }
+  { name: 'DATABASE_URL', description: 'URL for the database connection' },
+  { name: 'NEXT_PUBLIC_SUPABASE_URL', description: 'Supabase project URL' },
+  { name: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', description: 'Supabase anonymous key' },
+  { name: 'SUPABASE_SERVICE_ROLE_KEY', description: 'Supabase service role key' },
+  { name: 'STRIPE_SECRET_KEY', description: 'Secret key for Stripe' },
+  { name: 'NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY', description: 'Publishable key for Stripe' },
+  { name: 'STRIPE_WEBHOOK_SECRET', description: 'Webhook secret for Stripe' },
+  { name: 'OPENAI_API_KEY', description: 'API key for OpenAI' },
 ];
 
 // File checks
@@ -98,20 +99,19 @@ console.log();
 console.log(`${colors.blue}Checking package.json dependencies...${colors.reset}`);
 let packageErrors = 0;
 
-const requiredDependencies = [
+const requiredPackages = [
   '@stripe/react-stripe-js',
-  '@stripe/stripe-js',
+  '@supabase/ssr',
+  '@supabase/supabase-js',
   'stripe',
-  'next-auth',
-  '@vercel/postgres',
-  '@prisma/client'
+  'openai',
 ];
 
 try {
   const packageJson = require(path.join(process.cwd(), 'package.json'));
   const dependencies = { ...packageJson.dependencies };
   
-  requiredDependencies.forEach(dep => {
+  requiredPackages.forEach(dep => {
     if (dependencies[dep]) {
       console.log(`${colors.green}✓ ${dep}: ${dependencies[dep]}${colors.reset}`);
     } else {
