@@ -5,6 +5,8 @@ import prisma from '@/lib/prisma'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-jwt-secret'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const cookieStore = cookies()
@@ -19,38 +21,33 @@ export async function GET() {
       
       const chats = await prisma.chat.findMany({
         where: {
-          userId: decoded.userId
+          user_id: decoded.userId
         },
         orderBy: {
-          updatedAt: 'desc'
+          updated_at: 'desc'
         },
         include: {
           messages: {
             orderBy: {
-              createdAt: 'desc'
-            },
-            take: 1
+              created_at: 'desc'
+            }
           }
         }
       })
 
-      const formattedChats = chats.map(chat => ({
-        id: chat.id,
-        title: chat.title,
-        lastMessage: chat.messages[0]?.content || '',
-        updatedAt: chat.updatedAt
-      }))
-
-      return NextResponse.json(formattedChats)
+      return NextResponse.json({
+        chats: chats.map(chat => ({
+          ...chat,
+          messages: chat.messages,
+          updated_at: chat.updated_at
+        }))
+      })
     } catch (verifyError) {
       console.error('Token verification failed:', verifyError)
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 })
     }
   } catch (error) {
     console.error('Error fetching chats:', error)
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Failed to fetch chats' }, { status: 500 })
   }
 } 

@@ -5,6 +5,8 @@ import { verify } from 'jsonwebtoken'
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     // Get token from cookies
@@ -19,16 +21,20 @@ export async function GET() {
 
     // Get user's transactions
     const transactions = await prisma.transaction.findMany({
-      where: { userId: decoded.userId },
-      orderBy: { createdAt: 'desc' },
+      where: {
+        user_id: decoded.userId
+      },
+      orderBy: {
+        created_at: 'desc'
+      },
       take: 10, // Limit to last 10 transactions
       select: {
         id: true,
         type: true,
         amount: true,
-        status: true,
         description: true,
-        createdAt: true
+        status: true,
+        created_at: true
       }
     })
 
