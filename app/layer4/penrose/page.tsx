@@ -1,3 +1,5 @@
+'use client';
+
 import { Box, Container, Heading, Text, VStack, SimpleGrid, Icon, useColorModeValue } from '@chakra-ui/react';
 import { FaBrain, FaAtom, FaInfinity } from 'react-icons/fa';
 
