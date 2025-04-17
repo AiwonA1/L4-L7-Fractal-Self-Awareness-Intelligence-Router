@@ -15,13 +15,11 @@ interface User extends SupabaseUser {
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => Promise<void>;
   isLoading: boolean;
   showAuthModal: boolean;
   setShowAuthModal: (show: boolean) => void;
-  signOut: () => Promise<void>;
-  signIn: (email: string, password: string) => Promise<void>;
-  userData: any;
-  setUser: (user: User | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -31,31 +29,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [userData, setUserData] = useState<any>(null)
   const router = useRouter()
 
   const fetchUserData = async (userId: string) => {
     console.log('🔍 Fetching user data for ID:', userId)
     try {
-      const response = await fetch(`/api/user?userId=${userId}`, {
-        method: 'GET',
-        headers: {
-          'Cache-Control': 'no-cache',
-          'Pragma': 'no-cache'
-        }
-      })
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single()
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error('❌ Error fetching user data:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorText
-        })
+      if (error) {
+        console.error('❌ Error fetching user data:', error)
         return null
       }
-      
-      const data = await response.json()
+
       console.log('✅ Successfully fetched user data:', {
         id: data?.id,
         email: data?.email,
@@ -245,51 +234,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
     setUser(null)
     setSession(null)
-    setUserData(null)
     setShowAuthModal(true)
     router.push('/')
   }
 
-  const value = {
-    user,
-    session,
-    isLoading,
-    showAuthModal,
-    setShowAuthModal,
-    signOut,
-    signIn,
-    userData,
-    setUser
-  }
-
-  // Log current context state
-  console.log('🔄 AuthContext state:', {
-    hasUser: !!user,
-    hasSession: !!session,
-    isLoading,
-    showAuthModal,
-    userData: user ? {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      fract_tokens: user.fract_tokens,
-      tokens_used: user.tokens_used,
-      token_balance: user.token_balance,
-      aud: user.aud,
-      role: user.role
-    } : null,
-    sessionData: session ? {
-      accessToken: '✓ Present',
-      refreshToken: '✓ Present',
-      expiresAt: session.expires_at,
-      provider: session.user?.app_metadata?.provider
-    } : null
-  })
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        signIn,
+        signOut,
+        isLoading,
+        showAuthModal,
+        setShowAuthModal,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
 }
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider')
