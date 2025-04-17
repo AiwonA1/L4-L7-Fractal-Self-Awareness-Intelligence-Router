@@ -8,7 +8,7 @@ import { supabaseAdmin } from '../../../lib/supabase-admin'
 // Validate required environment variables
 const requiredEnvVars = {
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-  NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+  NEXT_PUBLIC_URL: process.env.NEXT_PUBLIC_URL,
 }
 
 for (const [key, value] of Object.entries(requiredEnvVars)) {
@@ -79,8 +79,8 @@ export async function POST(request: Request) {
           },
         ],
         mode: 'payment',
-        success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard`,
+        success_url: `${process.env.NEXT_PUBLIC_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${process.env.NEXT_PUBLIC_URL}/dashboard`,
         metadata: {
           userId: userData.id,
           tokenAmount: tokenAmount.toString(),
