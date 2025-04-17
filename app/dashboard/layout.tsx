@@ -2,12 +2,11 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import DashboardLayout from './components/DashboardLayout'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const supabase = createClient
 
   useEffect(() => {
     const checkAuth = async () => {

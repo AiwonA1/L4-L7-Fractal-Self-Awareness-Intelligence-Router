@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 import {
   Box,
   Button,
@@ -25,7 +25,6 @@ export default function SignUp() {
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const toast = useToast()
-  const supabase = createClient
 
   useEffect(() => {
     const checkAuth = async () => {
