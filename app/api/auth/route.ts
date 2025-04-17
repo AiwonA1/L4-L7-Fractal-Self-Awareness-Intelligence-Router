@@ -5,18 +5,18 @@ import { NextResponse } from 'next/server'
 console.log('Auth API Route: Module loaded')
 console.log('Auth API Route: Environment check', {
   hasSupabaseUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
-  hasServiceKey: !!process.env.SUPABASE_SERVICE_KEY,
+  hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY,
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL
 })
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
   console.error('Auth API Route: Missing required environment variables')
   throw new Error('Missing required environment variables')
 }
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_KEY,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
   {
     auth: {
       autoRefreshToken: false,
