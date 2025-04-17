@@ -1,0 +1,15 @@
+
+> fractiverse-router@1.0.0 dev
+> npm run clear-port && next dev -p 3000
+
+
+> fractiverse-router@1.0.0 clear-port
+> node scripts/clear-port-3000.js
+
+Checking if port 3000 is in use...
+Port 3000 is not in use
+Done checking port 3000.
+   ▲ Next.js 14.1.0
+   - Local:        http://localhost:3000
+   - Environments: .env.local, .env
+
