@@ -359,10 +359,16 @@ class PaymentProcessor {
 ## Security Rules
 
 1. **Authentication**
-   - Use NextAuth.js for authentication
-   - Implement role-based access control
-   - Secure all API routes
-   - Maintain quantum key distribution
+   - Use Supabase Auth for authentication
+   - Keep authentication logic in AuthContext.tsx
+   - Use createClient from @supabase/supabase-js for server-side auth
+   - Use createRouteHandlerClient for API routes
+   - Store session in cookies using Supabase's built-in cookie management
+   - Handle auth state changes with Supabase's onAuthStateChange
+   - Use signOut() from Supabase client for logging out
+   - Clear all cookies and local storage on logout
+   - Redirect to /login after logout
+   - Use dynamic = 'force-dynamic' for auth-related API routes
 
 2. **Data Protection**
    - Encrypt sensitive data

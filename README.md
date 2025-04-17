@@ -42,8 +42,8 @@ FractiVerse 1.0 delivers:
 - **Frontend Framework**: Next.js 14 with App Router
 - **UI Library**: React 18 with Chakra UI
 - **Backend**: Next.js API Routes
-- **Database**: PostgreSQL via Vercel Postgres
-- **Authentication**: NextAuth.js
+- **Database**: PostgreSQL via Supabase
+- **Authentication**: Supabase Auth
 - **Payment Processing**: Stripe
 - **AI Integration**: OpenAI GPT-4
 - **Development Language**: TypeScript
@@ -57,8 +57,8 @@ FractiVerse 1.0 delivers:
    - Layer 7: Universal Paradise Story Game PEFF
 
 2. **Authentication System**
-   - Email/password authentication
-   - Session management
+   - Email/password authentication via Supabase Auth
+   - Session management with Supabase cookies
    - Role-based access control
    - Secure token storage
 
@@ -189,11 +189,11 @@ FractiVerse 1.0 delivers:
 ### Core Development Principles
 
 1. **Fundamental Rules**
-   - Use plain JavaScript (no TypeScript) for all files
+   - Use TypeScript for all files
    - Use Chakra UI for layout, components, theming, and responsiveness
    - No middleware or extra abstraction layers - keep logic simple and direct
-   - Use Supabase JavaScript client directly in the frontend
-   - Protect OpenAI GPT-4o API key using single serverless API route
+   - Use Supabase client for authentication and database operations
+   - Protect OpenAI GPT-4 API key using single serverless API route
    - Use Stripe Elements directly for payments
    - Follow clean folder structure
    - Favor clarity over complexity
@@ -401,24 +401,29 @@ yarn dev
 
 When setting up your Vercel project, add these environment variables:
 
-```
-# App
-NEXT_PUBLIC_URL=https://your-vercel-domain.vercel.app
-
+```bash
 # Database
-DATABASE_URL=your_vercel_postgres_connection_string
+DATABASE_URL="postgres://..."
+DIRECT_URL="postgres://..."
 
-# NextAuth
-NEXTAUTH_URL=https://your-vercel-domain.vercel.app
-NEXTAUTH_SECRET=generate_a_new_secret
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
-# Stripe
-STRIPE_SECRET_KEY=sk_test_your_test_key
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_test_key
-STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+# Application URL
+NEXT_PUBLIC_URL="https://your-domain.vercel.app"
 
 # OpenAI
-OPENAI_API_KEY=your_openai_api_key
+OPENAI_API_KEY="your-openai-api-key"
+
+# Stripe
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-publishable-key"
+STRIPE_SECRET_KEY="your-secret-key"
+STRIPE_WEBHOOK_SECRET="your-webhook-secret"
+STRIPE_PRICE_100_TOKENS="price_xxx"
+STRIPE_PRICE_500_TOKENS="price_xxx"
+STRIPE_PRICE_1000_TOKENS="price_xxx"
 ```
 
 ### 2. Set Up Vercel Postgres Database
@@ -495,24 +500,29 @@ npm run dev
 
 When setting up your Vercel project, add these environment variables:
 
-```
-# App
-NEXT_PUBLIC_URL=https://your-vercel-domain.vercel.app
-
+```bash
 # Database
-DATABASE_URL=your_vercel_postgres_connection_string
+DATABASE_URL="postgres://..."
+DIRECT_URL="postgres://..."
 
-# NextAuth
-NEXTAUTH_URL=https://your-vercel-domain.vercel.app
-NEXTAUTH_SECRET=generate_a_new_secret
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
-# Stripe
-STRIPE_SECRET_KEY=sk_test_your_test_key
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_test_key
-STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+# Application URL
+NEXT_PUBLIC_URL="https://your-domain.vercel.app"
 
 # OpenAI
-OPENAI_API_KEY=your_openai_api_key
+OPENAI_API_KEY="your-openai-api-key"
+
+# Stripe
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-publishable-key"
+STRIPE_SECRET_KEY="your-secret-key"
+STRIPE_WEBHOOK_SECRET="your-webhook-secret"
+STRIPE_PRICE_100_TOKENS="price_xxx"
+STRIPE_PRICE_500_TOKENS="price_xxx"
+STRIPE_PRICE_1000_TOKENS="price_xxx"
 ```
 
 ### 2. Set Up Vercel Postgres Database
@@ -570,7 +580,7 @@ For testing Stripe webhooks locally:
 - **Frontend**: Next.js, React, Chakra UI
 - **Backend**: Next.js API Routes
 - **Database**: PostgreSQL (Vercel Postgres)
-- **Authentication**: NextAuth.js
+- **Authentication**: Supabase Auth
 - **Payments**: Stripe
 - **AI Integration**: OpenAI API
 
@@ -619,24 +629,29 @@ npm run dev
 
 When setting up your Vercel project, add these environment variables:
 
-```
-# App
-NEXT_PUBLIC_URL=https://your-vercel-domain.vercel.app
-
+```bash
 # Database
-DATABASE_URL=your_vercel_postgres_connection_string
+DATABASE_URL="postgres://..."
+DIRECT_URL="postgres://..."
 
-# NextAuth
-NEXTAUTH_URL=https://your-vercel-domain.vercel.app
-NEXTAUTH_SECRET=generate_a_new_secret
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
-# Stripe
-STRIPE_SECRET_KEY=sk_test_your_test_key
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=pk_test_your_test_key
-STRIPE_WEBHOOK_SECRET=whsec_your_webhook_secret
+# Application URL
+NEXT_PUBLIC_URL="https://your-domain.vercel.app"
 
 # OpenAI
-OPENAI_API_KEY=your_openai_api_key
+OPENAI_API_KEY="your-openai-api-key"
+
+# Stripe
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-publishable-key"
+STRIPE_SECRET_KEY="your-secret-key"
+STRIPE_WEBHOOK_SECRET="your-webhook-secret"
+STRIPE_PRICE_100_TOKENS="price_xxx"
+STRIPE_PRICE_500_TOKENS="price_xxx"
+STRIPE_PRICE_1000_TOKENS="price_xxx"
 ```
 
 ### 2. Set Up Vercel Postgres Database
@@ -694,7 +709,7 @@ For testing Stripe webhooks locally:
 - **Frontend**: Next.js, React, Chakra UI
 - **Backend**: Next.js API Routes
 - **Database**: PostgreSQL (Vercel Postgres)
-- **Authentication**: NextAuth.js
+- **Authentication**: Supabase Auth
 - **Payments**: Stripe
 - **AI Integration**: OpenAI API
 
@@ -721,8 +736,8 @@ This document provides instructions for deploying the FractiVerse Router applica
    - For secure payment processing
    - Supports tax calculation
 
-3. **NextAuth**
-   - For user authentication
+3. **Supabase**
+   - For user authentication and session management
 
 4. **OpenAI API**
    - For AI functionality
@@ -731,24 +746,29 @@ This document provides instructions for deploying the FractiVerse Router applica
 
 The following environment variables need to be set in your Vercel project:
 
-```
-# App
-NEXT_PUBLIC_URL=https://your-vercel-domain.vercel.app
-
+```bash
 # Database
-DATABASE_URL=[Your Vercel Postgres Connection String]
+DATABASE_URL="postgres://..."
+DIRECT_URL="postgres://..."
 
-# NextAuth
-NEXTAUTH_URL=https://your-vercel-domain.vercel.app
-NEXTAUTH_SECRET=[Generate a Secret]
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
 
-# Stripe
-STRIPE_SECRET_KEY=[Your Stripe Secret Key]
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=[Your Stripe Publishable Key]
-STRIPE_WEBHOOK_SECRET=[Your Stripe Webhook Secret]
+# Application URL
+NEXT_PUBLIC_URL="https://your-domain.vercel.app"
 
 # OpenAI
-OPENAI_API_KEY=[Your OpenAI API Key]
+OPENAI_API_KEY="your-openai-api-key"
+
+# Stripe
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-publishable-key"
+STRIPE_SECRET_KEY="your-secret-key"
+STRIPE_WEBHOOK_SECRET="your-webhook-secret"
+STRIPE_PRICE_100_TOKENS="price_xxx"
+STRIPE_PRICE_500_TOKENS="price_xxx"
+STRIPE_PRICE_1000_TOKENS="price_xxx"
 ```
 
 ## Deployment Steps
