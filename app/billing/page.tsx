@@ -31,7 +31,7 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js'
-import { FRACTIVERSE_PRICES, formatPrice } from '@/app/lib/stripe'
+import { FRACTIVERSE_PRICES, formatPrice, TokenTier } from '@/app/lib/stripe-client'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
 

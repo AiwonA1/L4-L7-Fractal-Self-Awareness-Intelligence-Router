@@ -10,7 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 // Create Supabase client for browser
-export const createClient = createBrowserClient(
+export const supabase = createBrowserClient(
   supabaseUrl,
   supabaseAnonKey,
 )
@@ -18,7 +18,7 @@ export const createClient = createBrowserClient(
 // Helper function to get user session
 export const getSession = async () => {
   try {
-    const { data: { session }, error } = await createClient.auth.getSession()
+    const { data: { session }, error } = await supabase.auth.getSession()
     if (error) throw error
     return session
   } catch (error) {
@@ -30,7 +30,7 @@ export const getSession = async () => {
 // Helper function to get user profile
 export async function getUserProfile(userId: string) {
   try {
-    const { data, error } = await createClient
+    const { data, error } = await supabase
       .from('users')
       .select('*')
       .eq('id', userId)
@@ -47,7 +47,7 @@ export async function getUserProfile(userId: string) {
 // Helper function to update user profile
 export const updateUserProfile = async (userId: string, updates: any) => {
   try {
-    const { data, error } = await createClient
+    const { data, error } = await supabase
       .from('users')
       .update(updates)
       .eq('id', userId)
