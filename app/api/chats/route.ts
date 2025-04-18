@@ -1,16 +1,11 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/supabase'
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
-  
   try {
     const cookieStore = cookies()
     const sessionCookie = cookieStore.get('sb-access-token')?.value
@@ -19,14 +14,14 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(sessionCookie)
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
     // Get user's chats
-    const { data: chats, error: chatsError } = await supabase
+    const { data: chats, error: chatsError } = await supabaseAdmin
       .from('chats')
       .select('*')
       .eq('user_id', user.id)
@@ -44,8 +39,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
-  
   try {
     const cookieStore = cookies()
     const sessionCookie = cookieStore.get('sb-access-token')?.value
@@ -54,7 +47,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(sessionCookie)
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -63,7 +56,7 @@ export async function POST(request: Request) {
     const { title } = await request.json()
 
     // Create new chat
-    const { data: chat, error: chatError } = await supabase
+    const { data: chat, error: chatError } = await supabaseAdmin
       .from('chats')
       .insert({
         user_id: user.id,

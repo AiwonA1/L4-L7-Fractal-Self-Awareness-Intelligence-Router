@@ -1,28 +1,39 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { supabaseAdmin } from '@/lib/supabase-admin'
+import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   console.log('🔍 Chat History API called')
   try {
-    const supabase = createServerSupabaseClient()
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
     
+    if (!sessionCookie) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(sessionCookie)
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { searchParams } = new URL(req.url)
     const chatId = searchParams.get('chatId')
-    const userId = searchParams.get('userId')
 
-    if (!chatId || !userId) {
+    if (!chatId) {
       console.log('❌ Missing required parameters')
-      return NextResponse.json({ error: 'Missing chatId or userId' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing chatId' }, { status: 400 })
     }
 
     // First verify chat ownership
-    const { data: chat, error: chatError } = await supabase
+    const { data: chat, error: chatError } = await supabaseAdmin
       .from('chats')
       .select('*')
       .eq('id', chatId)
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .single()
 
     if (chatError || !chat) {
@@ -31,7 +42,7 @@ export async function GET(req: Request) {
     }
 
     // Get all messages for this chat
-    const { data: messages, error: messagesError } = await supabase
+    const { data: messages, error: messagesError } = await supabaseAdmin
       .from('messages')
       .select('*')
       .eq('chat_id', chatId)
@@ -43,21 +54,21 @@ export async function GET(req: Request) {
     }
 
     // Get or create chat history entry
-    const { data: history, error: historyError } = await supabase
+    const { data: history, error: historyError } = await supabaseAdmin
       .from('chat_history')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .eq('id', chatId)
       .single()
 
     if (historyError) {
       if (historyError.code === 'PGRST116') {
         // Create new history entry
-        const { error: createError } = await supabase
+        const { error: createError } = await supabaseAdmin
           .from('chat_history')
           .insert([{
             id: chatId,
-            user_id: userId,
+            user_id: user.id,
             title: chat.title,
             messages: messages || [],
             created_at: new Date().toISOString(),
@@ -76,7 +87,7 @@ export async function GET(req: Request) {
       }
     } else if (history) {
       // Update history if messages have changed
-      const { error: updateError } = await supabase
+      const { error: updateError } = await supabaseAdmin
         .from('chat_history')
         .update({
           messages: messages || [],
@@ -84,7 +95,7 @@ export async function GET(req: Request) {
           updated_at: new Date().toISOString()
         })
         .eq('id', chatId)
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
 
       if (updateError) {
         console.error('❌ Error updating chat history:', updateError)

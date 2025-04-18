@@ -1,16 +1,19 @@
-import { createClient } from '@supabase/supabase-js'
+import { supabaseAdmin } from '@/lib/supabase-admin'
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST() {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
+    
+    if (!sessionCookie) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    const { error } = await supabase.auth.signOut()
+    const { error } = await supabaseAdmin.auth.signOut()
     
     if (error) {
       console.error('Force logout error:', error)
