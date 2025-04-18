@@ -2,6 +2,7 @@
   "version": 2,
   "framework": "nextjs",
   "regions": ["iad1"],
+  "buildCommand": "next build",
   "headers": [
     {
       "source": "/api/(.*)",
