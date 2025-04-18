@@ -5,21 +5,39 @@ import { createBrowserClient } from '@supabase/ssr'
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+if (!supabaseUrl) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL environment variable')
+}
+
+if (!supabaseAnonKey) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable')
 }
 
 // Create Supabase client for browser
 export const supabase = createBrowserClient(
   supabaseUrl,
   supabaseAnonKey,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+      flowType: 'pkce'
+    },
+    global: {
+      fetch: fetch.bind(globalThis)
+    }
+  }
 )
 
 // Helper function to get user session
 export const getSession = async () => {
   try {
     const { data: { session }, error } = await supabase.auth.getSession()
-    if (error) throw error
+    if (error) {
+      console.error('Session error:', error.message)
+      throw error
+    }
     return session
   } catch (error) {
     console.error('Session error:', error)
@@ -36,7 +54,10 @@ export async function getUserProfile(userId: string) {
       .eq('id', userId)
       .single()
       
-    if (error) throw error
+    if (error) {
+      console.error('Profile error:', error.message)
+      throw error
+    }
     return data
   } catch (error) {
     console.error('Profile error:', error)
@@ -54,7 +75,10 @@ export const updateUserProfile = async (userId: string, updates: any) => {
       .select()
       .single()
       
-    if (error) throw error
+    if (error) {
+      console.error('Update error:', error.message)
+      throw error
+    }
     return data
   } catch (error) {
     console.error('Update error:', error)
