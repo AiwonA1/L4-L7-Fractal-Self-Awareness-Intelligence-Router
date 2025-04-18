@@ -1,38 +1,18 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { cookies } from 'next/headers';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { stripe, getPriceFromTier, getTokensFromTier } from '@/app/lib/stripe';
 import { TokenTier } from '@/app/lib/stripe-client';
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('Missing Supabase environment variables');
-}
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-);
-
 export async function POST(request: Request) {
   try {
+    const supabase = createServerSupabaseClient()
+    
     // Get the authenticated user from Supabase
-    const cookieStore = cookies();
-    const accessToken = cookieStore.get('sb-access-token')?.value;
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-    if (!accessToken) {
+    if (sessionError || !session?.user) {
       return NextResponse.json(
         { error: 'Authentication required' },
-        { status: 401 }
-      );
-    }
-
-    // Get user from Supabase auth
-    const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
-
-    if (userError || !user) {
-      return NextResponse.json(
-        { error: 'Invalid session' },
         { status: 401 }
       );
     }
@@ -41,7 +21,7 @@ export async function POST(request: Request) {
     const { data: userData, error: dbError } = await supabase
       .from('users')
       .select('id, email, stripe_customer_id')
-      .eq('id', user.id)
+      .eq('id', session.user.id)
       .single();
 
     if (dbError || !userData) {
@@ -58,15 +38,17 @@ export async function POST(request: Request) {
 
     // Get or create Stripe customer
     let customerId = userData.stripe_customer_id;
+
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: userData.email,
         metadata: {
-          userId: userData.id
+          supabaseUserId: userData.id
         }
       });
+
       customerId = customer.id;
-      
+
       // Update user with Stripe customer ID
       const { error: updateError } = await supabase
         .from('users')
@@ -75,6 +57,10 @@ export async function POST(request: Request) {
 
       if (updateError) {
         console.error('Error updating user with Stripe customer ID:', updateError);
+        return NextResponse.json(
+          { error: 'Failed to update user data' },
+          { status: 500 }
+        );
       }
     }
 
@@ -85,19 +71,18 @@ export async function POST(request: Request) {
       customer: customerId,
       metadata: {
         userId: userData.id,
-        tokens: tokens,
-        tier: tier
+        tier,
+        tokens: tokens.toString()
       }
     });
 
     return NextResponse.json({
-      clientSecret: paymentIntent.client_secret,
-      amount: paymentIntent.amount
+      clientSecret: paymentIntent.client_secret
     });
   } catch (error) {
-    console.error('Payment intent creation error:', error);
+    console.error('Error creating payment intent:', error);
     return NextResponse.json(
-      { error: 'Error creating payment intent' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

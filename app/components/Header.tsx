@@ -16,7 +16,7 @@ import {
 import { FaMoon, FaSun } from 'react-icons/fa'
 import { useRouter } from 'next/navigation'
 import UserAvatar from './UserAvatar'
-import { createClient } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase'
 
 interface UserProfile {
   id: string
@@ -30,7 +30,6 @@ export default function Header() {
   const router = useRouter()
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const supabase = createClient
 
   useEffect(() => {
     const getUser = async () => {

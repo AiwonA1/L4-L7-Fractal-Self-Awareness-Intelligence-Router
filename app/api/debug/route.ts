@@ -3,37 +3,36 @@ import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
-  const supabase = createServerSupabaseClient()
-  
+export async function GET(req: Request) {
   try {
-    const { data: users, error } = await supabase
+    const supabase = createServerSupabaseClient()
+    
+    // Get all users
+    const { data: users, error: usersError } = await supabase
       .from('users')
       .select('*')
-    
-    if (error) throw error
-    
-    // Get the Supabase session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    // Check Supabase configuration
-    const supabaseConfig = {
-      url: process.env.NEXT_PUBLIC_SUPABASE_URL ? "Set" : "Not set",
-      anonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? "Set" : "Not set",
-      serviceRole: process.env.SUPABASE_SERVICE_ROLE_KEY ? "Set" : "Not set",
+
+    if (usersError) {
+      return NextResponse.json({ error: usersError.message }, { status: 500 })
     }
-    
+
+    // Get session info
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError) {
+      return NextResponse.json({ error: sessionError.message }, { status: 500 })
+    }
+
+    // Check if cookie is set
+    const cookieStatus = session ? 'Cookie is set' : 'Cookie is not set'
+
     return NextResponse.json({
-      message: "Auth debug information",
-      dbConnection: "Connected successfully",
-      dbFirstUser: users[0],
-      sessionExists: !!session,
-      session: session,
-      supabaseConfig,
-      timestamp: new Date().toISOString()
+      users,
+      session,
+      cookieStatus,
+      supabaseConfigured: true
     })
   } catch (error) {
-    console.error('Debug route error:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

@@ -1,19 +1,18 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { serverClient } from '@/lib/serverClient'
 import type { Database } from '@/types/supabase'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const supabase = createServerSupabaseClient()
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const { data: { session }, error: sessionError } = await serverClient.auth.getSession()
 
     if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: transactions, error: transactionError } = await supabase
+    const { data: transactions, error: transactionError } = await serverClient
       .from('transactions')
       .select('*')
       .eq('user_id', session.user.id)
@@ -30,8 +29,7 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const supabase = createServerSupabaseClient()
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    const { data: { session }, error: sessionError } = await serverClient.auth.getSession()
 
     if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -40,7 +38,7 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { type, amount, description } = body
 
-    const { data: transaction, error: transactionError } = await supabase
+    const { data: transaction, error: transactionError } = await serverClient
       .from('transactions')
       .insert({
         user_id: session.user.id,

@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   console.log('🔍 Chat History API called')
   try {
+    const supabase = createServerSupabaseClient()
+    
     const { searchParams } = new URL(req.url)
     const chatId = searchParams.get('chatId')
     const userId = searchParams.get('userId')
@@ -16,7 +18,7 @@ export async function GET(req: Request) {
     }
 
     // First verify chat ownership
-    const { data: chat, error: chatError } = await supabaseAdmin
+    const { data: chat, error: chatError } = await supabase
       .from('chats')
       .select('*')
       .eq('id', chatId)
@@ -29,7 +31,7 @@ export async function GET(req: Request) {
     }
 
     // Get all messages for this chat
-    const { data: messages, error: messagesError } = await supabaseAdmin
+    const { data: messages, error: messagesError } = await supabase
       .from('messages')
       .select('*')
       .eq('chat_id', chatId)
@@ -41,7 +43,7 @@ export async function GET(req: Request) {
     }
 
     // Get or create chat history entry
-    const { data: history, error: historyError } = await supabaseAdmin
+    const { data: history, error: historyError } = await supabase
       .from('chat_history')
       .select('*')
       .eq('user_id', userId)
@@ -51,7 +53,7 @@ export async function GET(req: Request) {
     if (historyError) {
       if (historyError.code === 'PGRST116') {
         // Create new history entry
-        const { error: createError } = await supabaseAdmin
+        const { error: createError } = await supabase
           .from('chat_history')
           .insert([{
             id: chatId,
@@ -74,7 +76,7 @@ export async function GET(req: Request) {
       }
     } else if (history) {
       // Update history if messages have changed
-      const { error: updateError } = await supabaseAdmin
+      const { error: updateError } = await supabase
         .from('chat_history')
         .update({
           messages: messages || [],

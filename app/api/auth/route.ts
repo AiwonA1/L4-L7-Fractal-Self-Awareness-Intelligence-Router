@@ -1,5 +1,5 @@
-import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 // Immediate logging when module is loaded
 console.log('Auth API Route: Module loaded')
@@ -14,36 +14,15 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_
   throw new Error('Missing required environment variables')
 }
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-)
-
 export async function POST(request: Request) {
-  console.log('Auth API Route: Received POST request')
-  
   try {
+    const supabase = createServerSupabaseClient()
+    
     const { email, password } = await request.json()
     console.log('Auth API Route: Attempting sign in for:', email)
 
-    // Verify admin client is working
-    const { data: verifyData, error: verifyError } = await supabaseAdmin.auth.getUser()
-    if (verifyError) {
-      console.error('Auth API Route: Admin client verification failed:', verifyError)
-      return NextResponse.json({ 
-        error: 'Invalid service configuration',
-        details: verifyError.message
-      }, { status: 500 })
-    }
-
     // Attempt sign in
-    const { data, error } = await supabaseAdmin.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
@@ -59,53 +38,51 @@ export async function POST(request: Request) {
     console.log('Auth API Route: Sign in successful for user:', data.user.email)
 
     // Check if user exists in users table
-    const { data: userData, error: userError } = await supabaseAdmin
+    const { data: userData, error: userError } = await supabase
       .from('users')
       .select('*')
       .eq('id', data.user.id)
       .single()
 
-    if (userError) {
-      if (userError.code === 'PGRST116') {
-        console.log('Auth API Route: Creating new user profile for:', data.user.email)
-        const { error: createError } = await supabaseAdmin
-          .from('users')
-          .insert([
-            {
-              id: data.user.id,
-              email: data.user.email,
-              fract_tokens: 33,
-              tokens_used: 0,
-              token_balance: 33,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }
-          ])
-
-        if (createError) {
-          console.error('Auth API Route: Error creating user profile:', createError)
-          return NextResponse.json({ error: createError.message }, { status: 500 })
-        }
-        console.log('Auth API Route: Successfully created user profile')
-      } else {
-        console.error('Auth API Route: Error checking user profile:', userError)
-        return NextResponse.json({ error: userError.message }, { status: 500 })
+    if (userError && userError.code === 'PGRST116') {
+      // Create new user record
+      const newUser = {
+        id: data.user.id,
+        email: data.user.email,
+        name: data.user.user_metadata?.name || null,
+        fract_tokens: 0,
+        tokens_used: 0,
+        token_balance: 0,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }
-    } else {
-      console.log('Auth API Route: Existing user profile found')
+
+      const { data: createdUser, error: createError } = await supabase
+        .from('users')
+        .insert([newUser])
+        .select()
+        .single()
+
+      if (createError) {
+        console.error('Error creating user:', createError)
+        return NextResponse.json({ error: 'Failed to create user' }, { status: 500 })
+      }
+
+      console.log('Created new user:', createdUser)
+      return NextResponse.json(createdUser)
     }
 
-    console.log('Auth API Route: Returning successful response with session')
-    return NextResponse.json({ 
-      user: data.user,
-      session: data.session
-    })
-  } catch (error: any) {
-    console.error('Auth API Route: Server error during sign in:', error)
-    return NextResponse.json({ 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      type: error.constructor.name
-    }, { status: 500 })
+    if (userError) {
+      console.error('Error fetching user data:', userError)
+      return NextResponse.json({ error: userError.message }, { status: 500 })
+    }
+
+    return NextResponse.json(userData)
+  } catch (error) {
+    console.error('Server error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
   }
 } 

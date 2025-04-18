@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
   console.log('🔍 Chat creation API called')
   try {
+    const supabase = createServerSupabaseClient()
+    
     const body = await req.json()
     console.log('📦 Request body:', body)
     const { userId } = body
@@ -18,7 +21,7 @@ export async function POST(req: Request) {
     const timestamp = new Date().toISOString()
 
     // Create the chat with default title
-    const { data: chat, error: chatError } = await supabaseAdmin
+    const { data: chat, error: chatError } = await supabase
       .from('chats')
       .insert([
         {

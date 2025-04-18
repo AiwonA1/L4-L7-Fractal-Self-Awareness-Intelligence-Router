@@ -1,17 +1,11 @@
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import Stripe from 'stripe'
-import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16',
 })
-
-// Initialize Supabase client
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
 
 export async function POST(request: Request) {
   const body = await request.text()
@@ -38,11 +32,13 @@ export async function POST(request: Request) {
 
     try {
       const userId = session.metadata?.userId
-      const tokenAmount = parseInt(session.metadata?.tokenAmount || '0')
+      const tokenAmount = parseInt(session.metadata?.tokens || '0')
 
       if (!userId || !tokenAmount) {
         throw new Error('Missing user ID or token amount in session metadata')
       }
+
+      const supabase = createServerSupabaseClient()
 
       // Get current user data
       const { data: userData, error: fetchError } = await supabase
