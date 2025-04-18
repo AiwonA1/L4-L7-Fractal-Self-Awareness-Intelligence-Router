@@ -34,23 +34,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchUserData = async (userId: string) => {
     console.log('🔍 Fetching user data for ID:', userId)
     try {
-      const response = await fetch('/api/user/data')
-      if (!response.ok) {
-        throw new Error('Failed to fetch user data')
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) {
+        throw error
       }
-      const data = await response.json()
-      
+
       console.log('✅ Successfully fetched user data:', {
-        id: data?.id,
-        email: data?.email,
-        name: data?.name,
-        fract_tokens: data?.fract_tokens,
-        tokens_used: data?.tokens_used,
-        token_balance: data?.token_balance,
-        created_at: data?.created_at
+        id: userData?.id,
+        email: userData?.email,
+        name: userData?.name,
+        fract_tokens: userData?.fract_tokens,
+        tokens_used: userData?.tokens_used,
+        token_balance: userData?.token_balance,
+        created_at: userData?.created_at
       })
 
-      return data
+      return userData
     } catch (error) {
       console.error('❌ Exception in fetchUserData:', error)
       return null
