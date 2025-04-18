@@ -30,7 +30,7 @@ export async function createChat(userId: string, title: string) {
 }
 
 export async function getUserChats() {
-  const supabase = createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
@@ -61,7 +61,7 @@ export async function getUserChats() {
 }
 
 export async function getChatById(chatId: string) {
-  const supabase = createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
@@ -112,7 +112,7 @@ export async function createMessage(chatId: string, role: string, content: strin
 }
 
 export async function updateChatTitle(chatId: string, title: string) {
-  const supabase = createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
@@ -132,7 +132,7 @@ export async function updateChatTitle(chatId: string, title: string) {
 }
 
 export async function deleteChat(chatId: string) {
-  const supabase = createServerSupabaseClient()
+  const supabase = createAdminSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')

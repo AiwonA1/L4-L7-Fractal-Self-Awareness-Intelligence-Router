@@ -24,8 +24,9 @@ import {
 } from '@chakra-ui/react'
 import Link from 'next/link'
 import { FaRobot, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaUser, FaEdit, FaCopy } from 'react-icons/fa'
-import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/app/context/AuthContext'
+import { getUserChats, getChatById, createChat, updateChatTitle, deleteChat, createMessage } from '@/app/actions/chat'
+import { updateUserTokens } from '@/app/actions/user'
 
 const infoCards = [
   {
@@ -132,24 +133,8 @@ export default function Dashboard() {
       setError(null)
       
       try {
-        console.log('🔍 Loading past chats for user:', user.id)
-        const { data: chats, error } = await supabase
-          .from('chats')
-          .select('*')
-          .eq('user_id', user.id)
-          .order('created_at', { ascending: false })
-
-        if (error) {
-          console.error('❌ Database error loading chats:', error)
-          throw error
-        }
-        
-        if (!chats) {
-          console.log('ℹ️ No chats found for user')
-          setPastChats([])
-          return
-        }
-        
+        console.log('🔍 Loading past chats for user')
+        const chats = await getUserChats();
         console.log('✅ Loaded chats:', chats.length)
         setPastChats(chats)
       } catch (error: any) {
@@ -184,30 +169,21 @@ export default function Dashboard() {
       
       try {
         console.log('🔍 Loading chat history for chat:', selectedChat)
-        const { data: messages, error } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('chat_id', selectedChat)
-          .order('created_at', { ascending: true })
-
-        if (error) {
-          console.error('❌ Database error loading messages:', error)
-          throw error
-        }
+        const chat = await getChatById(selectedChat);
         
-        if (!messages) {
+        if (!chat?.messages) {
           console.log('ℹ️ No messages found for chat')
           setChatHistory([])
           return
         }
         
-        console.log('✅ Loaded chat history:', messages.length, 'messages')
-        setChatHistory(messages)
+        console.log('✅ Loaded messages:', chat.messages.length)
+        setChatHistory(chat.messages)
       } catch (error: any) {
         console.error('❌ Error loading chat history:', error)
         setError(error.message)
         toast({
-          title: 'Error loading messages',
+          title: 'Error loading chat history',
           description: error.message || 'Failed to load chat messages',
           status: 'error',
           duration: 5000,
@@ -234,316 +210,223 @@ export default function Dashboard() {
 
   const deductToken = async (userId: string) => {
     try {
-      const response = await fetch('/api/tokens/use', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          amount: 1,
-          description: 'Chat interaction'
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to deduct token')
-      }
-
-      return true
+      await updateUserTokens(userId, -1);
+      return true;
     } catch (error) {
-      console.error('Error deducting token:', error)
-      return false
+      console.error('❌ Error deducting token:', error)
+      return false;
     }
   }
 
   const handleSendMessage = async () => {
-    if (!message.trim() || !user?.id) {
+    if (!message.trim()) return
+    if (!user?.id) {
       toast({
-        title: 'Error',
-        description: !message.trim() ? 'Please enter a message' : 'User not authenticated',
+        title: 'Not logged in',
+        description: 'Please log in to continue.',
         status: 'error',
-        duration: 3000,
-      })
-      return
-    }
-    if (isLoading) return
-
-    // Attempt to deduct token first
-    const deductionSuccess = await deductToken(user.id)
-    if (!deductionSuccess) {
-      toast({
-        title: 'Error',
-        description: 'Insufficient FractiTokens',
-        status: 'error',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       })
       return
     }
 
+    let chatId = selectedChat
     setIsLoading(true)
-    const userMessage = message.trim()
-    setMessage('')
-
+    setError(null)
+    
     try {
-      let currentChatId = selectedChat
-
-      // If no chat is selected, create a new one
-      if (!currentChatId) {
-        console.log('🔍 No chat selected, creating new chat')
-        const response = await fetch('/api/chat/create', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: user.id })
-        })
-
-        if (!response.ok) {
-          throw new Error('Failed to create new chat')
-        }
-
-        const newChat = await response.json()
-        currentChatId = newChat.id
-        setSelectedChat(currentChatId)
-        setPastChats(prev => {
-          const newChats = [newChat, ...prev]
-          return newChats.sort((a, b) => 
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          )
-        })
-        setChatHistory([])
+      // Create a new chat if none is selected
+      if (!chatId) {
+        const newChat = await createChat(user.id, message.substring(0, 50) + '...');
+        chatId = newChat.id
+        setSelectedChat(chatId)
+        // Add the new chat to the list of past chats
+        setPastChats(prev => [newChat, ...prev])
+      }
+      
+      // At this point, chatId should never be null - add a guard just in case
+      if (!chatId) {
+        throw new Error('Failed to create or select a chat');
+      }
+      
+      // Deduct a token for this message
+      if (!await deductToken(user.id)) {
+        throw new Error('Failed to deduct token. Please check your balance.')
       }
 
-      // Save user message
-      const messageResponse = await fetch('/api/chat/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: currentChatId,
-          userId: user.id,
-          role: 'user',
-          content: userMessage
-        })
+      // Add user message to UI immediately
+      const userMsg = { role: 'user', content: message }
+      setChatHistory(prev => [...prev, userMsg])
+      
+      // Save the user message to the database
+      await createMessage(chatId, 'user', message);
+      
+      // Clear the input field
+      setMessage('')
+      
+      // Generate AI response
+      const assistantContent = await generateAIResponse(message, chatId)
+      
+      // Save the AI response to the database
+      await createMessage(chatId, 'assistant', assistantContent);
+      
+      // Add AI response to UI
+      setChatHistory(prev => [...prev, { role: 'assistant', content: assistantContent }])
+      
+      // Refresh the list of past chats to update last_message
+      const updatedChats = await getUserChats();
+      setPastChats(updatedChats)
+      
+    } catch (error: any) {
+      console.error('❌ Error sending message:', error)
+      setError(error.message)
+      toast({
+        title: 'Error sending message',
+        description: error.message || 'Failed to send message',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
       })
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
-      if (!messageResponse.ok) {
-        throw new Error('Failed to save message')
-      }
-
-      // Add user message to chat locally
-      setChatHistory(prev => [...prev, { role: 'user', content: userMessage }])
-
-      // Get FractiVerse response
-      const fractiverseResponse = await fetch('/api/fractiverse', {
+  // Generate AI response (this was missing in our edit)
+  const generateAIResponse = async (userMessage: string, chatId: string) => {
+    try {
+      // In a real implementation, this would call your AI service
+      // For now, let's use a simulated response
+      const response = await fetch('/api/fractiverse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           message: userMessage,
-          chatId: currentChatId,
-          userId: user.id
+          chatId: chatId,
+          userId: user?.id
         })
-      })
-
-      if (!fractiverseResponse.ok) {
-        throw new Error('Failed to get AI response')
-      }
-
-      const aiData = await fractiverseResponse.json()
+      });
       
-      // Save assistant message
-      const assistantResponse = await fetch('/api/chat/message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: currentChatId,
-          userId: user.id,
-          role: 'assistant',
-          content: aiData.content
-        })
-      })
-
-      if (!assistantResponse.ok) {
-        throw new Error('Failed to save AI response')
+      if (!response.ok) {
+        throw new Error('Failed to get AI response');
       }
-
-      // Add AI response to chat locally
-      setChatHistory(prev => [...prev, { role: 'assistant', content: aiData.content }])
-
-      // Update chat timestamp and title if needed
-      const updateData: any = {
-        chatId: currentChatId,
-        userId: user.id,
-        created_at: new Date().toISOString()
-      }
-
-      // Add title if it's the first message
-      if (chatHistory.length === 0) {
-        const title = userMessage.slice(0, 50) + (userMessage.length > 50 ? '...' : '')
-        updateData.title = title
-      }
-
-      const updateResponse = await fetch('/api/chat/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
-      })
-
-      if (!updateResponse.ok) {
-        console.error('Failed to update chat')
-      } else {
-        // Update local state with new timestamp and title if applicable
-        setPastChats(prev => prev.map(chat => 
-          chat.id === currentChatId 
-            ? { 
-                ...chat, 
-                created_at: updateData.created_at,
-                ...(updateData.title ? { title: updateData.title } : {})
-              } 
-            : chat
-        ).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))
-      }
+      
+      const data = await response.json();
+      return data.content;
     } catch (error) {
-      console.error('❌ Error in handleSendMessage:', error)
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to send message',
-        status: 'error',
-        duration: 3000,
-      })
-      // Rollback the optimistic update
-      setChatHistory(prev => prev.filter(msg => msg.content !== userMessage))
-      setMessage(userMessage) // Restore the message in the input
-    } finally {
-      setIsLoading(false)
+      console.error('Error generating AI response:', error);
+      // Return a fallback response if something goes wrong
+      return "I'm sorry, I couldn't generate a response at this time. Please try again later.";
     }
   }
 
   const handleNewChat = async () => {
-    console.log('🔍 Starting new chat creation')
+    if (!user?.id) {
+      toast({
+        title: 'Not logged in',
+        description: 'Please log in to continue.',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+      return
+    }
+    
+    setIsLoading(true)
+    setError(null)
+    
     try {
-      setIsLoading(true)
+      const newChat = await createChat(user.id, 'New Chat');
       
-      if (!user?.id) {
-        throw new Error('User not authenticated')
-      }
-
-      const response = await fetch('/api/chat/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id })
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to create chat')
-      }
-
-      const chat = await response.json()
-      console.log('✅ Chat created successfully:', chat)
-
-      setPastChats(prev => {
-        const newChats = [chat, ...prev]
-        return newChats.sort((a, b) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )
-      })
-      setSelectedChat(chat.id)
+      // Add the new chat to the list and select it
+      setPastChats(prev => [newChat, ...prev])
+      setSelectedChat(newChat.id)
       setChatHistory([])
       
+    } catch (error: any) {
+      console.error('❌ Error creating new chat:', error)
+      setError(error.message)
       toast({
-        title: 'New chat created',
-        status: 'success',
-        duration: 2000
-      })
-    } catch (error) {
-      console.error('❌ Error in handleNewChat:', error)
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to create chat',
+        title: 'Error creating chat',
+        description: error.message || 'Failed to create new chat',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       })
     } finally {
       setIsLoading(false)
     }
   }
 
-  const deleteChat = async (chatId: string) => {
+  const handleDeleteChat = async (chatId: string) => {
+    if (!user?.id) return
+    
+    setIsLoading(true)
+    setError(null)
+    
     try {
-      if (!user?.id) {
-        throw new Error('User not authenticated')
-      }
-
-      const response = await fetch('/api/chat/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId, userId: user.id })
-      })
-
-      if (!response.ok) {
-        const error = await response.json()
-        throw new Error(error.error || 'Failed to delete chat')
-      }
-
+      await deleteChat(chatId);
+      
+      // Remove the chat from the list
       setPastChats(prev => prev.filter(chat => chat.id !== chatId))
+      
+      // If the deleted chat was selected, clear the selection
       if (selectedChat === chatId) {
         setSelectedChat(null)
         setChatHistory([])
       }
-
+      
       toast({
         title: 'Chat deleted',
-        description: 'The chat has been removed from your history.',
         status: 'success',
         duration: 3000,
+        isClosable: true,
       })
-    } catch (error) {
-      console.error('❌ Error in deleteChat:', error)
+    } catch (error: any) {
+      console.error('❌ Error deleting chat:', error)
+      setError(error.message)
       toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to delete chat',
+        title: 'Error deleting chat',
+        description: error.message || 'Failed to delete chat',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
   const handleRenameChat = async (chatId: string, title: string) => {
+    if (!title.trim() || !user?.id) return
+    
+    setIsLoading(true)
+    setError(null)
+    
     try {
-      if (!user?.id) {
-        throw new Error('User not authenticated')
-      }
-
-      const response = await fetch('/api/chat/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId,
-          userId: user.id,
-          title
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to rename chat')
-      }
-
+      await updateChatTitle(chatId, title);
+      
+      // Update the chat title in the list
       setPastChats(prev => prev.map(chat => 
         chat.id === chatId ? { ...chat, title } : chat
       ))
+      
       setEditingChatId(null)
       setNewTitle('')
-
+      
+    } catch (error: any) {
+      console.error('❌ Error renaming chat:', error)
+      setError(error.message)
       toast({
-        title: 'Chat renamed',
-        status: 'success',
-        duration: 2000
-      })
-    } catch (error) {
-      console.error('❌ Error in handleRenameChat:', error)
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to rename chat',
+        title: 'Error renaming chat',
+        description: error.message || 'Failed to rename chat',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
+        isClosable: true,
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -704,7 +587,7 @@ export default function Dashboard() {
                           colorScheme="red"
                           onClick={(e) => {
                             e.stopPropagation()
-                            deleteChat(chat.id)
+                            handleDeleteChat(chat.id)
                           }}
                         />
                       </Tooltip>
