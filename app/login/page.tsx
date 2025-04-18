@@ -72,8 +72,8 @@ export default function LoginPage() {
   return (
     <Container maxW="container.sm" py={10}>
       <VStack spacing={8}>
-        <Heading>Welcome Back</Heading>
-        <Box w="100%" p={8} borderWidth={1} borderRadius="lg">
+        <Heading size="xl" color="gray.800">Welcome Back</Heading>
+        <Box w="100%" p={8} borderWidth={1} borderRadius="lg" bg="white" boxShadow="lg">
           <form onSubmit={handleSubmit}>
             <VStack spacing={4}>
               <FormControl isRequired>
@@ -83,6 +83,8 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email"
+                  bg="white"
+                  color="gray.800"
                 />
               </FormControl>
 
@@ -93,12 +95,14 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
+                  bg="white"
+                  color="gray.800"
                 />
               </FormControl>
 
               <Button
                 type="submit"
-                colorScheme="blue"
+                colorScheme="brand"
                 width="full"
                 isLoading={isLoading}
                 loadingText="Logging in..."
@@ -106,9 +110,9 @@ export default function LoginPage() {
                 Log In
               </Button>
 
-              <Text fontSize="sm">
+              <Text fontSize="sm" color="gray.600">
                 Don't have an account?{' '}
-                <ChakraLink as={Link} href="/signup" color="blue.500">
+                <ChakraLink as={Link} href="/signup" color="brand.500">
                   Sign up
                 </ChakraLink>
               </Text>
