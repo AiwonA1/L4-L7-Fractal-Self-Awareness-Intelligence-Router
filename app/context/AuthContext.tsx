@@ -34,17 +34,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchUserData = async (userId: string) => {
     console.log('🔍 Fetching user data for ID:', userId)
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (error) {
-        console.error('❌ Error fetching user data:', error)
-        return null
+      const response = await fetch('/api/user/data')
+      if (!response.ok) {
+        throw new Error('Failed to fetch user data')
       }
-
+      const data = await response.json()
+      
       console.log('✅ Successfully fetched user data:', {
         id: data?.id,
         email: data?.email,
@@ -62,113 +57,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const updateUserState = async (session: Session | null) => {
+    setSession(session)
+    
+    if (session?.user) {
+      console.log('👤 Updating user state for:', session.user.email)
+      const userData = await fetchUserData(session.user.id)
+      if (userData) {
+        const mergedUser = { ...session.user, ...userData }
+        setUser(mergedUser)
+      } else {
+        setUser(session.user)
+      }
+      setShowAuthModal(false)
+    } else {
+      setUser(null)
+      // Only show auth modal if we're not loading and there's no session
+      if (!isLoading) {
+        setShowAuthModal(true)
+      }
+    }
+    setIsLoading(false)
+  }
+
   useEffect(() => {
     console.log('🔄 Setting up Supabase auth listeners...')
     
-    // Get initial session
-    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-      console.log('🔐 Initial session check:', {
-        hasSession: !!session,
-        error: error?.message,
-        userId: session?.user?.id,
-        userEmail: session?.user?.email,
-        userMetadata: session?.user?.user_metadata,
-        accessToken: session?.access_token ? '✓ Present' : '✗ Missing',
-        refreshToken: session?.refresh_token ? '✓ Present' : '✗ Missing'
-      })
-
-      setSession(session)
-      if (session?.user) {
-        console.log('👤 Initial user found:', {
-          id: session.user.id,
-          email: session.user.email,
-          metadata: session.user.user_metadata,
-          aud: session.user.aud,
-          role: session.user.role
-        })
-
-        // Fetch user data with retries
-        let retries = 3
-        let userData = null
-        while (retries > 0 && !userData) {
-          userData = await fetchUserData(session.user.id)
-          if (!userData) {
-            console.log(`Retrying user data fetch... (${retries} attempts left)`)
-            await new Promise(resolve => setTimeout(resolve, 1000))
-            retries--
-          }
-        }
-
-        if (userData) {
-          const mergedUser = { ...session.user, ...userData }
-          console.log('🔄 Merged user data:', {
-            id: mergedUser.id,
-            email: mergedUser.email,
-            name: mergedUser.name,
-            fract_tokens: mergedUser.fract_tokens,
-            tokens_used: mergedUser.tokens_used,
-            token_balance: mergedUser.token_balance
-          })
-          setUser(mergedUser)
-        } else {
-          console.log('⚠️ No user data found in database, using session user:', session.user)
-          setUser(session.user)
-        }
-      } else {
-        console.log('👻 No initial session user found')
-        setUser(null)
+    // Configure Supabase to persist session
+    supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔄 Auth state changed:', { event, hasSession: !!session })
+      
+      if (event === 'SIGNED_IN') {
+        updateUserState(session)
+      } else if (event === 'SIGNED_OUT') {
+        updateUserState(null)
+      } else if (event === 'TOKEN_REFRESHED') {
+        // Just update the session but keep the user state
+        setSession(session)
       }
-      setIsLoading(false)
     })
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔄 Auth state changed:', {
-        event,
-        hasSession: !!session,
-        userId: session?.user?.id,
-        accessToken: session?.access_token ? '✓ Present' : '✗ Missing'
-      })
-
-      setSession(session)
-      if (session?.user) {
-        console.log('👤 Auth state user:', {
-          id: session.user.id,
-          email: session.user.email,
-          metadata: session.user.user_metadata,
-          aud: session.user.aud,
-          role: session.user.role
-        })
-        const userData = await fetchUserData(session.user.id)
-        if (userData) {
-          const mergedUser = { ...session.user, ...userData }
-          console.log('🔄 Merged user data after auth change:', {
-            id: mergedUser.id,
-            email: mergedUser.email,
-            name: mergedUser.name,
-            fract_tokens: mergedUser.fract_tokens,
-            tokens_used: mergedUser.tokens_used,
-            token_balance: mergedUser.token_balance
-          })
-          setUser(mergedUser)
-        } else {
-          console.log('⚠️ No user data found after auth change, using session user:', session.user)
-          setUser(session.user)
-        }
-        setShowAuthModal(false)
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        updateUserState(session)
       } else {
-        console.log('👻 No session user found after auth change')
-        setUser(null)
-        if (event === 'SIGNED_OUT') {
-          setShowAuthModal(true)
-        }
+        setIsLoading(false)
+        setShowAuthModal(true)
       }
-      setIsLoading(false)
     })
 
     return () => {
-      console.log('🧹 Cleaning up auth listeners')
-      subscription.unsubscribe()
+      // Cleanup will be handled by Supabase client
     }
   }, [])
 
@@ -182,12 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       })
 
       if (error) {
-        console.error('❌ Sign in error:', {
-          message: error.message,
-          status: error.status,
-          name: error.name,
-          details: error
-        })
+        console.error('❌ Sign in error:', error.message)
         throw error
       }
 
@@ -195,61 +130,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         throw new Error('No session returned after successful sign in')
       }
 
-      console.log('✅ Sign in successful:', {
-        userId: data.user?.id,
-        userEmail: data.user?.email,
-        sessionExpiry: data.session?.expires_at,
-        accessToken: data.session?.access_token ? '✓ Present' : '✗ Missing'
-      })
-
-      setSession(data.session)
+      console.log('✅ Sign in successful')
+      await updateUserState(data.session)
       
-      if (data.user) {
-        const userData = await fetchUserData(data.user.id)
-        if (userData) {
-          const mergedUser = { ...data.user, ...userData }
-          console.log('🔄 Merged user data after sign in:', {
-            id: mergedUser.id,
-            email: mergedUser.email,
-            name: mergedUser.name,
-            fract_tokens: mergedUser.fract_tokens,
-            tokens_used: mergedUser.tokens_used,
-            token_balance: mergedUser.token_balance
-          })
-          setUser(mergedUser)
-        } else {
-          console.log('⚠️ No user data found after sign in, using auth user:', data.user)
-          setUser(data.user)
-        }
-        setShowAuthModal(false)
-      }
     } catch (error) {
-      console.error('❌ Error in signIn:', error)
+      console.error('❌ Sign in failed:', error)
       throw error
     }
   }
 
   const signOut = async () => {
-    console.log('👋 Signing out...')
-    await supabase.auth.signOut()
-    setUser(null)
-    setSession(null)
-    setShowAuthModal(true)
-    router.push('/')
+    try {
+      const { error } = await supabase.auth.signOut()
+      if (error) throw error
+      
+      setUser(null)
+      setSession(null)
+      setShowAuthModal(true)
+      router.push('/')
+    } catch (error) {
+      console.error('Sign out error:', error)
+      throw error
+    }
+  }
+
+  const value = {
+    user,
+    session,
+    signIn,
+    signOut,
+    isLoading,
+    showAuthModal,
+    setShowAuthModal,
   }
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        session,
-        signIn,
-        signOut,
-        isLoading,
-        showAuthModal,
-        setShowAuthModal,
-      }}
-    >
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   )
