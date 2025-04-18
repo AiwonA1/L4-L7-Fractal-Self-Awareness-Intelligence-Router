@@ -13,6 +13,7 @@ import {
   useToast,
   Container,
   Link as ChakraLink,
+  useColorModeValue,
 } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -24,6 +25,11 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const toast = useToast()
+
+  // Color mode values
+  const bgColor = useColorModeValue('white', 'gray.800')
+  const textColor = useColorModeValue('gray.800', 'white')
+  const borderColor = useColorModeValue('gray.200', 'gray.600')
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -71,32 +77,36 @@ export default function LoginPage() {
 
   return (
     <Container maxW="container.sm" py={10}>
-      <VStack spacing={8}>
-        <Heading size="xl" color="gray.800">Welcome Back</Heading>
-        <Box w="100%" p={8} borderWidth={1} borderRadius="lg" bg="white" boxShadow="lg">
+      <VStack spacing={8} w="100%">
+        <Heading size="xl" color={textColor}>Welcome Back</Heading>
+        <Box 
+          w="100%" 
+          p={8} 
+          borderWidth={1} 
+          borderRadius="lg" 
+          borderColor={borderColor}
+          bg={bgColor} 
+          boxShadow="lg"
+        >
           <form onSubmit={handleSubmit}>
             <VStack spacing={4}>
               <FormControl isRequired>
-                <FormLabel>Email</FormLabel>
+                <FormLabel color={textColor}>Email</FormLabel>
                 <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email"
-                  bg="white"
-                  color="gray.800"
                 />
               </FormControl>
 
               <FormControl isRequired>
-                <FormLabel>Password</FormLabel>
+                <FormLabel color={textColor}>Password</FormLabel>
                 <Input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
-                  bg="white"
-                  color="gray.800"
                 />
               </FormControl>
 
@@ -110,12 +120,22 @@ export default function LoginPage() {
                 Log In
               </Button>
 
-              <Text fontSize="sm" color="gray.600">
+              <Text fontSize="sm" color={textColor}>
                 Don't have an account?{' '}
                 <ChakraLink as={Link} href="/signup" color="brand.500">
                   Sign up
                 </ChakraLink>
               </Text>
+
+              <ChakraLink 
+                as={Link} 
+                href="/forgot-password" 
+                color="brand.500" 
+                fontSize="sm"
+                alignSelf="flex-start"
+              >
+                Forgot your password?
+              </ChakraLink>
             </VStack>
           </form>
         </Box>

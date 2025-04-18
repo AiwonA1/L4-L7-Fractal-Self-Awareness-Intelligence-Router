@@ -23,6 +23,13 @@ export const supabase = createBrowserClient<Database>(
     global: {
       headers: {
         'x-application-name': 'fractiverse'
+      },
+      fetch: (url, options) => {
+        return fetch(url, {
+          ...options,
+          cache: 'no-cache', // Disable caching to prevent stale DNS
+          keepalive: true, // Keep connection alive
+        })
       }
     },
     realtime: {
