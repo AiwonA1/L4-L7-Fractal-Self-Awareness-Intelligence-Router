@@ -1,129 +1,115 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { prisma } from '@/lib/prisma'
+import type { Database } from '@/types/supabase'
 
-export async function GET() {
-  console.log('📥 [API] GET /api/tokens')
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+export async function GET(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get Supabase session
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    console.log('🔑 [API] Session:', session?.user?.id || session?.user?.email)
-
-    if (sessionError || !session?.user?.email) {
-      console.log('❌ [API] Unauthorized - No session or user email')
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('🔍 [API] Finding user by email:', session.user.email)
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    if (!user) {
-      console.log('❌ [API] User not found')
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('✅ [API] Returning token balance:', user.token_balance)
-    return NextResponse.json({ balance: user.token_balance })
+    // Get user's token balance
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('token_balance')
+      .eq('id', user.id)
+      .single()
+
+    if (userError) throw userError
+    
+    return NextResponse.json({ token_balance: userData?.token_balance || 0 })
   } catch (error) {
-    console.error('💥 [API] Error in GET /api/tokens:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch token balance' },
-      { status: 500 }
-    )
+    console.error('Error fetching token balance:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
-  console.log('📥 [API] POST /api/tokens')
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get Supabase session
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    console.log('🔑 [API] Session:', session?.user?.email)
-
-    if (sessionError || !session?.user?.email) {
-      console.log('❌ [API] Unauthorized - No session or user email')
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { action, amount } = await request.json()
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    if (action !== 'purchase' || !amount || amount <= 0) {
-      return NextResponse.json(
-        { error: 'Invalid purchase request' },
-        { status: 400 }
-      )
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('🔍 [API] Finding user by email:', session.user.email)
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    const body = await request.json()
+    const { amount, description } = body
 
-    if (!user) {
-      console.log('❌ [API] User not found')
+    if (!amount || amount <= 0) {
+      return NextResponse.json({ error: 'Invalid token amount' }, { status: 400 })
+    }
+
+    // Get user's current token balance
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('token_balance, tokens_used')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    console.log('💰 [API] Updating token balance')
-    const updatedUser = await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        token_balance: {
-          increment: amount
-        }
-      }
-    })
+    const currentBalance = userData.token_balance || 0
+    if (currentBalance < amount) {
+      return NextResponse.json({ error: 'Insufficient tokens' }, { status: 400 })
+    }
 
-    console.log('📝 [API] Creating transaction record')
-    await prisma.transaction.create({
-      data: {
+    // Update user's token balance and tokens_used
+    const { error: updateError } = await supabase
+      .from('users')
+      .update({
+        token_balance: currentBalance - amount,
+        tokens_used: (userData.tokens_used || 0) + amount,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+
+    if (updateError) throw updateError
+
+    // Create transaction record
+    const { error: transactionError } = await supabase
+      .from('transactions')
+      .insert({
         user_id: user.id,
-        type: 'PURCHASE',
-        amount: amount,
-        status: 'COMPLETED',
-        description: `Purchased ${amount} FractiTokens`
-      }
-    })
+        type: 'USE',
+        amount,
+        description: description || 'Token usage',
+        status: 'COMPLETED'
+      })
 
-    console.log('✅ [API] Token purchase successful')
+    if (transactionError) throw transactionError
+
     return NextResponse.json({
       success: true,
-      balance: updatedUser.token_balance
+      token_balance: currentBalance - amount
     })
   } catch (error) {
-    console.error('💥 [API] Error processing token purchase:', error)
-    return NextResponse.json(
-      { error: 'Failed to process token purchase' },
-      { status: 500 }
-    )
+    console.error('Error using tokens:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 } 

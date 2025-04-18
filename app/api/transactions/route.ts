@@ -1,49 +1,82 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { verify } from 'jsonwebtoken'
+import type { Database } from '@/types/supabase'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get token from cookies
-    const token = cookies().get('auth-token')?.value
-
-    if (!token) {
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
+    
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify token
-    const decoded = verify(token, JWT_SECRET) as { userId: string }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    // Get user's transactions
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        user_id: decoded.userId
-      },
-      orderBy: {
-        created_at: 'desc'
-      },
-      take: 10, // Limit to last 10 transactions
-      select: {
-        id: true,
-        type: true,
-        amount: true,
-        description: true,
-        status: true,
-        created_at: true
-      }
-    })
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    return NextResponse.json({ transactions })
+    const { data: transactions, error: transactionError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+
+    if (transactionError) throw transactionError
+    
+    return NextResponse.json(transactions)
   } catch (error) {
     console.error('Error fetching transactions:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch transactions' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
+
+export async function POST(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
+  try {
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
+    
+    if (!sessionCookie) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { type, amount, description } = body
+
+    const { data: transaction, error: transactionError } = await supabase
+      .from('transactions')
+      .insert({
+        user_id: user.id,
+        type,
+        amount,
+        description,
+        status: 'COMPLETED'
+      })
+      .select()
+      .single()
+
+    if (transactionError) throw transactionError
+    
+    return NextResponse.json(transaction)
+  } catch (error) {
+    console.error('Error creating transaction:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 } 

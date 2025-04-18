@@ -1,78 +1,54 @@
 'use client'
 
-import {
-  Button,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalBody,
-  ModalCloseButton,
-  FormControl,
-  FormLabel,
-  Input,
-  VStack,
-  useToast,
-  Text,
-  Divider,
-  Icon,
-} from '@chakra-ui/react'
 import { useState } from 'react'
-import { FaGoogle } from 'react-icons/fa'
-import { useRouter } from 'next/navigation'
+import { Button, ButtonGroup, Input, VStack, Text, useToast } from '@chakra-ui/react'
+import { FcGoogle } from 'react-icons/fc'
 import { supabase } from '@/lib/supabase'
-import Link from 'next/link'
-import { useAuth } from '../context/AuthContext'
+import { useRouter } from 'next/navigation'
 
 export default function SignInButton() {
-  const { showAuthModal, setShowAuthModal, signIn } = useAuth()
+  const [isLoading, setIsLoading] = useState(false)
+  const [showEmailInput, setShowEmailInput] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
   const toast = useToast()
   const router = useRouter()
 
-  const handleClose = () => {
-    setShowAuthModal(false)
-    setEmail('')
-    setPassword('')
-  }
-
-  const showError = (message: string) => {
-    toast({
-      title: 'Error',
-      description: message,
-      status: 'error',
-      duration: 5000,
-      isClosable: true,
-    })
-  }
-
-  const handleEmailSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
+  const handleEmailSignIn = async () => {
+    if (!email || !password) {
+      toast({
+        title: 'Error',
+        description: 'Please enter both email and password',
+        status: 'error',
+        duration: 3000,
+      })
+      return
+    }
 
     try {
-      await signIn(email, password)
-      
-      toast({
-        title: 'Success!',
-        description: 'You have been logged in.',
-        status: 'success',
-        duration: 5000,
-        isClosable: true,
+      setIsLoading(true)
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       })
 
-      handleClose()
+      if (error) throw error
+
+      toast({
+        title: 'Success',
+        description: 'Signed in successfully',
+        status: 'success',
+        duration: 3000,
+      })
+
       router.push('/dashboard')
-    } catch (error: any) {
-      if (error.message?.includes('Invalid login credentials')) {
-        showError('Invalid email or password')
-      } else if (error.message?.includes('Invalid API key')) {
-        showError('Authentication service error. Please try again later.')
-      } else {
-        showError(error.message || 'Failed to sign in. Please try again.')
-      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to sign in',
+        status: 'error',
+        duration: 5000,
+      })
     } finally {
       setIsLoading(false)
     }
@@ -80,96 +56,77 @@ export default function SignInButton() {
 
   const handleGoogleSignIn = async () => {
     try {
+      setIsLoading(true)
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          }
+          redirectTo: `${window.location.origin}/auth/callback`
         }
       })
 
       if (error) throw error
-    } catch (error: any) {
-      showError('Failed to sign in with Google. Please try again.')
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to sign in with Google',
+        status: 'error',
+        duration: 5000,
+      })
+    } finally {
+      setIsLoading(false)
     }
   }
 
+  if (showEmailInput) {
+    return (
+      <VStack spacing={4} align="stretch">
+        <Input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <Input
+          type="password"
+          placeholder="Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+        <ButtonGroup spacing={4}>
+          <Button
+            onClick={handleEmailSignIn}
+            isLoading={isLoading}
+            colorScheme="blue"
+          >
+            Sign In
+          </Button>
+          <Button
+            onClick={() => setShowEmailInput(false)}
+            variant="ghost"
+          >
+            Cancel
+          </Button>
+        </ButtonGroup>
+      </VStack>
+    )
+  }
+
   return (
-    <>
-      <Button colorScheme="blue" onClick={() => setShowAuthModal(true)}>
-        Sign In
+    <ButtonGroup spacing={4}>
+      <Button
+        leftIcon={<FcGoogle />}
+        onClick={handleGoogleSignIn}
+        isLoading={isLoading}
+        variant="outline"
+      >
+        Sign in with Google
       </Button>
-
-      <Modal isOpen={showAuthModal} onClose={handleClose}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>Sign In</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody pb={6}>
-            <VStack spacing={4}>
-              <Button
-                leftIcon={<Icon as={FaGoogle} />}
-                width="full"
-                onClick={handleGoogleSignIn}
-                colorScheme="red"
-                variant="outline"
-              >
-                Sign in with Google
-              </Button>
-
-              <Divider />
-
-              <form onSubmit={handleEmailSignIn} style={{ width: '100%' }}>
-                <VStack spacing={4}>
-                  <FormControl>
-                    <FormLabel>Email</FormLabel>
-                    <Input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      required
-                    />
-                  </FormControl>
-
-                  <FormControl>
-                    <FormLabel>Password</FormLabel>
-                    <Input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter your password"
-                      required
-                    />
-                  </FormControl>
-
-                  <Button
-                    type="submit"
-                    colorScheme="blue"
-                    width="full"
-                    isLoading={isLoading}
-                    loadingText="Signing in..."
-                  >
-                    Sign In
-                  </Button>
-                </VStack>
-              </form>
-
-              <Text fontSize="sm">
-                Don't have an account?{' '}
-                <Link href="/signup">
-                  <Text as="span" color="blue.500">
-                    Sign up
-                  </Text>
-                </Link>
-              </Text>
-            </VStack>
-          </ModalBody>
-        </ModalContent>
-      </Modal>
-    </>
+      <Button
+        onClick={() => setShowEmailInput(true)}
+        variant="outline"
+      >
+        Sign in with Email
+      </Button>
+    </ButtonGroup>
   )
 } 

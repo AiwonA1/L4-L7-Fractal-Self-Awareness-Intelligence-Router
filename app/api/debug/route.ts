@@ -1,42 +1,26 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { PrismaClient } from '@prisma/client'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 
 export const dynamic = 'force-dynamic'
 
-const prisma = new PrismaClient()
+export async function GET() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export async function GET(request: Request) {
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  
   try {
+    const { data: users, error } = await supabase
+      .from('users')
+      .select('*')
+    
+    if (error) throw error
+    
     // Get cookies from the request
     const cookieStore = cookies()
     const cookieList = cookieStore.getAll()
     const cookieNames = cookieList.map(c => c.name)
-    
-    // Create Supabase client
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
-    
-    // Check if we can connect to the database with a more selective query
-    const dbCheck = await prisma.user.findFirst({
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        token_balance: true,
-        created_at: true
-      }
-    })
     
     // Get the Supabase session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -51,7 +35,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       message: "Auth debug information",
       dbConnection: "Connected successfully",
-      dbFirstUser: dbCheck,
+      dbFirstUser: users[0],
       sessionExists: !!session,
       session: session,
       supabaseConfig,
@@ -62,10 +46,7 @@ export async function GET(request: Request) {
       timestamp: new Date().toISOString()
     })
   } catch (error) {
-    console.error("Debug route error:", error)
-    return NextResponse.json({
-      message: "Error in debug route",
-      error: error instanceof Error ? error.message : String(error)
-    }, { status: 500 })
+    console.error('Debug route error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 } 

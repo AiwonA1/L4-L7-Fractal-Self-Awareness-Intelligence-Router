@@ -1,11 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { prisma } from '@/lib/prisma'
 import OpenAI from 'openai'
 import fs from 'fs'
 import path from 'path'
-import { Prisma } from '@prisma/client'
+import type { Database } from '@/types/supabase'
 
 interface Message {
   role: 'user' | 'assistant' | 'system'
@@ -38,6 +37,12 @@ const FRACTIVERSE_PROMPT = fs.readFileSync(
   'utf-8'
 )
 
+type Chat = Database['public']['Tables']['chats']['Row']
+type User = Database['public']['Tables']['users']['Row']
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
@@ -58,16 +63,9 @@ export async function PUT(
 
     // Get Supabase session
     const cookieStore = cookies()
-    const supabase = createServerClient(
+    const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
     
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -78,11 +76,13 @@ export async function PUT(
     }
 
     // Get user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single()
 
-    if (!user) {
+    if (userError || !user) {
       console.log(`[PUT /api/chat/${params.id}] User not found: ${session.user.email}`)
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
@@ -98,14 +98,14 @@ export async function PUT(
     }
 
     // Get chat
-    const chat = await prisma.chat.findUnique({
-      where: {
-        id: params.id,
-        user_id: user.id
-      }
-    })
+    const { data: chat, error: chatError } = await supabase
+      .from('chats')
+      .select('*')
+      .eq('id', params.id)
+      .eq('user_id', user.id)
+      .single()
 
-    if (!chat) {
+    if (chatError || !chat) {
       console.log(`[PUT /api/chat/${params.id}] Chat not found`)
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
@@ -173,22 +173,26 @@ export async function PUT(
       const llmCost = (usage.prompt_tokens * 0.03 + usage.completion_tokens * 0.06) / 1000
 
       // Create usage record with both LLM tokens and FractiToken
-      await prisma.transaction.create({
-        data: {
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
           user_id: user.id,
           type: 'CHAT',
           amount: 1,
           description: `Chat message with ${usage.total_tokens} tokens`,
           status: 'COMPLETED'
-        }
-      })
+        })
+
+      if (transactionError) throw transactionError
 
       // Deduct 1 FractiToken for the command
       const newBalance = currentBalance - 1
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { token_balance: newBalance }
-      })
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ token_balance: newBalance })
+        .eq('id', user.id)
+
+      if (updateError) throw updateError
 
       // Add assistant's response to messages
       const updatedMessages = [
@@ -200,13 +204,15 @@ export async function PUT(
       ]
 
       // Update chat with new messages
-      await prisma.chat.update({
-        where: { id: params.id },
-        data: { 
+      const { error: chatUpdateError } = await supabase
+        .from('chats')
+        .update({ 
           last_message: completion.choices[0].message.content.slice(0, 100),
-          updated_at: new Date()
-        }
-      })
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', params.id)
+
+      if (chatUpdateError) throw chatUpdateError
 
       console.log(`[PUT /api/chat/${params.id}] Chat updated successfully`)
       console.log(`[PUT /api/chat/${params.id}] New FractiToken balance: ${newBalance}`)
@@ -242,48 +248,20 @@ export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get Supabase session
-    const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const { error } = await supabase
+      .from('chats')
+      .delete()
+      .eq('id', params.id)
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (error) throw error
     
-    if (sessionError || !session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Get user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    // Delete chat
-    await prisma.chat.delete({
-      where: {
-        id: params.id,
-        user_id: user.id
-      }
-    })
-
     return NextResponse.json({ message: 'Chat deleted successfully' })
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error deleting chat:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
 
@@ -296,16 +274,9 @@ export async function PATCH(
     
     // Get Supabase session
     const cookieStore = cookies()
-    const supabase = createServerClient(
+    const supabase = createClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
     
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -315,23 +286,26 @@ export async function PATCH(
     }
 
     // Get user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single()
 
-    if (!user) {
+    if (userError || !user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
     // Update chat
-    const updatedChat = await prisma.chat.update({
-      where: {
-        id: params.id,
-        user_id: user.id
-      },
-      data: body
-    })
+    const { data: updatedChat, error: updateError } = await supabase
+      .from('chats')
+      .update(body)
+      .eq('id', params.id)
+      .eq('user_id', user.id)
+      .select()
+      .single()
 
+    if (updateError) throw updateError
     return NextResponse.json(updatedChat)
   } catch (error: any) {
     console.error('Error updating chat:', error)
@@ -343,51 +317,23 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get Supabase session
-    const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const { data: chat, error } = await supabase
+      .from('chats')
+      .select('*')
+      .eq('id', params.id)
+      .single()
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Get user
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
-    }
-
-    // Get chat
-    const chat = await prisma.chat.findUnique({
-      where: {
-        id: params.id,
-        user_id: user.id
-      }
-    })
-
+    if (error) throw error
     if (!chat) {
       return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
     }
-
+    
     return NextResponse.json(chat)
-  } catch (error: any) {
-    console.error('Error getting chat:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    console.error('Error fetching chat:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 } 

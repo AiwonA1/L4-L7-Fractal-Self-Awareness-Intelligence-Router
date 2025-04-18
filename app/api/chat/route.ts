@@ -1,51 +1,29 @@
+import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
-import type { Chat } from '@prisma/client'
+import type { Database } from '@/types/supabase'
+
+type Chat = Database['public']['Tables']['chats']['Row']
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(req: Request) {
+export async function GET(request: Request) {
+  const supabase = createClient(supabaseUrl, supabaseKey)
+  
   try {
-    const cookieStore = cookies()
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
-
-    // Get session from cookie
-    const sessionCookie = cookieStore.get('sb-access-token')?.value
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
-
-    if (authError || !user) {
-      console.error('Authentication error:', authError)
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const chats = await prisma.chat.findMany({
-      where: {
-        user_id: user.id
-      },
-      orderBy: {
-        created_at: 'desc'
-      }
-    })
-
-    const formattedChats = chats.map((chat: Chat) => ({
-      id: chat.id,
-      title: chat.title,
-      created_at: chat.created_at,
-      updated_at: chat.updated_at
-    }))
-
-    return NextResponse.json(formattedChats)
+    const { data: chats, error } = await supabase
+      .from('chats')
+      .select('*')
+      .order('created_at', { ascending: false })
+    
+    if (error) throw error
+    
+    return NextResponse.json(chats)
   } catch (error) {
-    console.error('Chat error:', error)
+    console.error('Error fetching chats:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -74,14 +52,17 @@ export async function POST(req: Request) {
     const body = await req.json()
     const { title } = body
 
-    const chat = await prisma.chat.create({
-      data: {
+    const { data: chat, error } = await supabase
+      .from('chats')
+      .insert({
         title,
         user_id: user.id,
-        updated_at: new Date()
-      }
-    })
+        updated_at: new Date().toISOString()
+      })
+      .select()
+      .single()
 
+    if (error) throw error
     return NextResponse.json(chat)
   } catch (error) {
     console.error('Chat error:', error)

@@ -1,143 +1,97 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import Stripe from 'stripe'
-import { prisma } from '@/lib/prisma'
+import type { Database } from '@/types/supabase'
 
-// Initialize Stripe with the secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-10-16',
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2023-10-16'
 })
 
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
 export async function POST(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get Supabase session
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session?.user?.email) {
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Find the user by email
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    if (!user) {
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get user details from database
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 })
     }
 
-    // If user doesn't have a Stripe customer ID, they can't have saved payment methods
-    if (!user.stripe_customer_id) {
-      return NextResponse.json({ error: 'No saved payment method found' }, { status: 400 })
-    }
+    const body = await request.json()
+    const { amount, payment_method_id } = body
 
-    // Extract request body
-    const { amount, priceInCents } = await request.json()
-
-    // Validate input
-    if (!amount || !priceInCents) {
-      return NextResponse.json({ error: 'Invalid request parameters' }, { status: 400 })
-    }
-
-    // Get the default payment method for the customer
-    const paymentMethods = await stripe.paymentMethods.list({
-      customer: user.stripe_customer_id,
-      type: 'card',
-    })
-
-    if (paymentMethods.data.length === 0) {
-      return NextResponse.json({ error: 'No saved payment method found' }, { status: 400 })
-    }
-
-    // Use the first payment method (in a real app, you might want to let the user choose)
-    const paymentMethodId = paymentMethods.data[0].id
-
-    // Calculate tax (in a real app, you would call a tax API based on customer location)
-    const taxAmount = Math.round(priceInCents * 0.07) // 7% tax
-    const totalAmount = priceInCents + taxAmount
-
-    // Create a payment intent with the saved payment method
+    // Create payment intent
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: totalAmount,
+      amount: amount * 100, // Convert to cents
       currency: 'usd',
-      customer: user.stripe_customer_id,
-      payment_method: paymentMethodId,
+      customer: userData.stripe_customer_id,
+      payment_method: payment_method_id,
       off_session: true,
       confirm: true,
-      metadata: {
-        userId: user.id,
-        tokenAmount: amount.toString(),
-        taxAmount: taxAmount.toString(),
-      },
     })
 
-    // If the payment is successful, update the user's token balance and create a transaction record
     if (paymentIntent.status === 'succeeded') {
-      // Add tokens to the user's balance
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          token_balance: {
-            increment: amount,
-          },
-        },
-      })
+      // Calculate token amount (1 token per dollar)
+      const tokenAmount = amount
+
+      // Update user's token balance
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          token_balance: (userData.token_balance || 0) + tokenAmount,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+
+      if (updateError) throw updateError
 
       // Create transaction record
-      await prisma.transaction.create({
-        data: {
+      const { error: transactionError } = await supabase
+        .from('transactions')
+        .insert({
           user_id: user.id,
           type: 'PURCHASE',
-          amount: amount,
-          status: 'COMPLETED',
-          description: `Purchased ${amount} FractiTokens (Payment Intent: ${paymentIntent.id}, Tax: ${taxAmount})`
-        }
-      })
+          amount: tokenAmount,
+          description: `Purchased ${tokenAmount} FractiTokens`,
+          status: 'COMPLETED'
+        })
 
-      return NextResponse.json({ 
-        success: true,
-        paymentIntentId: paymentIntent.id 
-      })
-    }
+      if (transactionError) throw transactionError
 
-    // If payment requires additional action, return the client_secret
-    if (paymentIntent.status === 'requires_action' && paymentIntent.next_action) {
       return NextResponse.json({
-        requires_action: true,
-        payment_intent_client_secret: paymentIntent.client_secret,
+        success: true,
+        message: 'Payment successful',
+        token_balance: (userData.token_balance || 0) + tokenAmount
       })
+    } else {
+      throw new Error('Payment failed')
     }
-
-    // Payment didn't succeed
-    return NextResponse.json({ 
-      error: `Payment failed with status: ${paymentIntent.status}` 
-    }, { status: 400 })
-    
-  } catch (error) {
-    console.error('Stripe charge error:', error)
-    
-    // Handle Stripe card error specifically
-    if (error instanceof Stripe.errors.StripeCardError) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
-    }
-    
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to process payment' },
-      { status: 500 }
-    )
+  } catch (error: any) {
+    console.error('Error processing payment:', error)
+    return NextResponse.json({
+      error: error.message || 'Payment processing failed'
+    }, { status: 500 })
   }
 } 

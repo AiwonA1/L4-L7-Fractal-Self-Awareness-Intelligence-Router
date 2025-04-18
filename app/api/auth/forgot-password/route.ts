@@ -1,55 +1,46 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { hash } from 'bcryptjs'
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@/types/supabase'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export async function POST(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
     const { email } = await request.json()
 
     if (!email) {
-      return NextResponse.json(
-        { error: 'Email is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
     // Check if user exists
-    const user = await prisma.user.findUnique({
-      where: { email }
-    })
+    const { data: user, error: userError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single()
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      )
+    if (userError || !user) {
+      // For security reasons, still return success even if user doesn't exist
+      return NextResponse.json({ message: 'If an account exists, a password reset link has been sent.' })
     }
 
-    // Generate a reset token
-    const resetToken = Math.random().toString(36).slice(-8)
-    const resetTokenExpiry = new Date(Date.now() + 3600000) // 1 hour from now
-
-    // Store the reset token in the database
-    await prisma.passwordReset.create({
-      data: {
-        userId: user.id,
-        token: resetToken,
-        expires: resetTokenExpiry,
-      },
+    // Send password reset email using Supabase Auth
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`
     })
 
-    // In a real application, you would send an email here
-    // For development, we'll just return the token
+    if (resetError) {
+      throw resetError
+    }
+
     return NextResponse.json({
-      message: 'Password reset token generated',
-      token: resetToken, // Only for development
-      expiresAt: resetTokenExpiry,
+      message: 'If an account exists, a password reset link has been sent.'
     })
   } catch (error) {
-    console.error('Password reset error:', error)
-    return NextResponse.json(
-      { error: 'Failed to process password reset request' },
-      { status: 500 }
-    )
+    console.error('Error in forgot password:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 } 
