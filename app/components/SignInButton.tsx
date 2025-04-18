@@ -2,13 +2,11 @@
 
 import { useState } from 'react'
 import { Button, ButtonGroup, Input, VStack, Text, useToast } from '@chakra-ui/react'
-import { FcGoogle } from 'react-icons/fc'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 export default function SignInButton() {
   const [isLoading, setIsLoading] = useState(false)
-  const [showEmailInput, setShowEmailInput] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const toast = useToast()
@@ -54,79 +52,28 @@ export default function SignInButton() {
     }
   }
 
-  const handleGoogleSignIn = async () => {
-    try {
-      setIsLoading(true)
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
-      })
-
-      if (error) throw error
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to sign in with Google',
-        status: 'error',
-        duration: 5000,
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  if (showEmailInput) {
-    return (
-      <VStack spacing={4} align="stretch">
-        <Input
-          type="email"
-          placeholder="Email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-        />
-        <Input
-          type="password"
-          placeholder="Password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <ButtonGroup spacing={4}>
-          <Button
-            onClick={handleEmailSignIn}
-            isLoading={isLoading}
-            colorScheme="blue"
-          >
-            Sign In
-          </Button>
-          <Button
-            onClick={() => setShowEmailInput(false)}
-            variant="ghost"
-          >
-            Cancel
-          </Button>
-        </ButtonGroup>
-      </VStack>
-    )
-  }
-
   return (
-    <ButtonGroup spacing={4}>
+    <VStack spacing={4} align="stretch">
+      <Input
+        type="email"
+        placeholder="Email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+      />
+      <Input
+        type="password"
+        placeholder="Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+      />
       <Button
-        leftIcon={<FcGoogle />}
-        onClick={handleGoogleSignIn}
+        onClick={handleEmailSignIn}
         isLoading={isLoading}
-        variant="outline"
+        colorScheme="blue"
+        width="100%"
       >
-        Sign in with Google
+        Sign In
       </Button>
-      <Button
-        onClick={() => setShowEmailInput(true)}
-        variant="outline"
-      >
-        Sign in with Email
-      </Button>
-    </ButtonGroup>
+    </VStack>
   )
 } 
