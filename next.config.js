@@ -44,15 +44,6 @@ const nextConfig = {
         ]
       }
     ]
-  },
-  // Add rewrites for Supabase
-  async rewrites() {
-    return [
-      {
-        source: '/auth/:path*',
-        destination: `${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/:path*`
-      }
-    ]
   }
 }
 
