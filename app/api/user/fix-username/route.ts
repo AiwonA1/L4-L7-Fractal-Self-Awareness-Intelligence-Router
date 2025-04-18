@@ -1,73 +1,65 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { prisma } from '@/lib/prisma'
+import type { Database } from '@/types/supabase'
 
-export const dynamic = 'force-dynamic'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export async function GET() {
+export async function POST(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get Supabase session
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session?.user?.email) {
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user from database
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Update user's name to "Pru"
-    await prisma.user.update({
-      where: { email: session.user.email },
-      data: { name: 'Pru' }
-    })
+    const { username } = await request.json()
 
-    // Return HTML that updates localStorage and redirects
-    const html = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Updating name...</title>
-        </head>
-        <body>
-          <script>
-            localStorage.setItem('userName', 'Pru');
-            alert('Name updated successfully!');
-            window.location.href = '/dashboard';
-          </script>
-        </body>
-      </html>
-    `
+    if (!username) {
+      return NextResponse.json({ error: 'Username is required' }, { status: 400 })
+    }
 
-    return new NextResponse(html, {
-      headers: { 'Content-Type': 'text/html' }
-    })
+    // Check if username is already taken
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('name', username)
+      .not('id', 'eq', user.id)
+      .single()
 
+    if (checkError && checkError.code !== 'PGRST116') { // PGRST116 means no rows returned
+      throw checkError
+    }
+
+    if (existingUser) {
+      return NextResponse.json({ error: 'Username already taken' }, { status: 400 })
+    }
+
+    // Update username
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ name: username })
+      .eq('id', user.id)
+      .select()
+      .single()
+
+    if (updateError) {
+      throw updateError
+    }
+
+    return NextResponse.json({ user: updatedUser })
   } catch (error) {
-    console.error('Error updating username:', error)
-    return NextResponse.json(
-      { error: 'Failed to update username. Please try again.' },
-      { status: 500 }
-    )
+    console.error('Error fixing username:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

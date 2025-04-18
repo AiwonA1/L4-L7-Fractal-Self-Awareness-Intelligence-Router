@@ -1,80 +1,62 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { prisma } from '@/lib/prisma'
+import type { Database } from '@/types/supabase'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session?.user?.email) {
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Get user's usage data
+    const { data: userData, error: usageError } = await supabase
+      .from('users')
+      .select('token_balance, tokens_used')
+      .eq('id', user.id)
+      .single()
+
+    if (usageError) {
+      throw usageError
+    }
+
     // Get user's transactions
-    const transactions = await prisma.transaction.findMany({
-      where: {
-        user: {
-          email: session.user.email
-        }
-      },
-      orderBy: {
-        created_at: 'desc'
-      }
-    })
+    const { data: transactions, error: transactionError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(10)
 
-    // Calculate total usage
-    const totalUsage = transactions.reduce((acc, curr) => acc + curr.amount, 0)
-
-    // Get daily usage
-    const dailyUsage = await prisma.transaction.groupBy({
-      by: ['created_at'],
-      where: {
-        user: {
-          email: session.user.email
-        }
-      },
-      _sum: {
-        amount: true
-      }
-    })
-
-    // Get chat usage
-    const chatUsage = await prisma.chat.count({
-      where: {
-        user: {
-          email: session.user.email
-        }
-      }
-    })
+    if (transactionError) {
+      throw transactionError
+    }
 
     return NextResponse.json({
-      totalUsage,
-      dailyUsage,
-      chatUsage,
-      transactions
+      usage: {
+        tokenBalance: userData?.token_balance || 0,
+        tokensUsed: userData?.tokens_used || 0,
+        recentTransactions: transactions || []
+      }
     })
-
   } catch (error) {
-    console.error('Error fetching usage:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch usage data' },
-      { status: 500 }
-    )
+    console.error('Error fetching usage data:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

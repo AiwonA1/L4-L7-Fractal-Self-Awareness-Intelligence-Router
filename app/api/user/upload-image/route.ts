@@ -1,99 +1,69 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { v4 as uuidv4 } from 'uuid'
-import { existsSync } from 'fs'
-import { prisma } from '@/lib/prisma'
+import type { Database } from '@/types/supabase'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export async function POST(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session?.user?.email) {
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Get user from database
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Process the uploaded file
     const formData = await request.formData()
-    const image = formData.get('image') as File
-    if (!image) {
-      return NextResponse.json({ error: 'No image uploaded' }, { status: 400 })
+    const file = formData.get('file') as File
+
+    if (!file) {
+      return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })
     }
 
-    // Validate file type
-    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
-    if (!validTypes.includes(image.type)) {
-      return NextResponse.json({ error: 'Invalid image format' }, { status: 400 })
+    // Upload file to Supabase Storage
+    const { data: uploadData, error: uploadError } = await supabase
+      .storage
+      .from('profile-images')
+      .upload(`${user.id}/${file.name}`, file, {
+        cacheControl: '3600',
+        upsert: true
+      })
+
+    if (uploadError) {
+      throw uploadError
     }
 
-    // Convert file to buffer
-    const bytes = await image.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    // Get public URL
+    const { data: { publicUrl } } = supabase
+      .storage
+      .from('profile-images')
+      .getPublicUrl(uploadData.path)
 
-    // Generate unique filename
-    const uniqueId = uuidv4()
-    const extension = image.name.split('.').pop() || 'jpg'
-    const filename = `${user.id}-${uniqueId}.${extension}`
+    // Update user profile with new image URL
+    const { data: updatedUser, error: updateError } = await supabase
+      .from('users')
+      .update({ image: publicUrl })
+      .eq('id', user.id)
+      .select()
+      .single()
 
-    // Ensure directory exists
-    const uploadsDir = join(process.cwd(), 'public', 'uploads', 'avatars')
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true })
+    if (updateError) {
+      throw updateError
     }
 
-    // Save file to directory
-    const filepath = join(uploadsDir, filename)
-    await writeFile(filepath, buffer)
-
-    // Generate the public URL
-    const imageUrl = `/uploads/avatars/${filename}`
-
-    // Update user's image URL in database and Supabase
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { image: imageUrl }
-    })
-
-    // Update user avatar in Supabase
-    await supabase.auth.updateUser({
-      data: { avatar_url: imageUrl }
-    })
-
-    // Return success with image URL
-    return NextResponse.json({ 
-      success: true,
-      imageUrl,
-      message: 'Profile image updated successfully'
-    })
+    return NextResponse.json({ user: updatedUser })
   } catch (error) {
-    console.error('Error uploading profile image:', error)
-    return NextResponse.json(
-      { error: 'Failed to upload profile image' },
-      { status: 500 }
-    )
+    console.error('Error uploading image:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 
