@@ -24,7 +24,7 @@ import {
 } from '@chakra-ui/react'
 import Link from 'next/link'
 import { FaRobot, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaUser, FaEdit, FaCopy } from 'react-icons/fa'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/app/context/AuthContext'
 
 const infoCards = [
@@ -127,19 +127,16 @@ export default function Dashboard() {
       
       try {
         console.log('🔍 Loading past chats for user:', user.id)
-        const response = await fetch(`/api/chat/list?userId=${user.id}`)
+        const { data: chats, error } = await supabase
+          .from('chats')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('created_at', { ascending: false })
+
+        if (error) throw error
         
-        if (!response.ok) {
-          throw new Error('Failed to load chats')
-        }
-        
-        const chats = await response.json()
         console.log('✅ Loaded chats:', chats)
-        // Sort chats by created_at in descending order (most recent first)
-        const sortedChats = chats.sort((a: { created_at: string }, b: { created_at: string }) => 
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        )
-        setPastChats(sortedChats)
+        setPastChats(chats)
       } catch (error) {
         console.error('❌ Error loading chats:', error)
         toast({
@@ -163,15 +160,16 @@ export default function Dashboard() {
       
       try {
         console.log('🔍 Loading chat history for chat:', selectedChat)
-        const response = await fetch(`/api/chat/history?chatId=${selectedChat}&userId=${user.id}`)
+        const { data: messages, error } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('chat_id', selectedChat)
+          .order('created_at', { ascending: true })
+
+        if (error) throw error
         
-        if (!response.ok) {
-          throw new Error('Failed to load chat history')
-        }
-        
-        const history = await response.json()
-        console.log('✅ Loaded chat history:', history)
-        setChatHistory(history.messages || [])
+        console.log('✅ Loaded chat history:', messages)
+        setChatHistory(messages || [])
       } catch (error) {
         console.error('❌ Error loading chat history:', error)
         toast({
