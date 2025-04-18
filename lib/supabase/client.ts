@@ -9,7 +9,52 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-// Create Supabase client for browser with retries
+// Custom fetch implementation with retries
+const customFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const maxRetries = 3
+  const baseDelay = 1000 // 1 second
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      console.log(`🔄 Attempt ${attempt + 1}/${maxRetries} - Fetching:`, input)
+      const response = await fetch(input, {
+        ...init,
+        cache: 'no-cache',
+        keepalive: true,
+        headers: {
+          ...init?.headers,
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
+      
+      if (!response.ok) {
+        console.error(`❌ HTTP error on attempt ${attempt + 1}:`, response.status, response.statusText)
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      
+      console.log(`✅ Success on attempt ${attempt + 1}`)
+      return response
+    } catch (error) {
+      const isLastAttempt = attempt === maxRetries - 1
+      console.error(`❌ Fetch error on attempt ${attempt + 1}:`, error)
+      
+      if (isLastAttempt) {
+        console.error('❌ Max retries exceeded, giving up')
+        throw error
+      }
+      
+      // Exponential backoff with jitter
+      const delay = Math.min(1000 * Math.pow(2, attempt) + Math.random() * 1000, 10000)
+      console.log(`⏳ Retrying in ${Math.round(delay)}ms...`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+
+  throw new Error('Max retries exceeded')
+}
+
+// Create Supabase client for browser with custom fetch
 export const supabase = createBrowserClient<Database>(
   supabaseUrl,
   supabaseAnonKey,
@@ -18,19 +63,14 @@ export const supabase = createBrowserClient<Database>(
       persistSession: true,
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      flowType: 'pkce'
+      flowType: 'pkce',
+      debug: process.env.NODE_ENV === 'development'
     },
     global: {
       headers: {
         'x-application-name': 'fractiverse'
       },
-      fetch: (url, options) => {
-        return fetch(url, {
-          ...options,
-          cache: 'no-cache', // Disable caching to prevent stale DNS
-          keepalive: true, // Keep connection alive
-        })
-      }
+      fetch: customFetch
     },
     realtime: {
       params: {
