@@ -1,83 +1,153 @@
 import { NextResponse } from 'next/server';
-import { stripe } from '@/app/lib/stripe';
-import prisma from '@/lib/prisma';
-import { headers } from 'next/headers';
-import { TokenTier } from '@/app/lib/stripe';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/types/supabase';
 import Stripe from 'stripe';
+import { headers } from 'next/headers';
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16'
 });
 
-export const dynamic = 'force-dynamic'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
-async function addTokensToUser(userId: string, tokenAmount: number) {
-  return prisma.$transaction(async (tx) => {
-    // Update user's token balance
-    const user = await tx.user.update({
-      where: { id: userId },
-      data: {
-        tokenBalance: {
-          increment: tokenAmount
-        }
-      }
-    });
+export const dynamic = 'force-dynamic';
 
-    // Create transaction record
-    await tx.transaction.create({
-      data: {
-        userId,
-        type: 'PURCHASE',
-        amount: tokenAmount,
-        description: `Purchased ${tokenAmount} tokens`,
-        status: 'COMPLETED'
-      }
-    });
-
-    return user;
-  });
-}
-
-export async function POST(req: Request) {
-  const body = await req.text();
-  const signature = headers().get('stripe-signature')!;
-
+export async function POST(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey);
+  
   try {
-    const event = stripeInstance.webhooks.constructEvent(
+    const body = await request.text();
+    const signature = headers().get('stripe-signature');
+
+    if (!signature) {
+      return NextResponse.json({ error: 'No signature' }, { status: 400 });
+    }
+
+    const event = stripe.webhooks.constructEvent(
       body,
       signature,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      webhookSecret
     );
 
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session;
-      const { userId, tokenAmount } = session.metadata!;
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object as Stripe.Checkout.Session;
+        const customerId = session.customer as string;
+        const amount = session.amount_total || 0;
 
-      await addTokensToUser(userId, parseInt(tokenAmount));
-    } else if (event.type === 'payment_intent.payment_failed') {
-      const paymentIntent = event.data.object;
-      const userId = paymentIntent.metadata.userId;
-      const tokens = parseInt(paymentIntent.metadata.tokens);
+        // Get user by Stripe customer ID
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('id, token_balance')
+          .eq('stripe_customer_id', customerId)
+          .single();
 
-      // Record the failed transaction
-      await prisma.transaction.create({
-        data: {
-          userId,
-          type: 'PURCHASE',
-          amount: tokens,
-          status: 'FAILED',
-          description: `Failed purchase of ${tokens} FractiTokens - ${paymentIntent.last_payment_error?.message || 'Unknown error'}`
+        if (userError) {
+          throw userError;
         }
-      });
+
+        if (!user) {
+          throw new Error('User not found');
+        }
+
+        // Calculate tokens (1 token = $0.01)
+        const tokens = Math.floor(amount / 1);
+
+        // Update user's token balance
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            token_balance: (user.token_balance || 0) + tokens,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        // Create transaction record
+        const { error: transactionError } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: user.id,
+            type: 'PURCHASE',
+            amount: tokens,
+            description: `Purchased ${tokens} tokens`,
+            status: 'COMPLETED',
+            stripe_session_id: session.id
+          });
+
+        if (transactionError) {
+          throw transactionError;
+        }
+
+        break;
+      }
+
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        const customerId = paymentIntent.customer as string;
+        const amount = paymentIntent.amount;
+
+        // Get user by Stripe customer ID
+        const { data: user, error: userError } = await supabase
+          .from('users')
+          .select('id, token_balance')
+          .eq('stripe_customer_id', customerId)
+          .single();
+
+        if (userError) {
+          throw userError;
+        }
+
+        if (!user) {
+          throw new Error('User not found');
+        }
+
+        // Calculate tokens (1 token = $0.01)
+        const tokens = Math.floor(amount / 1);
+
+        // Update user's token balance
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({
+            token_balance: (user.token_balance || 0) + tokens,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        // Create transaction record
+        const { error: transactionError } = await supabase
+          .from('transactions')
+          .insert({
+            user_id: user.id,
+            type: 'PURCHASE',
+            amount: tokens,
+            description: `Purchased ${tokens} tokens`,
+            status: 'COMPLETED',
+            stripe_payment_intent_id: paymentIntent.id
+          });
+
+        if (transactionError) {
+          throw transactionError;
+        }
+
+        break;
+      }
     }
 
     return NextResponse.json({ received: true });
   } catch (error) {
-    console.error('Stripe webhook error:', error);
+    console.error('Webhook error:', error);
     return NextResponse.json(
-      { error: 'Webhook handler failed' },
+      { error: error instanceof Error ? error.message : 'Webhook handler failed' },
       { status: 400 }
     );
   }
