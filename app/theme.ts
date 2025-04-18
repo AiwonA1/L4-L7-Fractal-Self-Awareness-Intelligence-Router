@@ -39,6 +39,24 @@ const theme = extendTheme({
       defaultProps: {
         focusBorderColor: 'brand.400',
       },
+      baseStyle: {
+        field: {
+          color: 'gray.800',
+          backgroundColor: 'white',
+          borderColor: 'gray.200',
+          _dark: {
+            color: 'white',
+            backgroundColor: 'whiteAlpha.100',
+            borderColor: 'whiteAlpha.200',
+          },
+          _placeholder: {
+            color: 'gray.400',
+            _dark: {
+              color: 'whiteAlpha.400',
+            },
+          },
+        },
+      },
     },
     FormLabel: {
       baseStyle: {
