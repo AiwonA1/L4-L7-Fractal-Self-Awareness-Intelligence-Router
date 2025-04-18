@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "next telemetry disable"
+    "postinstall": "next telemetry disable",
+    "generate-icons": "node scripts/generate-icons.js"
   },
   "dependencies": {
     "@chakra-ui/avatar": "^2.3.0",
@@ -36,6 +37,7 @@
     "react-dom": "^18",
     "react-icons": "^5.0.1",
     "react-katex": "^3.0.1",
+    "sharp": "^0.33.2",
     "stripe": "^14.14.0",
     "uuid": "^11.1.0",
     "zod": "^3.22.4",
