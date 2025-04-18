@@ -1,76 +1,55 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import type { Database } from '@/types/supabase'
 import Stripe from 'stripe'
-import { prisma } from '@/lib/prisma'
 
-// Initialize Stripe with the secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || '', {
-  apiVersion: '2023-10-16',
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: '2023-10-16'
 })
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const dynamic = 'force-dynamic'
 
-export async function GET() {
+export async function GET(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get Supabase session
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
     
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    
-    if (sessionError || !session?.user?.email) {
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Find the user by email
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email }
-    })
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // If user doesn't have a Stripe customer ID, they don't have any payment methods
-    if (!user.stripe_customer_id) {
-      return NextResponse.json({ paymentMethods: [] })
+    // Get user's stripe customer ID
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('stripe_customer_id')
+      .eq('id', user.id)
+      .single()
+
+    if (userError || !userData?.stripe_customer_id) {
+      return NextResponse.json({ error: 'User not found or no Stripe customer ID' }, { status: 404 })
     }
 
-    // Retrieve the customer's payment methods
+    // Get payment methods from Stripe
     const paymentMethods = await stripe.paymentMethods.list({
-      customer: user.stripe_customer_id,
-      type: 'card',
+      customer: userData.stripe_customer_id,
+      type: 'card'
     })
 
-    return NextResponse.json({
-      paymentMethods: paymentMethods.data.map(method => ({
-        id: method.id,
-        type: method.type,
-        card: method.type === 'card' ? {
-          brand: method.card?.brand,
-          last4: method.card?.last4,
-          expMonth: method.card?.exp_month,
-          expYear: method.card?.exp_year,
-        } : null,
-        isDefault: method.metadata?.default === 'true'
-      }))
-    })
+    return NextResponse.json({ paymentMethods: paymentMethods.data })
   } catch (error) {
-    console.error('Error retrieving payment methods:', error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to retrieve payment methods' },
-      { status: 500 }
-    )
+    console.error('Error fetching payment methods:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

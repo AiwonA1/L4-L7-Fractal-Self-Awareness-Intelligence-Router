@@ -1,55 +1,34 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
-import { sendVerificationEmail } from '@/lib/emailService'
+import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import type { Database } from '@/types/supabase'
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export async function POST(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
     const { email } = await request.json()
 
     if (!email) {
-      return NextResponse.json(
-        { error: 'Email is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ error: 'Email is required' }, { status: 400 })
     }
 
-    // Check if user exists and is not verified
-    const user = await prisma.user.findUnique({
-      where: { email }
+    // Resend verification email using Supabase
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email,
     })
 
-    if (!user) {
-      return NextResponse.json(
-        { error: 'User not found' },
-        { status: 404 }
-      )
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 400 })
     }
 
-    if (user.emailVerified) {
-      return NextResponse.json(
-        { error: 'Email is already verified' },
-        { status: 400 }
-      )
-    }
-
-    // Send verification email
-    const emailSent = await sendVerificationEmail(email)
-
-    if (!emailSent) {
-      return NextResponse.json(
-        { error: 'Failed to send verification email' },
-        { status: 500 }
-      )
-    }
-
-    return NextResponse.json({
-      message: 'Verification email sent successfully'
-    })
+    return NextResponse.json({ message: 'Verification email sent' })
   } catch (error) {
-    console.error('Resend verification error:', error)
-    return NextResponse.json(
-      { error: 'Failed to resend verification email' },
-      { status: 500 }
-    )
+    console.error('Error resending verification:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

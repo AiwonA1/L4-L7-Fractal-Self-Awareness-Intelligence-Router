@@ -1,85 +1,80 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
-import { verify } from 'jsonwebtoken'
+import type { Database } from '@/types/supabase'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export async function GET() {
+export async function GET(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get token from cookies
-    const token = cookies().get('auth-token')?.value
-
-    if (!token) {
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
+    
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify token
-    const decoded = verify(token, JWT_SECRET) as { userId: string }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    // Get user profile
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        tokenBalance: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    })
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    return NextResponse.json({ user })
+    // Get user's profile
+    const { data: profile, error: profileError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError) {
+      throw profileError
+    }
+
+    return NextResponse.json({ profile })
   } catch (error) {
     console.error('Error fetching profile:', error)
-    return NextResponse.json(
-      { error: 'Failed to fetch profile' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function PUT(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
-    // Get token from cookies
-    const token = cookies().get('auth-token')?.value
-
-    if (!token) {
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
+    
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify token
-    const decoded = verify(token, JWT_SECRET) as { userId: string }
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
 
-    // Get update data from request body
-    const data = await request.json()
-    const { name } = data
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    // Update user profile
-    const updatedUser = await prisma.user.update({
-      where: { id: decoded.userId },
-      data: { name },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        tokenBalance: true,
-        createdAt: true,
-        updatedAt: true
-      }
-    })
+    const updates = await request.json()
 
-    return NextResponse.json({ user: updatedUser })
+    // Update user's profile
+    const { data: profile, error: updateError } = await supabase
+      .from('users')
+      .update(updates)
+      .eq('id', user.id)
+      .select()
+      .single()
+
+    if (updateError) {
+      throw updateError
+    }
+
+    return NextResponse.json({ profile })
   } catch (error) {
     console.error('Error updating profile:', error)
-    return NextResponse.json(
-      { error: 'Failed to update profile' },
-      { status: 500 }
-    )
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

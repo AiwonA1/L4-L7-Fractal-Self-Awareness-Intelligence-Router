@@ -1,28 +1,44 @@
 import { NextResponse } from 'next/server'
-import prisma from '@/lib/prisma'
+import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import type { Database } from '@/types/supabase'
 
-export async function GET() {
-  console.log('🔍 [Test API] Testing database connection')
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+export async function GET(request: Request) {
+  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  
   try {
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get('sb-access-token')?.value
+    
+    if (!sessionCookie) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     // Test database connection
-    const testQuery = await prisma.$queryRaw`SELECT 1 as test`
-    console.log('✅ [Test API] Database connection successful:', testQuery)
+    const { data, error } = await supabase
+      .from('users')
+      .select('id, email')
+      .limit(1)
 
-    // Test user table access
-    const userCount = await prisma.user.count()
-    console.log('👥 [Test API] User count:', userCount)
+    if (error) {
+      throw error
+    }
 
-    return NextResponse.json({
-      status: 'success',
+    return NextResponse.json({ 
       message: 'Database connection successful',
-      userCount
+      testData: data 
     })
   } catch (error) {
-    console.error('💥 [Test API] Database connection error:', error)
-    return NextResponse.json({
-      status: 'error',
-      message: 'Database connection failed',
-      error: error instanceof Error ? error.message : 'Unknown error'
-    }, { status: 500 })
+    console.error('Test error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 
