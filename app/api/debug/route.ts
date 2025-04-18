@@ -1,14 +1,10 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-  const supabase = createClient(supabaseUrl, supabaseKey)
+  const supabase = createServerSupabaseClient()
   
   try {
     const { data: users, error } = await supabase
@@ -16,11 +12,6 @@ export async function GET() {
       .select('*')
     
     if (error) throw error
-    
-    // Get cookies from the request
-    const cookieStore = cookies()
-    const cookieList = cookieStore.getAll()
-    const cookieNames = cookieList.map(c => c.name)
     
     // Get the Supabase session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -39,10 +30,6 @@ export async function GET() {
       sessionExists: !!session,
       session: session,
       supabaseConfig,
-      cookieStatus: {
-        cookieNames,
-        sbSession: cookieStore.get('sb-access-token') ? "Found" : "Not found",
-      },
       timestamp: new Date().toISOString()
     })
   } catch (error) {
