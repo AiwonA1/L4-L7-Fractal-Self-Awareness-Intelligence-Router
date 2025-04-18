@@ -1,25 +1,14 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
-import type { Database } from '@/types/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
-  
+export async function GET() {
   try {
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get('sb-access-token')?.value
-    
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const supabase = createServerSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
-
-    if (authError || !user) {
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -27,7 +16,7 @@ export async function GET(request: Request) {
     const { data: profile, error: profileError } = await supabase
       .from('users')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', session.user.id)
       .single()
 
     if (profileError) {
@@ -42,19 +31,11 @@ export async function GET(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
-  
   try {
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get('sb-access-token')?.value
-    
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const supabase = createServerSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
-
-    if (authError || !user) {
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -64,7 +45,7 @@ export async function PUT(request: Request) {
     const { data: profile, error: updateError } = await supabase
       .from('users')
       .update(updates)
-      .eq('id', user.id)
+      .eq('id', session.user.id)
       .select()
       .single()
 

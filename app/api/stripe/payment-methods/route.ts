@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { Database } from '@/types/supabase'
 import Stripe from 'stripe'
 
@@ -8,33 +7,22 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2023-10-16'
 })
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
-  
+export async function GET() {
   try {
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get('sb-access-token')?.value
-    
-    if (!sessionCookie) {
+    const supabase = createServerSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
-
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Get user's stripe customer ID
+    // Get user's Stripe customer ID
     const { data: userData, error: userError } = await supabase
       .from('users')
       .select('stripe_customer_id')
-      .eq('id', user.id)
+      .eq('id', session.user.id)
       .single()
 
     if (userError || !userData?.stripe_customer_id) {
@@ -47,9 +35,9 @@ export async function GET(request: Request) {
       type: 'card'
     })
 
-    return NextResponse.json({ paymentMethods: paymentMethods.data })
+    return NextResponse.json(paymentMethods.data)
   } catch (error) {
     console.error('Error fetching payment methods:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 } 

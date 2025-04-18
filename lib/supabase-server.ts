@@ -10,6 +10,7 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const createServerSupabaseClient = () => {
   const cookieStore = cookies()
+
   return createServerClient(
     supabaseUrl,
     supabaseAnonKey,
@@ -19,20 +20,12 @@ export const createServerSupabaseClient = () => {
           return cookieStore.get(name)?.value
         },
         set(name: string, value: string, options: any) {
-          try {
-            cookieStore.set({ name, value, ...options })
-          } catch (error) {
-            // Handle cookies.set error in Server Components
-          }
+          cookieStore.set({ name, value, ...options })
         },
         remove(name: string, options: any) {
-          try {
-            cookieStore.set({ name, value: '', ...options })
-          } catch (error) {
-            // Handle cookies.delete error in Server Components
-          }
-        },
-      },
+          cookieStore.set({ name, value: '', ...options })
+        }
+      }
     }
   )
 } 

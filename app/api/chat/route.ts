@@ -1,22 +1,24 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import type { Database } from '@/types/supabase'
 
 type Chat = Database['public']['Tables']['chats']['Row']
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  const supabase = createClient(supabaseUrl, supabaseKey)
-  
+export async function GET() {
   try {
+    const supabase = createServerSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError || !session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     const { data: chats, error } = await supabase
       .from('chats')
       .select('*')
+      .eq('user_id', session.user.id)
       .order('created_at', { ascending: false })
     
     if (error) throw error
@@ -30,22 +32,10 @@ export async function GET(request: Request) {
 
 export async function POST(req: Request) {
   try {
-    const cookieStore = cookies()
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    )
+    const supabase = createServerSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
-    // Get session from cookie
-    const sessionCookie = cookieStore.get('sb-access-token')?.value
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
-
-    if (authError || !user) {
-      console.error('Authentication error:', authError)
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -56,7 +46,7 @@ export async function POST(req: Request) {
       .from('chats')
       .insert({
         title,
-        user_id: user.id,
+        user_id: session.user.id,
         updated_at: new Date().toISOString()
       })
       .select()

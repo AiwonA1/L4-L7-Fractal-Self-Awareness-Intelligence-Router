@@ -89,85 +89,126 @@ export default function Home() {
   const cardBg = useColorModeValue('white', 'gray.800')
   const cardHoverBg = useColorModeValue('gray.50', 'gray.700')
   const textColor = useColorModeValue('gray.600', 'gray.200')
+  const heroTextColor = useColorModeValue('gray.700', 'white')
+  const heroBg = useColorModeValue('gray.50', 'gray.900')
 
   return (
-    <Box minH="100vh" py={8}>
-      <Container maxW="container.xl">
-        <VStack spacing={8} align="stretch">
-          <Box textAlign="center" mb={8}>
+    <Box minH="100vh">
+      {/* Hero Section */}
+      <Box 
+        bg={heroBg}
+        py={20}
+        position="relative"
+        _before={{
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          bgGradient: useColorModeValue(
+            'linear(to-r, teal.50, blue.50)',
+            'linear(to-r, rgba(49, 151, 149, 0.06), rgba(49, 130, 206, 0.06))'
+          ),
+          zIndex: 0
+        }}
+      >
+        <Container maxW="container.xl" position="relative" zIndex={1}>
+          <VStack spacing={6} align="center">
             <Box 
               bg="teal.500" 
               color="white" 
               px={6} 
-              py={3} 
-              borderRadius="lg" 
-              fontSize="xl"
-              fontWeight="bold"
-              mb={8}
-              display="inline-block"
+              py={2} 
+              borderRadius="full" 
+              fontSize="md"
+              fontWeight="medium"
             >
-              We Are Here: Home Page
-            </Box>
-            <Heading size="2xl" mb={4} color="teal.500">
               Welcome to FractiVerse
+            </Box>
+            <Heading 
+              size="2xl" 
+              color={heroTextColor}
+              textAlign="center"
+              fontWeight="bold"
+              letterSpacing="tight"
+            >
+              Explore the Layers of Fractal
+              <Box as="span" color="teal.500"> Self-Awareness</Box>
             </Heading>
-            <Text fontSize="xl" color={textColor} maxW="2xl" mx="auto">
-              Explore the layers of fractal self-awareness and quantum intelligence
+            <Text 
+              fontSize="xl" 
+              color={heroTextColor} 
+              maxW="2xl" 
+              textAlign="center"
+              lineHeight="tall"
+            >
+              Discover quantum intelligence and navigate through the interconnected layers of consciousness
             </Text>
-          </Box>
+          </VStack>
+        </Container>
+      </Box>
 
-          <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 5 }} spacing={6}>
-            {infoCards.map((card, index) => (
-              <Link key={index} href={card.href} style={{ textDecoration: 'none' }}>
-                <Card
-                  bg={cardBg}
-                  _hover={{
-                    bg: cardHoverBg,
-                    transform: 'translateY(-2px)',
-                    boxShadow: 'lg',
-                  }}
-                  transition="all 0.2s"
-                  cursor="pointer"
-                  h="full"
-                  borderWidth="1px"
-                  borderColor="gray.200"
-                >
-                  <CardBody>
-                    <VStack spacing={3} align="start">
-                      <Icon
-                        as={card.icon}
-                        w={8}
-                        h={8}
-                        color="teal.500"
-                      />
-                      <Heading size="sm">
-                        {card.title}
-                      </Heading>
-                      <Text color={textColor}>
-                        {card.description}
-                      </Text>
-                    </VStack>
-                  </CardBody>
-                </Card>
-              </Link>
-            ))}
-          </SimpleGrid>
-
-          <Box textAlign="center" mt={8}>
-            <Link href="/dashboard" style={{ textDecoration: 'none' }}>
-              <Button
-                size="lg"
-                colorScheme="teal"
-                rightIcon={<FaArrowRight />}
-                px={8}
-                py={6}
-                fontSize="lg"
+      {/* Cards Section */}
+      <Container maxW="container.xl" py={16}>
+        <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing={8}>
+          {infoCards.map((card, index) => (
+            <Link key={index} href={card.href} style={{ textDecoration: 'none' }}>
+              <Card
+                bg={cardBg}
+                _hover={{
+                  transform: 'translateY(-4px)',
+                  boxShadow: 'xl',
+                  borderColor: 'teal.200',
+                }}
+                transition="all 0.3s"
+                cursor="pointer"
+                h="full"
+                borderWidth="1px"
+                borderColor={useColorModeValue('gray.200', 'gray.700')}
+                borderRadius="xl"
               >
-                Go to Dashboard
-              </Button>
+                <CardBody>
+                  <VStack spacing={4} align="start">
+                    <Icon
+                      as={card.icon}
+                      w={6}
+                      h={6}
+                      color="teal.500"
+                    />
+                    <Heading size="md" color={heroTextColor}>
+                      {card.title}
+                    </Heading>
+                    <Text color={textColor} fontSize="sm">
+                      {card.description}
+                    </Text>
+                  </VStack>
+                </CardBody>
+              </Card>
             </Link>
-          </Box>
-        </VStack>
+          ))}
+        </SimpleGrid>
+
+        <Box textAlign="center" mt={16}>
+          <Link href="/dashboard" style={{ textDecoration: 'none' }}>
+            <Button
+              size="lg"
+              colorScheme="teal"
+              rightIcon={<FaArrowRight />}
+              px={8}
+              py={6}
+              fontSize="lg"
+              fontWeight="bold"
+              _hover={{
+                transform: 'translateY(-2px)',
+                boxShadow: 'lg',
+              }}
+              transition="all 0.2s"
+            >
+              Go to Dashboard
+            </Button>
+          </Link>
+        </Box>
       </Container>
     </Box>
   )
