@@ -1,33 +1,22 @@
 import { NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { v4 as uuidv4 } from 'uuid'
+import fs from 'fs'
+import path from 'path'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
-import { v4 as uuidv4 } from 'uuid'
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    // Get Supabase session
-    const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-        },
-      }
-    )
+    const supabase = createServerSupabaseClient()
     
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     
-    if (sessionError || !session?.user?.email) {
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const formData = await request.formData()
+    const formData = await req.formData()
     const file = formData.get('file') as File
     if (!file) {
       return NextResponse.json({ error: 'No file uploaded' }, { status: 400 })

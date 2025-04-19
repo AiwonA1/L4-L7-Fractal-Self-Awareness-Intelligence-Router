@@ -305,9 +305,9 @@ export default function Dashboard() {
           message: userMessage,
           chatId: chatId,
           userId: user?.id
-        })
+      })
       });
-      
+
       if (!response.ok) {
         throw new Error('Failed to get AI response');
       }
@@ -376,7 +376,7 @@ export default function Dashboard() {
         setSelectedChat(null)
         setChatHistory([])
       }
-      
+
       toast({
         title: 'Chat deleted',
         status: 'success',
@@ -414,7 +414,7 @@ export default function Dashboard() {
       
       setEditingChatId(null)
       setNewTitle('')
-      
+
     } catch (error: any) {
       console.error('❌ Error renaming chat:', error)
       setError(error.message)

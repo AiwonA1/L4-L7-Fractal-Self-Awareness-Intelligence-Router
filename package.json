@@ -19,8 +19,11 @@
     "@chakra-ui/toast": "^7.0.2",
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
+    "@next/bundle-analyzer": "^14.1.0",
+    "@radix-ui/react-accordion": "^1.1.2",
     "@stripe/react-stripe-js": "^2.5.1",
     "@stripe/stripe-js": "^2.4.0",
+    "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.6.1",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/nodemailer": "^6.4.17",
@@ -40,9 +43,7 @@
     "sharp": "^0.33.2",
     "stripe": "^14.14.0",
     "uuid": "^11.1.0",
-    "zod": "^3.22.4",
-    "@next/bundle-analyzer": "^14.1.0",
-    "@radix-ui/react-accordion": "^1.1.2"
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.49.4",
@@ -56,10 +57,10 @@
     "eslint-config-next": "14.1.0",
     "node-fetch": "^2.7.0",
     "postcss": "^8",
+    "prettier": "^3.2.5",
+    "prettier-plugin-tailwindcss": "^0.5.11",
     "tailwindcss": "^3.3.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3",
-    "prettier": "^3.2.5",
-    "prettier-plugin-tailwindcss": "^0.5.11"
+    "typescript": "^5.8.3"
   }
 }

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/supabase'
 
@@ -9,7 +9,7 @@ const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
+  const supabase = createServerSupabaseClient()
   
   try {
     const cookieStore = cookies()
