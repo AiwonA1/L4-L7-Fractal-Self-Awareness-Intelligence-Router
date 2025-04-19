@@ -12,7 +12,7 @@ type Chat = Database['public']['Tables']['chats']['Row'] & {
 type ChatHistory = Database['public']['Tables']['chat_history']['Row']
 
 export async function createChat(userId: string, title: string) {
-  const supabase = createAdminSupabaseClient()
+  const supabase = createServerSupabaseClient()
   
   const { data: chat, error } = await supabase
     .from('chats')
@@ -30,7 +30,7 @@ export async function createChat(userId: string, title: string) {
 }
 
 export async function getUserChats() {
-  const supabase = createAdminSupabaseClient()
+  const supabase = createServerSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
@@ -61,7 +61,7 @@ export async function getUserChats() {
 }
 
 export async function getChatById(chatId: string) {
-  const supabase = createAdminSupabaseClient()
+  const supabase = createServerSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
@@ -93,7 +93,20 @@ export async function getChatById(chatId: string) {
 }
 
 export async function createMessage(chatId: string, role: string, content: string) {
-  const supabase = createAdminSupabaseClient()
+  const supabase = createServerSupabaseClient()
+  
+  // Verify the user owns this chat
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.user?.id) throw new Error('Not authenticated')
+  
+  const { data: chat } = await supabase
+    .from('chats')
+    .select()
+    .eq('id', chatId)
+    .eq('user_id', session.user.id)
+    .single()
+  
+  if (!chat) throw new Error('Chat not found or access denied')
   
   const { data: message, error } = await supabase
     .from('messages')
@@ -112,7 +125,7 @@ export async function createMessage(chatId: string, role: string, content: strin
 }
 
 export async function updateChatTitle(chatId: string, title: string) {
-  const supabase = createAdminSupabaseClient()
+  const supabase = createServerSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
@@ -132,7 +145,7 @@ export async function updateChatTitle(chatId: string, title: string) {
 }
 
 export async function deleteChat(chatId: string) {
-  const supabase = createAdminSupabaseClient()
+  const supabase = createServerSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
