@@ -121,83 +121,6 @@ export default function Dashboard() {
   const [editingChatId, setEditingChatId] = useState<string | null>(null)
   const [newTitle, setNewTitle] = useState('')
 
-  // Load user's past chats
-  useEffect(() => {
-    const loadPastChats = async () => {
-      if (!user?.id) {
-        console.log('⏳ Waiting for user ID...')
-        return
-      }
-      
-      setIsLoadingChats(true)
-      setError(null)
-      
-      try {
-        console.log('🔍 Loading past chats for user')
-        const chats = await getUserChats();
-        console.log('✅ Loaded chats:', chats.length)
-        setPastChats(chats)
-      } catch (error: any) {
-        console.error('❌ Error loading chats:', error)
-        setError(error.message)
-        toast({
-          title: 'Error loading chats',
-          description: error.message || 'Failed to load chat history',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        })
-        setPastChats([])
-      } finally {
-        setIsLoadingChats(false)
-      }
-    }
-
-    loadPastChats()
-  }, [user?.id, toast])
-
-  // Load chat history when a chat is selected
-  useEffect(() => {
-    const loadChatHistory = async () => {
-      if (!selectedChat || !user?.id) {
-        console.log('⏳ Waiting for chat selection and user ID...')
-        return
-      }
-      
-      setIsLoading(true)
-      setError(null)
-      
-      try {
-        console.log('🔍 Loading chat history for chat:', selectedChat)
-        const chat = await getChatById(selectedChat);
-        
-        if (!chat?.messages) {
-          console.log('ℹ️ No messages found for chat')
-          setChatHistory([])
-          return
-        }
-        
-        console.log('✅ Loaded messages:', chat.messages.length)
-        setChatHistory(chat.messages)
-      } catch (error: any) {
-        console.error('❌ Error loading chat history:', error)
-        setError(error.message)
-        toast({
-          title: 'Error loading chat history',
-          description: error.message || 'Failed to load chat messages',
-          status: 'error',
-          duration: 5000,
-          isClosable: true,
-        })
-        setChatHistory([])
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
-    loadChatHistory()
-  }, [selectedChat, user?.id, toast])
-
   const handleCopyMessage = (content: string) => {
     navigator.clipboard.writeText(content)
     toast({
@@ -337,7 +260,21 @@ export default function Dashboard() {
     setError(null)
     
     try {
-      const newChat = await createChat(user.id, 'New Chat');
+      const response = await fetch('/api/dashboard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create_chat',
+          title: 'New Chat'
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create chat');
+      }
+
+      const { chat: newChat } = await response.json();
       
       // Add the new chat to the list and select it
       setPastChats(prev => [newChat, ...prev])
@@ -358,6 +295,96 @@ export default function Dashboard() {
       setIsLoading(false)
     }
   }
+
+  // Load user's past chats
+  useEffect(() => {
+    const loadPastChats = async () => {
+      if (!user?.id) {
+        console.log('⏳ Waiting for user ID...')
+        return
+      }
+      
+      setIsLoadingChats(true)
+      setError(null)
+      
+      try {
+        console.log('🔍 Loading past chats for user')
+        const response = await fetch('/api/dashboard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'get_chats'
+          })
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to load chats');
+        }
+
+        const { chats } = await response.json();
+        console.log('✅ Loaded chats:', chats.length)
+        setPastChats(chats)
+      } catch (error: any) {
+        console.error('❌ Error loading chats:', error)
+        setError(error.message)
+        toast({
+          title: 'Error loading chats',
+          description: error.message || 'Failed to load chat history',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        })
+        setPastChats([])
+      } finally {
+        setIsLoadingChats(false)
+      }
+    }
+
+    loadPastChats()
+  }, [user?.id, toast])
+
+  // Load chat history when a chat is selected
+  useEffect(() => {
+    const loadChatHistory = async () => {
+      if (!selectedChat || !user?.id) {
+        console.log('⏳ Waiting for chat selection and user ID...')
+        return
+      }
+      
+      setIsLoading(true)
+      setError(null)
+      
+      try {
+        console.log('🔍 Loading chat history for chat:', selectedChat)
+        const chat = await getChatById(selectedChat);
+        
+        if (!chat?.messages) {
+          console.log('ℹ️ No messages found for chat')
+          setChatHistory([])
+          return
+        }
+        
+        console.log('✅ Loaded messages:', chat.messages.length)
+        setChatHistory(chat.messages)
+      } catch (error: any) {
+        console.error('❌ Error loading chat history:', error)
+        setError(error.message)
+        toast({
+          title: 'Error loading chat history',
+          description: error.message || 'Failed to load chat messages',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        })
+        setChatHistory([])
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    loadChatHistory()
+  }, [selectedChat, user?.id, toast])
 
   const handleDeleteChat = async (chatId: string) => {
     if (!user?.id) return
