@@ -1,19 +1,16 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient, getAuthenticatedUserId } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   try {
-    const supabase = createServerSupabaseClient()
-    
-    // Get session
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-    if (sessionError || !session?.user?.id) {
+    const userId = await getAuthenticatedUserId()
+    if (!userId) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Get request body
+    const supabase = createServerSupabaseClient()
     const { action, title, chatId } = await req.json()
 
     switch (action) {
@@ -21,7 +18,7 @@ export async function POST(req: Request) {
         const { data: chat, error: createError } = await supabase
           .from('chats')
           .insert({
-            user_id: session.user.id,
+            user_id: userId,
             title: title || 'New Chat',
           })
           .select()
@@ -43,7 +40,7 @@ export async function POST(req: Request) {
               created_at
             )
           `)
-          .eq('user_id', session.user.id)
+          .eq('user_id', userId)
           .order('updated_at', { ascending: false })
 
         if (getError) {
