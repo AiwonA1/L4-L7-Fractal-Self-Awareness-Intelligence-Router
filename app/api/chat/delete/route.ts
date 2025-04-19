@@ -1,16 +1,23 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export async function DELETE(req: Request) {
   try {
     const supabase = createServerSupabaseClient();
-    const session = await supabase.auth.getSession();
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get('sb-access-token')?.value;
     
-    if (!session.data.session?.user) {
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.data.session.user.id;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const url = new URL(req.url);
     const chatId = url.searchParams.get('chatId');
 
@@ -23,7 +30,7 @@ export async function DELETE(req: Request) {
       .from('chat_history')
       .delete()
       .eq('chat_id', chatId)
-      .eq('user_id', userId);
+      .eq('user_id', user.id);
 
     if (messageError) {
       return NextResponse.json({ error: messageError.message }, { status: 400 });
@@ -34,7 +41,7 @@ export async function DELETE(req: Request) {
       .from('chats')
       .delete()
       .eq('id', chatId)
-      .eq('user_id', userId);
+      .eq('user_id', user.id);
 
     if (chatError) {
       return NextResponse.json({ error: chatError.message }, { status: 400 });

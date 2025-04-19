@@ -1,17 +1,24 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
 import { Message } from '@/types/chat';
+import { cookies } from 'next/headers';
 
 export async function POST(req: Request) {
   try {
     const supabase = createServerSupabaseClient();
-    const session = await supabase.auth.getSession();
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get('sb-access-token')?.value;
     
-    if (!session.data.session?.user) {
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.data.session.user.id;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { messages, chatId, title } = await req.json();
 
     // If chatId is provided, update existing chat
@@ -23,7 +30,7 @@ export async function POST(req: Request) {
           updated_at: new Date().toISOString()
         })
         .eq('id', chatId)
-        .eq('user_id', userId);
+        .eq('user_id', user.id);
 
       if (chatError) {
         return NextResponse.json({ error: chatError.message }, { status: 400 });
@@ -37,7 +44,7 @@ export async function POST(req: Request) {
             role: msg.role,
             content: msg.content,
             timestamp: msg.timestamp,
-            user_id: userId
+            user_id: user.id
           }))
         );
 
@@ -49,7 +56,7 @@ export async function POST(req: Request) {
       const { data: chatData, error: chatError } = await supabase
         .from('chats')
         .insert({
-          user_id: userId,
+          user_id: user.id,
           title: title || 'New Chat',
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString()
@@ -69,7 +76,7 @@ export async function POST(req: Request) {
             role: msg.role,
             content: msg.content,
             timestamp: msg.timestamp,
-            user_id: userId
+            user_id: user.id
           }))
         );
 

@@ -1,16 +1,23 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 export async function GET(req: Request) {
   try {
     const supabase = createServerSupabaseClient();
-    const session = await supabase.auth.getSession();
+    const cookieStore = cookies();
+    const sessionCookie = cookieStore.get('sb-access-token')?.value;
     
-    if (!session.data.session?.user) {
+    if (!sessionCookie) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const userId = session.data.session.user.id;
+    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie);
+
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const url = new URL(req.url);
     const chatId = url.searchParams.get('chatId');
 
@@ -20,7 +27,7 @@ export async function GET(req: Request) {
         .from('chat_history')
         .select('*')
         .eq('chat_id', chatId)
-        .eq('user_id', userId)
+        .eq('user_id', user.id)
         .order('timestamp', { ascending: true });
 
       if (messageError) {
@@ -34,7 +41,7 @@ export async function GET(req: Request) {
     const { data: chats, error: chatError } = await supabase
       .from('chats')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .order('updated_at', { ascending: false });
 
     if (chatError) {
