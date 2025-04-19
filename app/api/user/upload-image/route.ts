@@ -1,29 +1,23 @@
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
-import type { Database } from '@/types/supabase'
+import { Database } from '@/lib/database.types'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-export async function POST(request: Request) {
-  const supabase = createClient<Database>(supabaseUrl, supabaseKey)
-  
+export async function POST(req: Request) {
   try {
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get('sb-access-token')?.value
+    const supabase = createServerSupabaseClient()
+    const session = await supabase.auth.getSession()
     
-    if (!sessionCookie) {
+    if (!session.data.session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const { data: { user }, error: authError } = await supabase.auth.getUser(sessionCookie)
+    const { data: { user }, error: authError } = await supabase.auth.getUser(session.data.session.user.id)
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const formData = await request.formData()
+    const formData = await req.formData()
     const file = formData.get('file') as File
 
     if (!file) {

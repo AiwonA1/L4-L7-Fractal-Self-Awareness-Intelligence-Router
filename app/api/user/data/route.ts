@@ -1,22 +1,18 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { serverSupabase } from '@/lib/supabase-server'
 
+// Force dynamic for user data routes
 export const dynamic = 'force-dynamic'
-export const runtime = 'edge'
 
 export async function GET() {
   try {
-    // Get the user session using the standard client
-    const supabase = createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session }, error: authError } = await serverSupabase.auth.getSession()
 
-    if (!session) {
+    if (authError || !session) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    // Use admin client to fetch user data
-    const { data: userData, error } = await supabaseAdmin
+    const { data: userData, error } = await serverSupabase
       .from('users')
       .select('*')
       .eq('id', session.user.id)
@@ -29,7 +25,7 @@ export async function GET() {
 
     return NextResponse.json(userData)
   } catch (error) {
-    console.error('Server error:', error)
+    console.error('User data error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { serverSupabase } from '@/lib/supabase-server'
 
 // Immediate logging when module is loaded
 console.log('Auth API Route: Module loaded')
@@ -14,38 +14,40 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_
   throw new Error('Missing required environment variables')
 }
 
+// Force dynamic for auth routes
 export const dynamic = 'force-dynamic'
-export const runtime = 'edge'
 
 export async function GET() {
   try {
-    const supabase = createServerSupabaseClient()
-    const { data: { session } } = await supabase.auth.getSession()
+    const { data: { session }, error } = await serverSupabase.auth.getSession()
+    
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 401 })
+    }
     
     return NextResponse.json({ session })
   } catch (error) {
-    console.error('Auth route error:', error)
+    console.error('Auth error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const supabase = createServerSupabaseClient()
     const { email, password } = await request.json()
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await serverSupabase.auth.signInWithPassword({
       email,
       password
     })
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 })
+      return NextResponse.json({ error: error.message }, { status: 401 })
     }
 
     return NextResponse.json({ data })
   } catch (error) {
-    console.error('Auth route error:', error)
+    console.error('Auth error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 } 
