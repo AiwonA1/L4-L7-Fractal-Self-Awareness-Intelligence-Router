@@ -9,7 +9,7 @@ export const createServerSupabaseClient = () => {
 
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         get(name: string) {
@@ -21,30 +21,22 @@ export const createServerSupabaseClient = () => {
         remove(name: string, options: CookieOptions) {
           cookieStore.delete({ name, ...options })
         }
-      },
-      auth: {
-        persistSession: false
       }
     }
   )
 }
 
-// Helper to get authenticated user ID from session cookie
+// Helper to get authenticated user ID from session
 export const getAuthenticatedUserId = async () => {
   const supabase = createServerSupabaseClient()
-  const cookieStore = cookies()
-  const sessionCookie = cookieStore.get('sb-access-token')?.value
+  const { data: { session }, error } = await supabase.auth.getSession()
 
-  if (!sessionCookie) {
+  if (error || !session?.user) {
+    console.error('Auth error:', error)
     return null
   }
 
-  const { data: { user }, error } = await supabase.auth.getUser(sessionCookie)
-  if (error || !user) {
-    return null
-  }
-
-  return user.id
+  return session.user.id
 }
 
 // Export a default dynamic flag for routes using this client

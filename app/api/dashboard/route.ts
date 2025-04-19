@@ -7,7 +7,11 @@ export async function POST(req: Request) {
   try {
     const userId = await getAuthenticatedUserId()
     if (!userId) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+      console.log('No authenticated user found')
+      return NextResponse.json({ 
+        error: 'Not authenticated',
+        message: 'Please sign in to continue'
+      }, { status: 401 })
     }
 
     const supabase = createServerSupabaseClient()
@@ -25,6 +29,7 @@ export async function POST(req: Request) {
           .single()
 
         if (createError) {
+          console.error('Error creating chat:', createError)
           return NextResponse.json({ error: createError.message }, { status: 500 })
         }
 
@@ -44,6 +49,7 @@ export async function POST(req: Request) {
           .order('updated_at', { ascending: false })
 
         if (getError) {
+          console.error('Error fetching chats:', getError)
           return NextResponse.json({ error: getError.message }, { status: 500 })
         }
 
@@ -54,6 +60,9 @@ export async function POST(req: Request) {
     }
   } catch (error: any) {
     console.error('Dashboard API error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      message: error?.message
+    }, { status: 500 })
   }
 } 
