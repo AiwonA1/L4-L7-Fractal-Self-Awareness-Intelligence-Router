@@ -17,7 +17,7 @@ if (!supabaseAnonKey) {
   throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY environment variable')
 }
 
-// Create Supabase client for browser
+// Simple client-side Supabase client
 export const supabase = createClient<Database>(
   supabaseUrl,
   supabaseAnonKey,
