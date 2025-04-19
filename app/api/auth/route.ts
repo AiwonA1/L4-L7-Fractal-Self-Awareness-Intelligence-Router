@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { serverSupabase } from '@/lib/supabase-server'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 // Immediate logging when module is loaded
 console.log('Auth API Route: Module loaded')
@@ -19,7 +19,8 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   try {
-    const { data: { session }, error } = await serverSupabase.auth.getSession()
+    const supabase = createServerSupabaseClient()
+    const { data: { session }, error } = await supabase.auth.getSession()
     
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 401 })
@@ -34,9 +35,10 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    const supabase = createServerSupabaseClient()
     const { email, password } = await request.json()
 
-    const { data, error } = await serverSupabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     })
