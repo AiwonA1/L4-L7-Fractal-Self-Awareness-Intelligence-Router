@@ -29,11 +29,11 @@ export const createServerSupabaseClient = () => {
             // Handle edge runtime
           }
         }
-      },
-      auth: {
-        detectSessionInUrl: true,
-        persistSession: true
       }
     }
   )
-} 
+}
+
+// Export config for route handlers
+export const dynamic = 'force-dynamic'
+export const runtime = 'edge' 
