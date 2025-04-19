@@ -1,9 +1,9 @@
 import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/supabase'
+import { createClient } from '@supabase/supabase-js'
 
 type Message = Database['public']['Tables']['messages']['Row']
 type Chat = Database['public']['Tables']['chats']['Row']
-type ChatHistory = Database['public']['Tables']['chat_history']['Row']
 
 export async function createChat(userId: string, title: string) {
   const { data: chat, error } = await supabase

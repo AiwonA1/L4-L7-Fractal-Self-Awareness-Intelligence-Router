@@ -2,38 +2,48 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase-admin'
 import { cookies } from 'next/headers'
 import type { Database } from '@/types/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase-server'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
+export async function GET(req: Request) {
   try {
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get('sb-access-token')?.value
-    
-    if (!sessionCookie) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const supabase = createServerSupabaseClient()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+    if (sessionError || !session?.user) {
+      console.error('Auth error:', sessionError)
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
     }
 
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(sessionCookie)
+    const userId = session.user.id
 
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // Get user's chats
-    const { data: chats, error: chatsError } = await supabaseAdmin
+    // Get all chats for the user
+    const { data: chats, error: chatsError } = await supabase
       .from('chats')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
+      .select(`
+        id,
+        title,
+        created_at,
+        updated_at,
+        messages (
+          id,
+          role,
+          content,
+          created_at
+        )
+      `)
+      .eq('user_id', userId)
+      .order('updated_at', { ascending: false })
 
     if (chatsError) {
-      throw chatsError
+      console.error('Error fetching chats:', chatsError)
+      return NextResponse.json({ error: chatsError.message }, { status: 400 })
     }
 
-    return NextResponse.json({ chats: chats || [] })
+    return NextResponse.json({ chats })
   } catch (error) {
-    console.error('Error fetching chats:', error)
+    console.error('Chats API error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

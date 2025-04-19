@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "next telemetry disable",
-    "generate-icons": "node scripts/generate-icons.js"
+    "generate-icons": "node scripts/generate-icons.js",
+    "test": "vitest",
+    "test:watch": "vitest watch",
+    "test:coverage": "vitest run --coverage",
+    "test:setup": "ts-node scripts/setup-test-user.ts"
   },
   "dependencies": {
     "@chakra-ui/avatar": "^2.3.0",
@@ -47,20 +51,26 @@
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.49.4",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
     "@types/node": "^20",
     "@types/node-fetch": "^2.6.12",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@vitejs/plugin-react": "^4.4.1",
     "autoprefixer": "^10.0.1",
     "dotenv": "^16.5.0",
     "eslint": "^8",
     "eslint-config-next": "14.1.0",
+    "jsdom": "^26.1.0",
+    "msw": "^2.7.5",
     "node-fetch": "^2.7.0",
     "postcss": "^8",
     "prettier": "^3.2.5",
     "prettier-plugin-tailwindcss": "^0.5.11",
     "tailwindcss": "^3.3.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^3.1.1"
   }
 }
