@@ -31,52 +31,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const router = useRouter()
 
-  const fetchUserData = async (userId: string) => {
-    console.log('🔍 Fetching user data for ID:', userId)
-    try {
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
-
-      if (error) {
-        throw error
-      }
-
-      console.log('✅ Successfully fetched user data:', {
-        id: userData?.id,
-        email: userData?.email,
-        name: userData?.name,
-        fract_tokens: userData?.fract_tokens,
-        tokens_used: userData?.tokens_used,
-        token_balance: userData?.token_balance,
-        created_at: userData?.created_at
-      })
-
-      return userData
-    } catch (error) {
-      console.error('❌ Exception in fetchUserData:', error)
-      return null
-    }
-  }
-
   const updateUserState = async (session: Session | null) => {
     setSession(session)
     
     if (session?.user) {
       console.log('👤 Updating user state for:', session.user.email)
-      const userData = await fetchUserData(session.user.id)
-      if (userData) {
+      // Get user profile data using Supabase's built-in auth
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', session.user.id)
+        .single()
+
+      if (!error && userData) {
         const mergedUser = { ...session.user, ...userData }
         setUser(mergedUser)
+        setShowAuthModal(false)
       } else {
+        console.error('Error fetching user data:', error)
         setUser(session.user)
       }
-      setShowAuthModal(false)
     } else {
       setUser(null)
-      // Only show auth modal if we're not loading and there's no session
       if (!isLoading) {
         setShowAuthModal(true)
       }
