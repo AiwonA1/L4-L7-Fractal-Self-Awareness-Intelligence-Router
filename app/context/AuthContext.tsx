@@ -3,14 +3,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
-
-interface User extends SupabaseUser {
-  name?: string;
-  fract_tokens?: number;
-  tokens_used?: number;
-  token_balance?: number;
-}
+import type { User, Session } from '@supabase/supabase-js'
 
 interface AuthContextType {
   user: User | null;
@@ -31,87 +24,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const router = useRouter()
 
-  const updateUserState = async (session: Session | null) => {
-    setSession(session)
-    
-    if (session?.user) {
-      console.log('👤 Updating user state for:', session.user.email)
-      // Get user profile data using Supabase's built-in auth
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', session.user.id)
-        .single()
-
-      if (!error && userData) {
-        const mergedUser = { ...session.user, ...userData }
-        setUser(mergedUser)
-        setShowAuthModal(false)
-      } else {
-        console.error('Error fetching user data:', error)
-        setUser(session.user)
-      }
-    } else {
-      setUser(null)
-      if (!isLoading) {
-        setShowAuthModal(true)
-      }
-    }
-    setIsLoading(false)
-  }
-
   useEffect(() => {
     console.log('🔄 Setting up Supabase auth listeners...')
     
-    // Configure Supabase to persist session
-    supabase.auth.onAuthStateChange((event, session) => {
-      console.log('🔄 Auth state changed:', { event, hasSession: !!session })
-      
-      if (event === 'SIGNED_IN') {
-        updateUserState(session)
-      } else if (event === 'SIGNED_OUT') {
-        updateUserState(null)
-      } else if (event === 'TOKEN_REFRESHED') {
-        // Just update the session but keep the user state
-        setSession(session)
-      }
-    })
-
     // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session) {
-        updateUserState(session)
-      } else {
-        setIsLoading(false)
-        setShowAuthModal(true)
+      setSession(session)
+      setUser(session?.user ?? null)
+      setIsLoading(false)
+      setShowAuthModal(!session)
+    })
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔄 Auth state changed:', event)
+      setSession(session)
+      setUser(session?.user ?? null)
+      setShowAuthModal(!session)
+      
+      if (event === 'SIGNED_OUT') {
+        router.push('/')
       }
     })
 
     return () => {
-      // Cleanup will be handled by Supabase client
+      subscription.unsubscribe()
     }
-  }, [])
+  }, [router])
 
   const signIn = async (email: string, password: string) => {
     try {
       console.log('🔑 Attempting sign in with email:', email)
-      
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
-        password,
+        password
       })
 
-      if (error) {
-        console.error('❌ Sign in error:', error.message)
-        throw error
-      }
-
-      if (!data.session) {
-        throw new Error('No session returned after successful sign in')
-      }
+      if (error) throw error
 
       console.log('✅ Sign in successful')
-      await updateUserState(data.session)
+      setShowAuthModal(false)
       
     } catch (error) {
       console.error('❌ Sign in failed:', error)
@@ -123,11 +75,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
-      
-      setUser(null)
-      setSession(null)
-      setShowAuthModal(true)
-      router.push('/')
     } catch (error) {
       console.error('Sign out error:', error)
       throw error
@@ -141,7 +88,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     isLoading,
     showAuthModal,
-    setShowAuthModal,
+    setShowAuthModal
   }
 
   return (
