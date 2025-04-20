@@ -1,117 +1,180 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import {
   Box,
   Flex,
   HStack,
   IconButton,
+  Button,
   Menu,
   MenuButton,
-  MenuItem,
   MenuList,
-  useColorMode,
-  useColorModeValue,
+  MenuItem,
+  MenuDivider,
+  Avatar,
+  Text,
+  Link as ChakraLink,
+  useDisclosure,
 } from '@chakra-ui/react'
-import { FaMoon, FaSun } from 'react-icons/fa'
-import { useRouter } from 'next/navigation'
-import UserAvatar from './UserAvatar'
-import { supabase } from '@/lib/supabase/client'
+import { FaUser, FaSignOutAlt, FaCoins, FaBrain, FaBook, FaChartLine } from 'react-icons/fa'
+import { useAuth } from '@/app/context/AuthContext'
+import { TokenPurchaseModal } from './TokenPurchaseModal'
+import type { Database } from '@/types/supabase'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { getUserProfile, subscribeToProfile } from '@/lib/supabase/client'
 
-interface UserProfile {
-  id: string
-  name: string | null
-  email: string
-  image: string | null
-}
+type Profile = Database['public']['Tables']['users']['Row']
+
+const NAV_ITEMS = [
+  { label: 'Dashboard', href: '/dashboard', icon: FaBrain },
+  { label: 'Documentation', href: '/documentation', icon: FaBook },
+  { label: 'Performance', href: '/test-report', icon: FaChartLine },
+]
 
 export default function Header() {
-  const { colorMode, toggleColorMode } = useColorMode()
-  const router = useRouter()
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const { user, signOut } = useAuth()
+  const { isOpen, onOpen, onClose } = useDisclosure()
+  const pathname = usePathname()
+  const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
-    const getUser = async () => {
-      try {
-        setIsLoading(true)
-        const { data: { session }, error } = await supabase.auth.getSession()
-        if (session?.user) {
-          // Get user profile from database
-          const { data: profile } = await supabase
-            .from('users')
-            .select('id, name, email, image')
-            .eq('id', session.user.id)
-            .single()
+    if (user?.id) {
+      // Get initial profile
+      getUserProfile(user.id).then(setProfile)
 
-          if (profile) {
-            setUserProfile(profile as UserProfile)
-          }
-        }
-      } catch (error) {
-        console.error('Error fetching user profile:', error)
-      } finally {
-        setIsLoading(false)
+      // Subscribe to profile changes
+      const subscription = subscribeToProfile(user.id, (updatedProfile) => {
+        console.log('Profile updated:', updatedProfile)
+        setProfile(updatedProfile)
+      })
+
+      return () => {
+        subscription.unsubscribe()
       }
     }
+  }, [user?.id])
 
-    getUser()
-  }, [])
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
+  const getUserDisplayName = () => {
+    if (!user) return 'Guest'
+    return profile?.name || user.email?.split('@')[0] || 'Guest'
   }
 
-  const bg = useColorModeValue('white', 'gray.800')
-  const borderColor = useColorModeValue('gray.200', 'gray.700')
+  const handleSignOut = async () => {
+    try {
+      await signOut()
+    } catch (error) {
+      console.error('Error signing out:', error)
+    }
+  }
 
   return (
-    <Box
-      as="header"
-      bg={bg}
-      borderBottom="1px"
-      borderColor={borderColor}
-      py={4}
-      px={6}
-    >
-      <Flex justify="space-between" align="center" maxW="7xl" mx="auto">
-        <Box>
-          {/* Add your logo or site name here */}
-        </Box>
+    <>
+      <Box
+        as="header"
+        position="fixed"
+        top={0}
+        left={0}
+        right={0}
+        bg="gray.900"
+        borderBottom="1px"
+        borderColor="whiteAlpha.100"
+        zIndex="sticky"
+      >
+        <Flex
+          px={4}
+          h={16}
+          alignItems="center"
+          justifyContent="space-between"
+          maxW="7xl"
+          mx="auto"
+        >
+          <HStack spacing={8} alignItems="center">
+            <Text fontSize="2xl" fontWeight="bold" color="whiteAlpha.900">
+              FractiVerse
+            </Text>
 
-        <HStack spacing={4}>
-          <IconButton
-            aria-label="Toggle color mode"
-            icon={colorMode === 'light' ? <FaMoon /> : <FaSun />}
-            onClick={toggleColorMode}
-            variant="ghost"
-          />
+            <HStack spacing={4} display={{ base: 'none', md: 'flex' }}>
+              {NAV_ITEMS.map((item) => (
+                <ChakraLink
+                  key={item.href}
+                  as={Link}
+                  href={item.href}
+                  px={3}
+                  py={2}
+                  rounded="md"
+                  color="whiteAlpha.900"
+                  _hover={{ bg: 'whiteAlpha.100' }}
+                  bg={pathname === item.href ? 'whiteAlpha.100' : 'transparent'}
+                >
+                  <HStack spacing={2}>
+                    <item.icon />
+                    <Text>{item.label}</Text>
+                  </HStack>
+                </ChakraLink>
+              ))}
+            </HStack>
+          </HStack>
 
-          {!isLoading && userProfile && (
+          <HStack spacing={4}>
+            {user && (
+              <Button
+                leftIcon={<FaCoins />}
+                colorScheme="yellow"
+                variant="solid"
+                onClick={onOpen}
+              >
+                {profile?.token_balance || 0} FractiTokens
+              </Button>
+            )}
+
             <Menu>
-              <MenuButton>
-                <UserAvatar
-                  name={userProfile.name}
-                  image={userProfile.image}
-                  size="md"
-                />
-              </MenuButton>
-              <MenuList>
-                <MenuItem onClick={() => router.push('/profile')}>
+              <MenuButton
+                as={IconButton}
+                icon={
+                  <Avatar
+                    size="sm"
+                    name={getUserDisplayName()}
+                    src={profile?.image}
+                  />
+                }
+                variant="ghost"
+                aria-label="User menu"
+                _hover={{ bg: 'whiteAlpha.100' }}
+              />
+              <MenuList bg="gray.800" borderColor="whiteAlpha.200">
+                <Text px={3} py={2} fontWeight="medium" color="whiteAlpha.900">
+                  {getUserDisplayName()}
+                </Text>
+                <MenuDivider borderColor="whiteAlpha.200" />
+                <MenuItem 
+                  icon={<FaUser />} 
+                  as={Link} 
+                  href="/profile"
+                  _hover={{ bg: 'whiteAlpha.100' }}
+                  color="whiteAlpha.900"
+                >
                   Profile
                 </MenuItem>
-                <MenuItem onClick={() => router.push('/settings')}>
-                  Settings
-                </MenuItem>
-                <MenuItem onClick={handleSignOut}>
+                <MenuItem 
+                  icon={<FaSignOutAlt />} 
+                  onClick={handleSignOut}
+                  _hover={{ bg: 'whiteAlpha.100' }}
+                  color="whiteAlpha.900"
+                >
                   Sign Out
                 </MenuItem>
               </MenuList>
             </Menu>
-          )}
-        </HStack>
-      </Flex>
-    </Box>
+          </HStack>
+        </Flex>
+      </Box>
+
+      <TokenPurchaseModal
+        isOpen={isOpen}
+        onClose={onClose}
+      />
+    </>
   )
 } 
