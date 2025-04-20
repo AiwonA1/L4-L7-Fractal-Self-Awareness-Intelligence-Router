@@ -1,11 +1,13 @@
 import { Inter } from 'next/font/google'
 import { Providers } from './providers'
-import { RouteGuard } from './components/RouteGuard'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { CookieOptions } from '@supabase/ssr'
+import { redirect } from 'next/navigation'
 
 const inter = Inter({ subsets: ['latin'] })
+
+export const dynamic = 'force-dynamic'
 
 export default async function RootLayout({
   children,
@@ -34,13 +36,19 @@ export default async function RootLayout({
 
   const { data: { session } } = await supabase.auth.getSession()
 
+  // If user is authenticated and trying to access root, redirect to dashboard
+  if (session?.user) {
+    const pathname = new URL(cookieStore.get('next-url')?.value || '/', 'http://localhost').pathname
+    if (pathname === '/') {
+      redirect('/dashboard')
+    }
+  }
+
   return (
     <html lang="en">
       <body className={inter.className}>
         <Providers initialSession={session}>
-          <RouteGuard>
-            {children}
-          </RouteGuard>
+          {children}
         </Providers>
       </body>
     </html>

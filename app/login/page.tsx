@@ -3,8 +3,20 @@
 import { Box, Container, VStack, Heading, Text, Tabs, TabList, TabPanels, Tab, TabPanel } from '@chakra-ui/react'
 import SignInButton from '@/app/components/SignInButton'
 import SignUpButton from '@/app/components/SignUpButton'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/app/context/AuthContext'
 
 export default function LoginPage() {
+  const router = useRouter()
+  const { user } = useAuth()
+
+  useEffect(() => {
+    if (user) {
+      router.replace('/dashboard')
+    }
+  }, [user, router])
+
   return (
     <Container maxW="container.sm" py={10}>
       <VStack spacing={8} align="stretch">
