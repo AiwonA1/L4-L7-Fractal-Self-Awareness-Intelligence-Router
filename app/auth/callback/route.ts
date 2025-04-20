@@ -10,9 +10,7 @@ export async function GET(request: Request) {
     const requestUrl = new URL(request.url)
     const code = requestUrl.searchParams.get('code')
     const cookieStore = cookies()
-    const supabase = createRouteHandlerClient<Database>({ 
-      cookies: () => cookieStore,
-    })
+    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore })
 
     if (code) {
       // Exchange the code for a session
@@ -28,6 +26,21 @@ export async function GET(request: Request) {
       
       if (!session) {
         return NextResponse.redirect(new URL('/login?error=session', requestUrl.origin))
+      }
+
+      // Create or update user profile
+      const { error: profileError } = await supabase
+        .from('users')
+        .upsert({
+          id: session.user.id,
+          email: session.user.email,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single()
+
+      if (profileError) {
+        console.error('Profile update error:', profileError)
       }
     }
 
