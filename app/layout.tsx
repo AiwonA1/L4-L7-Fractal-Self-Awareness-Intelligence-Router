@@ -2,9 +2,9 @@ import type { Metadata, Viewport } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
-import { LayoutContent } from './components/LayoutContent'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { RouteGuard } from './components/RouteGuard'
+import { headers } from 'next/headers'
+import { createClient } from '@/lib/supabase/server'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -42,29 +42,9 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const cookieStore = cookies()
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set(name, value, options)
-        },
-        remove(name: string, options: any) {
-          cookieStore.delete(name, options)
-        },
-      },
-    }
-  )
-
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  const headersList = headers()
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
 
   return (
     <html lang="en">
@@ -74,9 +54,9 @@ export default async function RootLayout({
       </head>
       <body className={inter.className}>
         <Providers initialSession={session}>
-          <LayoutContent>
+          <RouteGuard>
             {children}
-          </LayoutContent>
+          </RouteGuard>
         </Providers>
       </body>
     </html>
