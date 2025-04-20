@@ -11,16 +11,32 @@ export default function SignInButton() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isChecking, setIsChecking] = useState(true)
 
   // Check for existing session on mount
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        console.log('Existing session found:', session.user.id)
-        router.push('/dashboard')
+      try {
+        setIsChecking(true)
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error) {
+          console.error('Error checking session:', error.message)
+          return
+        }
+
+        if (session?.user) {
+          console.log('Existing session found:', session.user.id)
+          router.replace('/dashboard')
+          return
+        }
+      } catch (error) {
+        console.error('Error in session check:', error)
+      } finally {
+        setIsChecking(false)
       }
     }
+    
     checkSession()
   }, [router])
 
@@ -81,22 +97,8 @@ export default function SignInButton() {
       }
 
       console.log('Sign in successful, user:', data.session.user.id)
+      router.replace('/dashboard')
       
-      // Verify the session was stored
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        console.log('Session verified after sign in')
-        router.push('/dashboard')
-      } else {
-        console.error('Session not found after successful sign in')
-        toast({
-          title: 'Error',
-          description: 'Session not persisted. Please try again.',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        })
-      }
     } catch (error) {
       console.error('Error signing in:', error)
       toast({
@@ -109,6 +111,10 @@ export default function SignInButton() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  if (isChecking) {
+    return null // Or a loading spinner if you prefer
   }
 
   return (
