@@ -1,246 +1,196 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect } from 'react'
 import { useAuth } from './AuthContext'
+import * as chatService from '@/app/services/chat'
+import type { Chat, Message } from '@/app/services/chat'
 import { supabase } from '@/lib/supabase/client'
-import type { Database } from '@/types/supabase'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@chakra-ui/react'
 
-type Chat = Database['public']['Tables']['chats']['Row']
-type Message = Database['public']['Tables']['messages']['Row']
-
 interface ChatContextType {
   chats: Chat[]
-  messages: Message[]
   currentChat: Chat | null
-  setCurrentChat: (chat: Chat | null) => void
-  sendMessage: (content: string) => Promise<void>
-  createNewChat: (title: string, firstMessage: string) => Promise<Chat>
-  loadMessages: (chatId: string) => Promise<void>
+  messages: Message[]
   isLoading: boolean
-  error: string | null
+  error: Error | null
+  loadChats: () => Promise<void>
+  loadMessages: (chatId: string) => Promise<void>
+  createNewChat: (title: string, initialMessage: string) => Promise<void>
+  sendMessage: (content: string) => Promise<void>
   updateChatTitle: (chatId: string, title: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
 }
 
-const ChatContext = createContext<ChatContextType>({
-  chats: [],
-  messages: [],
-  currentChat: null,
-  setCurrentChat: () => {},
-  sendMessage: async () => {},
-  createNewChat: async () => { throw new Error('Not implemented') },
-  loadMessages: async () => {},
-  isLoading: false,
-  error: null,
-  updateChatTitle: async () => {},
-  deleteChat: async () => {}
-})
+const ChatContext = createContext<ChatContextType | undefined>(undefined)
 
-export function ChatProvider({ children }: { children: ReactNode }) {
+export function ChatProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
   const [chats, setChats] = useState<Chat[]>([])
-  const [messages, setMessages] = useState<Message[]>([])
   const [currentChat, setCurrentChat] = useState<Chat | null>(null)
+  const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { user, session } = useAuth()
+  const [error, setError] = useState<Error | null>(null)
+
+  useEffect(() => {
+    if (user?.id) {
+      loadChats()
+      // Subscribe to chat updates
+      const subscription = chatService.subscribeToChats(user.id, (chat) => {
+        setChats((prevChats) => {
+          const index = prevChats.findIndex((c) => c.id === chat.id)
+          if (index >= 0) {
+            const newChats = [...prevChats]
+            newChats[index] = chat
+            return newChats
+          }
+          return [...prevChats, chat]
+        })
+      })
+
+      return () => {
+        subscription.unsubscribe()
+      }
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (currentChat?.id) {
+      // Subscribe to message updates for current chat
+      const subscription = chatService.subscribeToChatMessages(currentChat.id, (message) => {
+        setMessages((prevMessages) => {
+          const index = prevMessages.findIndex((m) => m.id === message.id)
+          if (index >= 0) {
+            const newMessages = [...prevMessages]
+            newMessages[index] = message
+            return newMessages
+          }
+          return [...prevMessages, message]
+        })
+      })
+
+      return () => {
+        subscription.unsubscribe()
+      }
+    }
+  }, [currentChat?.id])
 
   const loadChats = async () => {
-    if (!user || !session) return
+    if (!user?.id) return
+
     setIsLoading(true)
     setError(null)
-    try {
-      const { data: chats, error } = await supabase
-        .from('chats')
-        .select(`
-          *,
-          messages (
-            *
-          )
-        `)
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
 
-      if (error) throw error
-      setChats(chats || [])
+    try {
+      const data = await chatService.getChats(user.id)
+      setChats(data)
     } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to load chats'))
       console.error('Error loading chats:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load chats')
     } finally {
       setIsLoading(false)
     }
   }
 
   const loadMessages = async (chatId: string) => {
-    if (!user || !session) return
+    if (!user?.id) return
+
     setIsLoading(true)
     setError(null)
-    try {
-      const { data: messages, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true })
 
-      if (error) throw error
-      setMessages(messages || [])
+    try {
+      const chat = chats.find((c) => c.id === chatId)
+      if (chat) {
+        setCurrentChat(chat)
+        setMessages(chat.messages || [])
+      }
     } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to load messages'))
       console.error('Error loading messages:', err)
-      setError(err instanceof Error ? err.message : 'Failed to load messages')
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Subscribe to chat updates when user is authenticated
-  useEffect(() => {
-    if (!user || !session) return
+  const createNewChat = async (title: string, initialMessage: string) => {
+    if (!user?.id) return
 
-    const chatSubscription = supabase
-      .channel('chat-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'chats',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          console.log('Chat update received:', payload)
-          loadChats()
-        }
-      )
-      .subscribe()
+    setIsLoading(true)
+    setError(null)
 
-    return () => {
-      chatSubscription.unsubscribe()
+    try {
+      const chat = await chatService.createChat(user.id, title)
+      if (chat) {
+        await chatService.addMessage(chat.id, initialMessage, 'user')
+        await loadChats()
+        setCurrentChat(chat)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to create chat'))
+      console.error('Error creating chat:', err)
+    } finally {
+      setIsLoading(false)
     }
-  }, [user, session])
-
-  // Load initial chats when user is authenticated
-  useEffect(() => {
-    if (user && session) {
-      loadChats()
-    } else {
-      setChats([])
-      setCurrentChat(null)
-      setMessages([])
-    }
-  }, [user, session])
+  }
 
   const sendMessage = async (content: string) => {
-    if (!currentChat || !user) return
+    if (!currentChat?.id || !user?.id) return
+
     setIsLoading(true)
     setError(null)
+
     try {
-      // Insert the message
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert([{
-          chat_id: currentChat.id,
-          content,
-          role: 'user',
-          created_at: new Date().toISOString()
-        }])
-
-      if (messageError) throw messageError
-
-      // Update chat timestamp
-      const { error: updateError } = await supabase
-        .from('chats')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', currentChat.id)
-
-      if (updateError) throw updateError
-
-      // Reload messages to get the new one
-      await loadMessages(currentChat.id)
+      const message = await chatService.addMessage(currentChat.id, content, 'user')
+      setMessages((prev) => [...prev, message])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send message')
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const createNewChat = async (title: string, firstMessage: string): Promise<Chat> => {
-    if (!user) throw new Error('Not authenticated')
-    setIsLoading(true)
-    setError(null)
-    try {
-      // Create the chat
-      const { data: chat, error: chatError } = await supabase
-        .from('chats')
-        .insert([{
-          title,
-          user_id: user.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }])
-        .select()
-        .single()
-
-      if (chatError || !chat) throw chatError || new Error('Failed to create chat')
-
-      // Add the first message
-      const { error: messageError } = await supabase
-        .from('messages')
-        .insert([{
-          chat_id: chat.id,
-          content: firstMessage,
-          role: 'user',
-          created_at: new Date().toISOString()
-        }])
-
-      if (messageError) {
-        // If message creation fails, delete the chat
-        await supabase.from('chats').delete().eq('id', chat.id)
-        throw messageError
-      }
-
-      // Update the chats list and set current chat
-      setChats(prev => [chat, ...prev])
-      setCurrentChat(chat)
-      await loadMessages(chat.id)
-      return chat
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create chat')
-      throw err
+      setError(err instanceof Error ? err : new Error('Failed to send message'))
+      console.error('Error sending message:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
   const updateChatTitle = async (chatId: string, title: string) => {
+    if (!user?.id) return
+
     setIsLoading(true)
     setError(null)
+
     try {
-      const { error } = await supabase
+      // Update chat title in Supabase
+      const { data, error } = await supabase
         .from('chats')
         .update({ title })
         .eq('id', chatId)
+        .eq('user_id', user.id)
+        .select()
+        .single()
 
       if (error) throw error
 
-      setChats(prev => prev.map(chat => 
-        chat.id === chatId ? { ...chat, title } : chat
-      ))
+      // Update local state
+      setChats((prev) =>
+        prev.map((chat) => (chat.id === chatId ? { ...chat, title } : chat))
+      )
       if (currentChat?.id === chatId) {
-        setCurrentChat(prev => prev ? { ...prev, title } : null)
+        setCurrentChat((prev) => (prev ? { ...prev, title } : null))
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update chat title')
+      setError(err instanceof Error ? err : new Error('Failed to update chat title'))
+      console.error('Error updating chat title:', err)
     } finally {
       setIsLoading(false)
     }
   }
 
   const deleteChat = async (chatId: string) => {
+    if (!user?.id) return
+
     setIsLoading(true)
     setError(null)
+
     try {
-      // Delete messages first (due to foreign key constraint)
+      // Delete chat in Supabase
       const { error: messagesError } = await supabase
         .from('messages')
         .delete()
@@ -248,21 +198,23 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       if (messagesError) throw messagesError
 
-      // Then delete the chat
-      const { error: chatError } = await supabase
+      const { error } = await supabase
         .from('chats')
         .delete()
         .eq('id', chatId)
+        .eq('user_id', user.id)
 
-      if (chatError) throw chatError
+      if (error) throw error
 
-      setChats(prev => prev.filter(chat => chat.id !== chatId))
+      // Update local state
+      setChats((prev) => prev.filter((chat) => chat.id !== chatId))
       if (currentChat?.id === chatId) {
         setCurrentChat(null)
         setMessages([])
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete chat')
+      setError(err instanceof Error ? err : new Error('Failed to delete chat'))
+      console.error('Error deleting chat:', err)
     } finally {
       setIsLoading(false)
     }
@@ -270,16 +222,16 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
   const value = {
     chats,
-    messages,
     currentChat,
-    setCurrentChat,
-    sendMessage,
-    createNewChat,
-    loadMessages,
+    messages,
     isLoading,
     error,
+    loadChats,
+    loadMessages,
+    createNewChat,
+    sendMessage,
     updateChatTitle,
-    deleteChat
+    deleteChat,
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>

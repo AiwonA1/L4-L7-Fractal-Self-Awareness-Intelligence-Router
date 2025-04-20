@@ -1,25 +1,15 @@
 import { supabase } from '@/lib/supabase/client'
 import type { Database } from '@/types/supabase'
 
-export type Chat = Database['public']['Tables']['chats']['Row']
 export type Message = Database['public']['Tables']['messages']['Row']
-
-// Helper function to ensure session
-async function ensureSession() {
-  const { data: { session }, error } = await supabase.auth.getSession()
-  if (error || !session) {
-    console.error('Session error:', error)
-    throw new Error('No valid session')
-  }
-  return session
+export type Chat = Database['public']['Tables']['chats']['Row'] & {
+  messages?: Message[]
 }
 
 export async function getChats(userId: string) {
   try {
-    const session = await ensureSession()
-    if (session.user.id !== userId) {
-      throw new Error('Unauthorized access')
-    }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('No session')
 
     const { data, error } = await supabase
       .from('chats')
@@ -35,7 +25,7 @@ export async function getChats(userId: string) {
       throw error
     }
 
-    return data
+    return data || []
   } catch (error) {
     console.error('Error in getChats:', error)
     throw error
@@ -44,10 +34,8 @@ export async function getChats(userId: string) {
 
 export async function createChat(userId: string, title: string) {
   try {
-    const session = await ensureSession()
-    if (session.user.id !== userId) {
-      throw new Error('Unauthorized access')
-    }
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('No session')
 
     const { data, error } = await supabase
       .from('chats')
@@ -71,7 +59,8 @@ export async function createChat(userId: string, title: string) {
 
 export async function addMessage(chatId: string, content: string, role: string) {
   try {
-    await ensureSession()
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) throw new Error('No session')
 
     // First verify chat ownership
     const { data: chat, error: chatError } = await supabase
@@ -82,6 +71,10 @@ export async function addMessage(chatId: string, content: string, role: string) 
 
     if (chatError || !chat) {
       throw new Error('Chat not found')
+    }
+
+    if (chat.user_id !== session.user.id) {
+      throw new Error('Unauthorized')
     }
 
     const { data, error } = await supabase
@@ -114,7 +107,7 @@ export function subscribeToChats(
   userId: string,
   callback: (payload: Chat) => void
 ) {
-  const channel = supabase
+  return supabase
     .channel(`user-chats-${userId}`)
     .on(
       'postgres_changes',
@@ -133,19 +126,17 @@ export function subscribeToChats(
       if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
         console.log('Subscription closed or error, attempting to reconnect...')
         setTimeout(() => {
-          channel.subscribe()
+          subscribeToChats(userId, callback)
         }, 1000)
       }
     })
-
-  return channel
 }
 
 export function subscribeToChatMessages(
   chatId: string,
   callback: (payload: Message) => void
 ) {
-  const channel = supabase
+  return supabase
     .channel(`chat-${chatId}`)
     .on(
       'postgres_changes',
@@ -164,10 +155,8 @@ export function subscribeToChatMessages(
       if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
         console.log('Subscription closed or error, attempting to reconnect...')
         setTimeout(() => {
-          channel.subscribe()
+          subscribeToChatMessages(chatId, callback)
         }, 1000)
       }
     })
-
-  return channel
 } 
