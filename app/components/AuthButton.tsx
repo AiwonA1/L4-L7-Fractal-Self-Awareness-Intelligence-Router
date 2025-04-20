@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { Button, Icon } from '@chakra-ui/react'
 import { FaUser, FaUserPlus } from 'react-icons/fa'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 
 export default function AuthButton() {
   const [isNewUser, setIsNewUser] = useState(true)

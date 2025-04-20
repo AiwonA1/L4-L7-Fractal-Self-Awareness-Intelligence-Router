@@ -2,8 +2,10 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { useAuth } from './AuthContext'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 import type { Database } from '@/types/supabase'
+import { useRouter } from 'next/navigation'
+import { useToast } from '@chakra-ui/react'
 
 type Chat = Database['public']['Tables']['chats']['Row']
 type Message = Database['public']['Tables']['messages']['Row']

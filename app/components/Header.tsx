@@ -16,7 +16,7 @@ import {
 import { FaMoon, FaSun } from 'react-icons/fa'
 import { useRouter } from 'next/navigation'
 import UserAvatar from './UserAvatar'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 
 interface UserProfile {
   id: string

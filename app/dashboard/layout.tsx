@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 import DashboardLayout from './components/DashboardLayout'
 
 export default function Layout({ children }: { children: React.ReactNode }) {

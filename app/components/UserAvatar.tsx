@@ -13,7 +13,7 @@ import {
   Spinner,
 } from '@chakra-ui/react'
 import { FaCamera } from 'react-icons/fa'
-import { createClient } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase/client'
 
 interface UserAvatarProps {
   name?: string | null
