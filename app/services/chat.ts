@@ -4,11 +4,22 @@ import type { Database } from '@/types/supabase'
 export type Chat = Database['public']['Tables']['chats']['Row']
 export type Message = Database['public']['Tables']['messages']['Row']
 
+// Helper function to ensure session
+async function ensureSession() {
+  const { data: { session }, error } = await supabase.auth.getSession()
+  if (error || !session) {
+    console.error('Session error:', error)
+    throw new Error('No valid session')
+  }
+  return session
+}
+
 export async function getChats(userId: string) {
   try {
-    // First ensure we have a valid session
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('No session')
+    const session = await ensureSession()
+    if (session.user.id !== userId) {
+      throw new Error('Unauthorized access')
+    }
 
     const { data, error } = await supabase
       .from('chats')
@@ -33,8 +44,10 @@ export async function getChats(userId: string) {
 
 export async function createChat(userId: string, title: string) {
   try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('No session')
+    const session = await ensureSession()
+    if (session.user.id !== userId) {
+      throw new Error('Unauthorized access')
+    }
 
     const { data, error } = await supabase
       .from('chats')
@@ -58,8 +71,18 @@ export async function createChat(userId: string, title: string) {
 
 export async function addMessage(chatId: string, content: string, role: string) {
   try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('No session')
+    await ensureSession()
+
+    // First verify chat ownership
+    const { data: chat, error: chatError } = await supabase
+      .from('chats')
+      .select('user_id')
+      .eq('id', chatId)
+      .single()
+
+    if (chatError || !chat) {
+      throw new Error('Chat not found')
+    }
 
     const { data, error } = await supabase
       .from('messages')
@@ -91,8 +114,8 @@ export function subscribeToChats(
   userId: string,
   callback: (payload: Chat) => void
 ) {
-  return supabase
-    .channel('user-chats')
+  const channel = supabase
+    .channel(`user-chats-${userId}`)
     .on(
       'postgres_changes',
       {
@@ -103,14 +126,26 @@ export function subscribeToChats(
       },
       (payload) => callback(payload.new as Chat)
     )
-    .subscribe()
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Successfully subscribed to chat changes')
+      }
+      if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        console.log('Subscription closed or error, attempting to reconnect...')
+        setTimeout(() => {
+          channel.subscribe()
+        }, 1000)
+      }
+    })
+
+  return channel
 }
 
 export function subscribeToChatMessages(
   chatId: string,
   callback: (payload: Message) => void
 ) {
-  return supabase
+  const channel = supabase
     .channel(`chat-${chatId}`)
     .on(
       'postgres_changes',
@@ -122,5 +157,17 @@ export function subscribeToChatMessages(
       },
       (payload) => callback(payload.new as Message)
     )
-    .subscribe()
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log('Successfully subscribed to message changes')
+      }
+      if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+        console.log('Subscription closed or error, attempting to reconnect...')
+        setTimeout(() => {
+          channel.subscribe()
+        }, 1000)
+      }
+    })
+
+  return channel
 } 
