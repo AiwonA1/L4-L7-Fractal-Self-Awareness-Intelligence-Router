@@ -1,6 +1,8 @@
+'use client'
+
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
 import { useAuth } from './AuthContext'
+import { supabase } from '@/lib/supabase'
 import type { Database } from '@/types/supabase'
 
 type Chat = Database['public']['Tables']['chats']['Row']
@@ -42,49 +44,21 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuth()
 
-  const sendMessage = async (content: string) => {
-    if (!currentChat) return
+  const loadChats = async () => {
+    if (!user) return
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chatId: currentChat.id,
-          content,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to send message')
-      await loadMessages(currentChat.id)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to send message')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+      const { data: chats, error } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false })
 
-  const createNewChat = async (title: string, firstMessage: string): Promise<Chat> => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          content: firstMessage,
-        }),
-      })
-      if (!response.ok) throw new Error('Failed to create chat')
-      const newChat = await response.json()
-      setChats(prev => [...prev, newChat])
-      setCurrentChat(newChat)
-      await loadMessages(newChat.id)
-      return newChat
+      if (error) throw error
+      setChats(chats || [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create chat')
-      throw err
+      setError(err instanceof Error ? err.message : 'Failed to load chats')
     } finally {
       setIsLoading(false)
     }
@@ -94,12 +68,108 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch(`/api/chat/${chatId}/messages`)
-      if (!response.ok) throw new Error('Failed to load messages')
-      const data = await response.json()
-      setMessages(data.messages)
+      // First verify chat ownership
+      const { data: chat, error: chatError } = await supabase
+        .from('chats')
+        .select('*')
+        .eq('id', chatId)
+        .single()
+
+      if (chatError || !chat) throw new Error('Chat not found')
+
+      const { data: messages, error: messagesError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true })
+
+      if (messagesError) throw messagesError
+      setMessages(messages || [])
+      setCurrentChat(chat)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load messages')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const sendMessage = async (content: string) => {
+    if (!currentChat || !user) return
+    setIsLoading(true)
+    setError(null)
+    try {
+      // Insert the message
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert([{
+          chat_id: currentChat.id,
+          content,
+          role: 'user',
+          created_at: new Date().toISOString()
+        }])
+
+      if (messageError) throw messageError
+
+      // Update chat timestamp
+      const { error: updateError } = await supabase
+        .from('chats')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', currentChat.id)
+
+      if (updateError) throw updateError
+
+      // Reload messages to get the new one
+      await loadMessages(currentChat.id)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to send message')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const createNewChat = async (title: string, firstMessage: string): Promise<Chat> => {
+    if (!user) throw new Error('Not authenticated')
+    setIsLoading(true)
+    setError(null)
+    try {
+      // Create the chat
+      const { data: chat, error: chatError } = await supabase
+        .from('chats')
+        .insert([{
+          title,
+          user_id: user.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }])
+        .select()
+        .single()
+
+      if (chatError || !chat) throw chatError || new Error('Failed to create chat')
+
+      // Add the first message
+      const { error: messageError } = await supabase
+        .from('messages')
+        .insert([{
+          chat_id: chat.id,
+          content: firstMessage,
+          role: 'user',
+          created_at: new Date().toISOString()
+        }])
+
+      if (messageError) {
+        // If message creation fails, delete the chat
+        await supabase.from('chats').delete().eq('id', chat.id)
+        throw messageError
+      }
+
+      // Update the chats list and set current chat
+      setChats(prev => [chat, ...prev])
+      setCurrentChat(chat)
+      await loadMessages(chat.id)
+      return chat
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to create chat')
+      throw err
     } finally {
       setIsLoading(false)
     }
@@ -109,12 +179,13 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/chat/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId, title }),
-      })
-      if (!response.ok) throw new Error('Failed to update chat title')
+      const { error } = await supabase
+        .from('chats')
+        .update({ title })
+        .eq('id', chatId)
+
+      if (error) throw error
+
       setChats(prev => prev.map(chat => 
         chat.id === chatId ? { ...chat, title } : chat
       ))
@@ -132,12 +203,22 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setIsLoading(true)
     setError(null)
     try {
-      const response = await fetch('/api/chat/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chatId }),
-      })
-      if (!response.ok) throw new Error('Failed to delete chat')
+      // Delete messages first (due to foreign key constraint)
+      const { error: messagesError } = await supabase
+        .from('messages')
+        .delete()
+        .eq('chat_id', chatId)
+
+      if (messagesError) throw messagesError
+
+      // Then delete the chat
+      const { error: chatError } = await supabase
+        .from('chats')
+        .delete()
+        .eq('id', chatId)
+
+      if (chatError) throw chatError
+
       setChats(prev => prev.filter(chat => chat.id !== chatId))
       if (currentChat?.id === chatId) {
         setCurrentChat(null)
@@ -151,22 +232,14 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    const loadChats = async () => {
-      setIsLoading(true)
-      setError(null)
-      try {
-        const response = await fetch('/api/chat/list')
-        if (!response.ok) throw new Error('Failed to load chats')
-        const data = await response.json()
-        setChats(data.chats)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load chats')
-      } finally {
-        setIsLoading(false)
-      }
+    if (user) {
+      loadChats()
+    } else {
+      setChats([])
+      setCurrentChat(null)
+      setMessages([])
     }
-    loadChats()
-  }, [])
+  }, [user])
 
   const value = {
     chats,
