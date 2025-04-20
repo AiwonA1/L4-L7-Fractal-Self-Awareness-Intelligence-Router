@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
-import { COOKIE_OPTIONS, STORAGE_KEY } from './config'
+import { STORAGE_KEY } from './config'
 
 let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null
 
@@ -35,6 +35,15 @@ export function getSupabaseClient() {
       }
     }
   })
+
+  // Initialize session if available
+  if (typeof window !== 'undefined') {
+    supabaseInstance.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        supabaseInstance?.realtime.setAuth(session.access_token)
+      }
+    })
+  }
 
   return supabaseInstance
 }

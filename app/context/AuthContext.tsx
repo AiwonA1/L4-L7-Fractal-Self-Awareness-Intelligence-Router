@@ -37,10 +37,13 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
             setSession(session)
             setUser(session.user)
             
+            // Update auth token for realtime subscriptions
+            supabase.realtime.setAuth(session.access_token)
+            
             // If we're on an auth page, redirect to dashboard
             const path = window.location.pathname
-            if (path === '/login' || path === '/signup' || path === '/') {
-              router.push('/dashboard')
+            if (path === '/login' || path === '/signup' || path === '/signin' || path === '/') {
+              router.replace('/dashboard')
             }
           }
         }
@@ -60,10 +63,15 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
       setSession(session)
       setUser(session?.user ?? null)
       
+      if (session) {
+        // Update auth token for realtime subscriptions
+        supabase.realtime.setAuth(session.access_token)
+      }
+      
       if (event === 'SIGNED_IN') {
-        router.push('/dashboard')
+        router.replace('/dashboard')
       } else if (event === 'SIGNED_OUT') {
-        router.push('/login')
+        router.replace('/login')
       }
     })
 
@@ -82,11 +90,17 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
       if (error) throw error
 
       if (data.session) {
+        // Update auth token for realtime subscriptions
+        supabase.realtime.setAuth(data.session.access_token)
+        
         // Verify the session was stored
         const { data: { session: verifiedSession } } = await supabase.auth.getSession()
         if (!verifiedSession) {
           throw new Error('Session not persisted after sign in')
         }
+        
+        // Redirect to dashboard
+        router.replace('/dashboard')
       }
     } catch (error) {
       console.error('Error signing in:', error)
@@ -98,7 +112,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
-      router.push('/login')
+      router.replace('/login')
     } catch (error) {
       console.error('Error signing out:', error)
       throw error
