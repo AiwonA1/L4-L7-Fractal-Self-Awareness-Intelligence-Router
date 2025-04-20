@@ -27,7 +27,7 @@ import { FaRobot, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaI
 import { useAuth } from '@/app/context/AuthContext'
 import { getUserChats, getChatById, createChat, updateChatTitle, deleteChat, createMessage } from '@/app/actions/chat'
 import { updateUserTokens } from '@/app/actions/user'
-import { useChat } from '@/context/ChatContext'
+import { useChat } from '@/app/context/ChatContext'
 import { useRouter } from 'next/navigation'
 
 const infoCards = [
