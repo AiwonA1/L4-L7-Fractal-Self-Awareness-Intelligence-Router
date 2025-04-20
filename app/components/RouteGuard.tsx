@@ -9,7 +9,7 @@ interface RouteGuardProps {
 }
 
 const publicRoutes = ['/about', '/contact', '/privacy-policy']
-const authRoutes = ['/signin', '/signup', '/login']
+const authRoutes = ['/login', '/signup', '/forgot-password']
 
 export function RouteGuard({ children }: RouteGuardProps) {
   const { user, isLoading } = useAuth()
@@ -32,7 +32,7 @@ export function RouteGuard({ children }: RouteGuardProps) {
     } else {
       // Non-logged in users can only access public and auth routes
       if (!isPublicRoute && !isAuthRoute) {
-        router.replace('/signin')
+        router.replace('/login')
         return
       }
     }
