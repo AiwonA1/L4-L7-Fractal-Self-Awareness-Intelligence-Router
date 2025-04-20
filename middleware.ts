@@ -14,6 +14,7 @@ export async function middleware(req: NextRequest) {
 
     // Handle authentication for protected routes
     const isAuthPage = req.nextUrl.pathname.startsWith('/login') || 
+                      req.nextUrl.pathname.startsWith('/signin') ||
                       req.nextUrl.pathname.startsWith('/signup') ||
                       req.nextUrl.pathname.startsWith('/auth')
     
@@ -23,6 +24,14 @@ export async function middleware(req: NextRequest) {
 
     const isRootPath = req.nextUrl.pathname === '/'
 
+    console.log('Route check:', {
+      path: req.nextUrl.pathname,
+      isAuthPage,
+      isProtectedRoute,
+      isRootPath,
+      hasSession: !!session
+    })
+
     // If user is logged in and on root path, redirect to dashboard
     if (isRootPath && session) {
       return NextResponse.redirect(new URL('/dashboard', req.url))
@@ -30,12 +39,14 @@ export async function middleware(req: NextRequest) {
 
     // If user is logged in and trying to access auth pages, redirect to dashboard
     if (isAuthPage && session) {
+      console.log('Authenticated user trying to access auth page, redirecting to dashboard')
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
     // If user is not logged in and trying to access protected routes, redirect to login
     if (isProtectedRoute && !session) {
-      return NextResponse.redirect(new URL('/login', req.url))
+      console.log('Unauthenticated user trying to access protected route, redirecting to signin')
+      return NextResponse.redirect(new URL('/signin', req.url))
     }
 
     return res
