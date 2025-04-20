@@ -25,7 +25,7 @@ import {
 import Link from 'next/link'
 import { FaRobot, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaUser, FaEdit, FaCopy } from 'react-icons/fa'
 import { useAuth } from '@/app/context/AuthContext'
-import { getUserChats, getChatById, createChat, updateChatTitle, deleteChat, createMessage } from '@/app/actions/chat'
+import { getUserChats, getChatById, updateChatTitle as updateChatTitleAction, deleteChat as deleteChatAction, createMessage } from '@/app/actions/chat'
 import { updateUserTokens } from '@/app/actions/user'
 import { useChat } from '@/app/context/ChatContext'
 import { useRouter } from 'next/navigation'
@@ -104,13 +104,13 @@ export default function Dashboard() {
   const { user } = useAuth()
   const { 
     chats,
-    selectedChat,
+    currentChat,
     messages,
     isLoading,
     error,
     loadChats,
     loadMessages,
-    createChat,
+    createNewChat,
     sendMessage,
     updateChatTitle,
     deleteChat
@@ -139,14 +139,31 @@ export default function Dashboard() {
     e.preventDefault()
     if (!newMessage.trim()) return
 
-    await sendMessage(newMessage, 'user')
-    setNewMessage('')
+    try {
+      await sendMessage(newMessage)
+      setNewMessage('')
+    } catch (err) {
+      toast({
+        title: 'Error sending message',
+        description: err instanceof Error ? err.message : 'Failed to send message',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
+    }
   }
 
   const handleCreateChat = async () => {
-    const chat = await createChat('New Chat', 'Hello!')
-    if (chat) {
-      await loadMessages(chat.id)
+    try {
+      await createNewChat('New Chat', 'Hello!')
+    } catch (err) {
+      toast({
+        title: 'Error creating chat',
+        description: err instanceof Error ? err.message : 'Failed to create chat',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      })
     }
   }
 
@@ -259,11 +276,11 @@ export default function Dashboard() {
                   p={2}
                   borderRadius="md"
                   cursor="pointer"
-                  bg={selectedChat?.id === chat.id ? sidebarHoverBg : 'transparent'}
+                  bg={currentChat?.id === chat.id ? sidebarHoverBg : 'transparent'}
                   _hover={{ bg: sidebarHoverBg }}
                   onClick={() => loadMessages(chat.id)}
                   borderWidth="1px"
-                  borderColor={selectedChat?.id === chat.id ? 'teal.500' : 'transparent'}
+                  borderColor={currentChat?.id === chat.id ? 'teal.500' : 'transparent'}
                 >
                   <HStack justify="space-between">
                       <Text fontWeight="medium" fontSize="sm" color={sidebarTextColor} noOfLines={2}>
