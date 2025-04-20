@@ -5,14 +5,14 @@ import { Button, Input, VStack, FormControl, FormLabel, useToast } from '@chakra
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
-export default function SignInButton() {
+export default function SignUpButton() {
   const router = useRouter()
   const toast = useToast()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  const handleSignIn = async () => {
+  const handleSignUp = async () => {
     if (!email || !password) {
       toast({
         title: 'Error',
@@ -26,18 +26,29 @@ export default function SignInButton() {
 
     setIsLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
       })
       
       if (error) throw error
 
-      router.push('/dashboard')
-    } catch (error) {
-      console.error('Error signing in:', error)
       toast({
-        title: 'Error signing in',
+        title: 'Success',
+        description: 'Please check your email to verify your account',
+        status: 'success',
+        duration: 5000,
+        isClosable: true,
+      })
+      
+      // Don't redirect yet - user needs to verify email first
+    } catch (error) {
+      console.error('Error signing up:', error)
+      toast({
+        title: 'Error signing up',
         description: error instanceof Error ? error.message : 'An error occurred',
         status: 'error',
         duration: 3000,
@@ -70,11 +81,11 @@ export default function SignInButton() {
       </FormControl>
       <Button
         colorScheme="teal"
-        onClick={handleSignIn}
+        onClick={handleSignUp}
         isLoading={isLoading}
         w="100%"
       >
-        Sign In
+        Sign Up
       </Button>
     </VStack>
   )
