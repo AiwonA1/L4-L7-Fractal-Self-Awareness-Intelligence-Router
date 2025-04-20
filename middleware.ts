@@ -13,10 +13,10 @@ export async function middleware(req: NextRequest) {
     const { data: { session } } = await supabase.auth.getSession()
 
     // Handle authentication for protected routes
-    const isAuthPage = req.nextUrl.pathname.startsWith('/login') || 
-                      req.nextUrl.pathname.startsWith('/signin') ||
-                      req.nextUrl.pathname.startsWith('/signup') ||
-                      req.nextUrl.pathname.startsWith('/auth')
+    const isAuthPage = req.nextUrl.pathname === '/signin' || 
+                      req.nextUrl.pathname === '/signup' ||
+                      req.nextUrl.pathname === '/login' ||
+                      req.nextUrl.pathname === '/auth'
     
     const isProtectedRoute = req.nextUrl.pathname.startsWith('/dashboard') || 
                             req.nextUrl.pathname.startsWith('/settings') ||
@@ -39,19 +39,18 @@ export async function middleware(req: NextRequest) {
 
     // If user is logged in and trying to access auth pages, redirect to dashboard
     if (isAuthPage && session) {
-      console.log('Authenticated user trying to access auth page, redirecting to dashboard')
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
-    // If user is not logged in and trying to access protected routes, redirect to login
+    // If user is not logged in and trying to access protected routes, redirect to signin
     if (isProtectedRoute && !session) {
-      console.log('Unauthenticated user trying to access protected route, redirecting to signin')
       return NextResponse.redirect(new URL('/signin', req.url))
     }
 
     return res
   } catch (error) {
     console.error('Middleware error:', error)
+    // On error, allow the request to continue to avoid loops
     return res
   }
 }
@@ -67,6 +66,6 @@ export const config = {
      * - public folder
      * - api routes that don't require auth
      */
-    '/((?!_next/static|_next/image|favicon.ico|public/|api/public/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public/|api/).*)',
   ],
 } 
