@@ -4,6 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { CookieOptions } from '@supabase/ssr'
 import { redirect } from 'next/navigation'
+import { LayoutContent } from './components/LayoutContent'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -48,7 +49,9 @@ export default async function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <Providers initialSession={session}>
-          {children}
+          <LayoutContent>
+            {children}
+          </LayoutContent>
         </Providers>
       </body>
     </html>

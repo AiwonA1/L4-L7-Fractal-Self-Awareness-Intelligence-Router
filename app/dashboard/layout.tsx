@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import DashboardLayout from './components/DashboardLayout'
+import { Box } from '@chakra-ui/react'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -29,5 +29,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   }, [router])
 
-  return <DashboardLayout>{children}</DashboardLayout>
+  return (
+    <Box minH="calc(100vh - 5rem)" py={8}>
+      {children}
+    </Box>
+  )
 } 
