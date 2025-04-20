@@ -28,6 +28,11 @@ export function getSupabaseClient() {
       headers: {
         'X-Client-Info': 'supabase-js-v2'
       }
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10
+      }
     }
   })
 
@@ -38,17 +43,30 @@ export function getSupabaseClient() {
 export const supabase = getSupabaseClient()
 
 // Add a listener for auth state changes
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && supabase) {
   supabase.auth.onAuthStateChange((event, session) => {
     console.log('Auth state changed:', event, session?.user?.id)
+    
+    // Update the auth token for realtime subscriptions
+    if (session) {
+      supabase.realtime.setAuth(session.access_token)
+    }
   })
 }
 
 // Helper function to get user session
 export const getSession = async () => {
+  if (!supabase) return null
+  
   try {
     const { data: { session }, error } = await supabase.auth.getSession()
     if (error) throw error
+    
+    // Update the auth token for realtime subscriptions
+    if (session) {
+      supabase.realtime.setAuth(session.access_token)
+    }
+    
     return session
   } catch (error) {
     console.error('Session error:', error)
