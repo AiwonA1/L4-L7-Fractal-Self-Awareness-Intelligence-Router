@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
+import { supabase } from '@/lib/supabase/client'
 import { Box, Button, Container, Heading, Text, VStack, useToast } from '@chakra-ui/react'
 import { Session } from '@supabase/supabase-js'
 
