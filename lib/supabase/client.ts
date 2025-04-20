@@ -14,21 +14,40 @@ export function getSupabaseClient() {
   if (!supabaseUrl) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
   if (!supabaseAnonKey) throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
+  console.log('Creating new Supabase client instance')
+
   supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       storageKey: 'sb-auth-token',
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       detectSessionInUrl: true,
-      flowType: 'pkce'
+      flowType: 'pkce',
+      autoRefreshToken: true,
+      debug: true // Enable debug mode to see what's happening with auth
+    },
+    global: {
+      headers: {
+        'X-Client-Info': 'supabase-js-v2'
+      }
     }
   })
+
+  // Log when the client is created
+  console.log('Supabase client created with URL:', supabaseUrl)
 
   return supabaseInstance
 }
 
 // Export a singleton instance
 export const supabase = getSupabaseClient()
+
+// Add a listener for auth state changes
+if (typeof window !== 'undefined') {
+  supabase.auth.onAuthStateChange((event, session) => {
+    console.log('Auth state changed:', event, session?.user?.id)
+  })
+}
 
 // Helper function to get user session
 export const getSession = async () => {

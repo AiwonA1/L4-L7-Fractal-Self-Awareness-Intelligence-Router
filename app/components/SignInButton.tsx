@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { Button, Input, VStack, FormControl, FormLabel, useToast } from '@chakra-ui/react'
+import { useState, useEffect } from 'react'
+import { Button, Input, VStack, FormControl, FormLabel, useToast, Text, Link } from '@chakra-ui/react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
 
@@ -11,6 +11,18 @@ export default function SignInButton() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Check for existing session on mount
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        console.log('Existing session found:', session.user.id)
+        router.push('/dashboard')
+      }
+    }
+    checkSession()
+  }, [router])
 
   const handleSignIn = async () => {
     if (!email || !password) {
@@ -26,14 +38,65 @@ export default function SignInButton() {
 
     setIsLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log('Attempting sign in with email:', email)
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       })
       
-      if (error) throw error
+      if (error) {
+        console.error('Sign in error:', error.message)
+        if (error.message === 'Invalid login credentials') {
+          toast({
+            title: 'Error signing in',
+            description: 'Invalid email or password. Please try again.',
+            status: 'error',
+            duration: 5000,
+            isClosable: true,
+          })
+        } else if (error.message.includes('Email not confirmed')) {
+          toast({
+            title: 'Email not verified',
+            description: 'Please check your email and verify your account before signing in.',
+            status: 'warning',
+            duration: 5000,
+            isClosable: true,
+          })
+        } else {
+          throw error
+        }
+        return
+      }
 
-      router.push('/dashboard')
+      if (!data.session) {
+        console.error('No session created after successful sign in')
+        toast({
+          title: 'Error',
+          description: 'No session created. Please try again.',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        })
+        return
+      }
+
+      console.log('Sign in successful, user:', data.session.user.id)
+      
+      // Verify the session was stored
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        console.log('Session verified after sign in')
+        router.push('/dashboard')
+      } else {
+        console.error('Session not found after successful sign in')
+        toast({
+          title: 'Error',
+          description: 'Session not persisted. Please try again.',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        })
+      }
     } catch (error) {
       console.error('Error signing in:', error)
       toast({
@@ -66,6 +129,11 @@ export default function SignInButton() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Enter your password"
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              handleSignIn()
+            }
+          }}
         />
       </FormControl>
       <Button
@@ -76,6 +144,12 @@ export default function SignInButton() {
       >
         Sign In
       </Button>
+      <Text fontSize="sm">
+        Don't have an account? <Link color="teal.500" href="/signup">Sign up</Link>
+      </Text>
+      <Text fontSize="sm">
+        <Link color="teal.500" href="/forgot-password">Forgot password?</Link>
+      </Text>
     </VStack>
   )
 } 
