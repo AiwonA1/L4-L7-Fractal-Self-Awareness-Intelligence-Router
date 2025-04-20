@@ -18,15 +18,23 @@ export async function middleware(req: NextRequest) {
                       req.nextUrl.pathname.startsWith('/auth')
     
     const isProtectedRoute = req.nextUrl.pathname.startsWith('/dashboard') || 
-                            req.nextUrl.pathname.startsWith('/settings')
+                            req.nextUrl.pathname.startsWith('/settings') ||
+                            req.nextUrl.pathname.startsWith('/profile')
 
-    if (isAuthPage && session) {
-      // Redirect to dashboard if trying to access auth pages while logged in
+    const isRootPath = req.nextUrl.pathname === '/'
+
+    // If user is logged in and on root path, redirect to dashboard
+    if (isRootPath && session) {
       return NextResponse.redirect(new URL('/dashboard', req.url))
     }
 
+    // If user is logged in and trying to access auth pages, redirect to dashboard
+    if (isAuthPage && session) {
+      return NextResponse.redirect(new URL('/dashboard', req.url))
+    }
+
+    // If user is not logged in and trying to access protected routes, redirect to login
     if (isProtectedRoute && !session) {
-      // Redirect to login if trying to access protected routes while logged out
       return NextResponse.redirect(new URL('/login', req.url))
     }
 

@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google'
 import './globals.css'
 import { Providers } from './providers'
 import { LayoutContent } from './components/LayoutContent'
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -52,6 +52,12 @@ export default async function RootLayout({
         get(name: string) {
           return cookieStore.get(name)?.value
         },
+        set(name: string, value: string, options: any) {
+          cookieStore.set(name, value, options)
+        },
+        remove(name: string, options: any) {
+          cookieStore.delete(name, options)
+        },
       },
     }
   )
@@ -67,7 +73,7 @@ export default async function RootLayout({
         <link rel="apple-touch-icon" href="/fractiverse-logo.svg" />
       </head>
       <body className={inter.className}>
-        <Providers>
+        <Providers initialSession={session}>
           <LayoutContent>
             {children}
           </LayoutContent>
