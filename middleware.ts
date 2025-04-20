@@ -1,44 +1,37 @@
-import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { NextResponse, type NextRequest } from 'next/server'
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import type { Database } from '@/types/supabase'
 
-export async function middleware(request: NextRequest) {
-  let response = NextResponse.next({
-    request: {
-      headers: request.headers,
-    },
-  })
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next()
+  const supabase = createMiddlewareClient<Database>({ req, res })
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-        },
-        remove(name: string, options: CookieOptions) {
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-        },
-      },
-    }
-  )
+  // Refresh session if expired
+  const { data: { session }, error } = await supabase.auth.getSession()
 
-  await supabase.auth.getSession()
+  // Handle authentication for protected routes
+  const isAuthPage = req.nextUrl.pathname.startsWith('/login') || 
+                    req.nextUrl.pathname.startsWith('/signup') ||
+                    req.nextUrl.pathname.startsWith('/auth')
+  
+  const isProtectedRoute = req.nextUrl.pathname.startsWith('/dashboard') || 
+                          req.nextUrl.pathname.startsWith('/settings')
 
-  return response
+  if (isAuthPage && session) {
+    // Redirect to dashboard if trying to access auth pages while logged in
+    return NextResponse.redirect(new URL('/dashboard', req.url))
+  }
+
+  if (isProtectedRoute && !session) {
+    // Redirect to login if trying to access protected routes while logged out
+    return NextResponse.redirect(new URL('/login', req.url))
+  }
+
+  return res
 }
 
+// Specify which routes should trigger this middleware
 export const config = {
   matcher: [
     /*
@@ -47,7 +40,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
+     * - api routes that don't require auth
      */
-    '/((?!_next/static|_next/image|favicon.ico|public/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public/|api/public/).*)',
   ],
 } 

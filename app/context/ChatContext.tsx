@@ -42,22 +42,28 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [currentChat, setCurrentChat] = useState<Chat | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { user } = useAuth()
+  const { user, session } = useAuth()
 
   const loadChats = async () => {
-    if (!user) return
+    if (!user || !session) return
     setIsLoading(true)
     setError(null)
     try {
       const { data: chats, error } = await supabase
         .from('chats')
-        .select('*')
+        .select(`
+          *,
+          messages (
+            *
+          )
+        `)
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+        .order('updated_at', { ascending: false })
 
       if (error) throw error
       setChats(chats || [])
     } catch (err) {
+      console.error('Error loading chats:', err)
       setError(err instanceof Error ? err.message : 'Failed to load chats')
     } finally {
       setIsLoading(false)
@@ -65,33 +71,62 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   }
 
   const loadMessages = async (chatId: string) => {
+    if (!user || !session) return
     setIsLoading(true)
     setError(null)
     try {
-      // First verify chat ownership
-      const { data: chat, error: chatError } = await supabase
-        .from('chats')
-        .select('*')
-        .eq('id', chatId)
-        .single()
-
-      if (chatError || !chat) throw new Error('Chat not found')
-
-      const { data: messages, error: messagesError } = await supabase
+      const { data: messages, error } = await supabase
         .from('messages')
         .select('*')
         .eq('chat_id', chatId)
         .order('created_at', { ascending: true })
 
-      if (messagesError) throw messagesError
+      if (error) throw error
       setMessages(messages || [])
-      setCurrentChat(chat)
     } catch (err) {
+      console.error('Error loading messages:', err)
       setError(err instanceof Error ? err.message : 'Failed to load messages')
     } finally {
       setIsLoading(false)
     }
   }
+
+  // Subscribe to chat updates when user is authenticated
+  useEffect(() => {
+    if (!user || !session) return
+
+    const chatSubscription = supabase
+      .channel('chat-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'chats',
+          filter: `user_id=eq.${user.id}`
+        },
+        (payload) => {
+          console.log('Chat update received:', payload)
+          loadChats()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      chatSubscription.unsubscribe()
+    }
+  }, [user, session])
+
+  // Load initial chats when user is authenticated
+  useEffect(() => {
+    if (user && session) {
+      loadChats()
+    } else {
+      setChats([])
+      setCurrentChat(null)
+      setMessages([])
+    }
+  }, [user, session])
 
   const sendMessage = async (content: string) => {
     if (!currentChat || !user) return
@@ -230,16 +265,6 @@ export function ChatProvider({ children }: { children: ReactNode }) {
       setIsLoading(false)
     }
   }
-
-  useEffect(() => {
-    if (user) {
-      loadChats()
-    } else {
-      setChats([])
-      setCurrentChat(null)
-      setMessages([])
-    }
-  }, [user])
 
   const value = {
     chats,

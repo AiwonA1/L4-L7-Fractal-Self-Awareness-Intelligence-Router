@@ -1,51 +1,46 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { RealtimeChannel } from '@supabase/supabase-js'
-import { Database } from '@/types/supabase'
+import { type Database } from '@/types/supabase'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables')
+// Create a single instance of the Supabase client for client-side usage
+export const createClient = () => {
+  return createClientComponentClient<Database>()
 }
 
-// Create Supabase client for browser
-export const supabase = createBrowserClient<Database>(
-  supabaseUrl,
-  supabaseAnonKey,
-  {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-      flowType: 'pkce'
-    },
-    global: {
-      headers: {
-        'x-application-name': 'fractiverse'
-      }
-    }
-  }
-)
+// Export a singleton instance
+export const supabase = createClient()
 
-// Helper function to get user session with retries
-export const getSession = async (retries = 3) => {
-  for (let i = 0; i < retries; i++) {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      if (error) throw error
-      return session
-    } catch (error) {
-      console.error(`Session error (attempt ${i + 1}/${retries}):`, error)
-      if (i === retries - 1) return null
-      await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)))
-    }
+// Helper function to get user session
+export const getSession = async () => {
+  try {
+    const { data: { session }, error } = await supabase.auth.getSession()
+    if (error) throw error
+    return session
+  } catch (error) {
+    console.error('Session error:', error)
+    return null
   }
-  return null
+}
+
+// Helper function to get user profile
+export const getUserProfile = async (userId: string) => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .single()
+    
+    if (error) throw error
+    return data
+  } catch (error) {
+    console.error('Profile error:', error)
+    return null
+  }
 }
 
 // Helper function to get user profile with retries
-export const getUserProfile = async (userId: string, retries = 3) => {
+export const getUserProfileWithRetries = async (userId: string, retries = 3) => {
   for (let i = 0; i < retries; i++) {
     try {
       const { data, error } = await supabase
