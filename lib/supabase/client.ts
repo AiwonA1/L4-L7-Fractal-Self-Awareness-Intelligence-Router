@@ -14,17 +14,15 @@ export function getSupabaseClient() {
   if (!supabaseUrl) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
   if (!supabaseAnonKey) throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
-  console.log('Creating new Supabase client instance')
-
   supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
-      storageKey: 'sb-auth-token',
+      storageKey: STORAGE_KEY,
       storage: typeof window !== 'undefined' ? window.localStorage : undefined,
       detectSessionInUrl: true,
       flowType: 'pkce',
       autoRefreshToken: true,
-      debug: true // Enable debug mode to see what's happening with auth
+      debug: true
     },
     global: {
       headers: {
@@ -32,9 +30,6 @@ export function getSupabaseClient() {
       }
     }
   })
-
-  // Log when the client is created
-  console.log('Supabase client created with URL:', supabaseUrl)
 
   return supabaseInstance
 }

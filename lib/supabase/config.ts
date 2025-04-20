@@ -9,4 +9,4 @@ export const COOKIE_OPTIONS = {
   maxAge: 60 * 60 * 24 * 365, // 1 year
 } as const
 
-export const STORAGE_KEY = 'sb-' + (process.env.NEXT_PUBLIC_SUPABASE_URL || '').split('//')[1].split('.')[0] 
+export const STORAGE_KEY = 'sb-auth-token' 
