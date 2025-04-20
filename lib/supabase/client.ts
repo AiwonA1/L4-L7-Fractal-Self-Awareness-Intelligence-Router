@@ -1,14 +1,17 @@
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { RealtimeChannel } from '@supabase/supabase-js'
-import { type Database } from '@/types/supabase'
+import type { Database } from '@/types/supabase'
 
-// Create a single instance of the Supabase client for client-side usage
-export const createClient = () => {
-  return createClientComponentClient<Database>()
-}
-
-// Export a singleton instance
-export const supabase = createClient()
+// Create the Supabase client instance
+export const supabase = createClientComponentClient<Database>({
+  cookieOptions: {
+    name: 'sb-auth-token',
+    domain: typeof window !== 'undefined' ? window.location.hostname : '',
+    path: '/',
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  }
+})
 
 // Helper function to get user session
 export const getSession = async () => {
