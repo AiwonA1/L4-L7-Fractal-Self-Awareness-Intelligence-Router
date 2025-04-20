@@ -3,54 +3,85 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Database } from '@/types/supabase'
 
+// Keep track of redirects to prevent loops
+const MAX_REDIRECTS = 3
+const redirectCount = new Map<string, number>()
+
 export async function middleware(req: NextRequest) {
+  // Get or initialize redirect count for this request ID
+  const requestId = req.headers.get('x-request-id') || req.url
+  const currentCount = redirectCount.get(requestId) || 0
+
+  // Check for redirect loops
+  if (currentCount >= MAX_REDIRECTS) {
+    console.error('Max redirects reached for:', requestId, 'Path:', req.nextUrl.pathname)
+    redirectCount.delete(requestId)
+    return NextResponse.next()
+  }
+
   const res = NextResponse.next()
   
   try {
     const supabase = createMiddlewareClient<Database>({ req, res })
+    const {
+      data: { session },
+      error: sessionError
+    } = await supabase.auth.getSession()
 
-    // Refresh session if expired
-    const { data: { session } } = await supabase.auth.getSession()
+    if (sessionError) {
+      console.error('Session error:', sessionError)
+      return res
+    }
 
-    // Handle authentication for protected routes
-    const isAuthPage = req.nextUrl.pathname === '/signin' || 
-                      req.nextUrl.pathname === '/signup' ||
-                      req.nextUrl.pathname === '/login' ||
-                      req.nextUrl.pathname === '/auth'
-    
-    const isProtectedRoute = req.nextUrl.pathname.startsWith('/dashboard') || 
-                            req.nextUrl.pathname.startsWith('/settings') ||
-                            req.nextUrl.pathname.startsWith('/profile')
+    // Define routes
+    const publicRoutes = ['/', '/about', '/contact', '/privacy-policy']
+    const authRoutes = ['/signin', '/signup', '/login', '/auth']
+    const protectedRoutes = ['/dashboard', '/settings', '/profile']
 
-    const isRootPath = req.nextUrl.pathname === '/'
+    const currentPath = req.nextUrl.pathname
+    const isAuthRoute = authRoutes.includes(currentPath)
+    const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route))
+    const isPublicRoute = publicRoutes.includes(currentPath)
 
     console.log('Route check:', {
-      path: req.nextUrl.pathname,
-      isAuthPage,
+      path: currentPath,
+      isAuthRoute,
       isProtectedRoute,
-      isRootPath,
-      hasSession: !!session
+      isPublicRoute,
+      hasSession: !!session,
+      redirectCount: currentCount
     })
 
-    // If user is logged in and on root path, redirect to dashboard
-    if (isRootPath && session) {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
+    let redirectUrl: string | null = null
+
+    // Determine redirect based on session state and current route
+    if (session) {
+      // Logged in users
+      if (isAuthRoute) {
+        redirectUrl = '/dashboard'
+      }
+    } else {
+      // Not logged in users
+      if (isProtectedRoute) {
+        redirectUrl = '/signin'
+      }
     }
 
-    // If user is logged in and trying to access auth pages, redirect to dashboard
-    if (isAuthPage && session) {
-      return NextResponse.redirect(new URL('/dashboard', req.url))
+    // If redirect is needed, increment counter and redirect
+    if (redirectUrl) {
+      redirectCount.set(requestId, currentCount + 1)
+      console.log('Redirecting to:', redirectUrl, 'Count:', currentCount + 1)
+      return NextResponse.redirect(new URL(redirectUrl, req.url))
     }
 
-    // If user is not logged in and trying to access protected routes, redirect to signin
-    if (isProtectedRoute && !session) {
-      return NextResponse.redirect(new URL('/signin', req.url))
-    }
-
+    // No redirect needed, clear counter
+    redirectCount.delete(requestId)
     return res
+
   } catch (error) {
     console.error('Middleware error:', error)
-    // On error, allow the request to continue to avoid loops
+    // On error, clear counter and continue
+    redirectCount.delete(requestId)
     return res
   }
 }
@@ -64,8 +95,8 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      * - public folder
-     * - api routes that don't require auth
+     * - api routes
      */
-    '/((?!_next/static|_next/image|favicon.ico|public/|api/).*)',
+    '/((?!_next/static|_next/image|favicon.ico|public|api|assets).*)',
   ],
 } 
