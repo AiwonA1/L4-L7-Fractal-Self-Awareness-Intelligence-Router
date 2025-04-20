@@ -266,9 +266,9 @@ export default function Dashboard() {
                   borderColor={selectedChat?.id === chat.id ? 'teal.500' : 'transparent'}
                 >
                   <HStack justify="space-between">
-                    <Text fontWeight="medium" fontSize="sm" color={sidebarTextColor} noOfLines={2}>
-                      {chat.title}
-                    </Text>
+                      <Text fontWeight="medium" fontSize="sm" color={sidebarTextColor} noOfLines={2}>
+                        {chat.title}
+                      </Text>
                     <HStack spacing={1}>
                       <Tooltip label="Delete chat" placement="top">
                         <IconButton
