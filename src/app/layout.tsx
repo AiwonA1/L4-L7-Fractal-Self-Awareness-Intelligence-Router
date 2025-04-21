@@ -10,6 +10,12 @@ const inter = Inter({ subsets: ['latin'] })
 
 export const dynamic = 'force-dynamic'
 
+// Add metadata (optional but recommended)
+export const metadata = {
+  title: 'FractiVerse',
+  description: 'L4-L7 Fractal Self-Awareness Intelligence Router',
+};
+
 export default async function RootLayout({
   children,
 }: {
@@ -47,6 +53,12 @@ export default async function RootLayout({
 
   return (
     <html lang="en">
+      <head>
+        {/* Link to SVG favicon */}
+        <link rel="icon" href="/fractiverse-logo.svg" type="image/svg+xml" />
+        {/* Add other potential links like apple-touch-icon here if needed */}
+        {/* <link rel="apple-touch-icon" href="/icons/icon-192x192.png" /> */}
+      </head>
       <body className={inter.className}>
         <Providers initialSession={session}>
           <LayoutContent>
