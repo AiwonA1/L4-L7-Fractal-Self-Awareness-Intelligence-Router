@@ -13,10 +13,7 @@ export async function getChats(userId: string) {
 
     const { data, error } = await supabase
       .from('chats')
-      .select(`
-        *,
-        messages (*)
-      `)
+      .select('id, title, user_id, updated_at')
       .eq('user_id', userId)
       .order('updated_at', { ascending: false })
 

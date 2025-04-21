@@ -8,9 +8,17 @@ import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@chakra-ui/react'
 
+// Type for the list of chats - only includes fields needed for the list
+interface ChatListItem {
+  id: string;
+  user_id: string;
+  title: string;
+  updated_at: string;
+}
+
 interface ChatContextType {
-  chats: Chat[]
-  currentChat: Chat | null
+  chats: ChatListItem[]
+  currentChat: ChatListItem | null
   messages: Message[]
   isLoading: boolean
   error: Error | null
@@ -25,8 +33,8 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined)
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
   const toast = useToast()
-  const [chats, setChats] = useState<Chat[]>([])
-  const [currentChat, setCurrentChat] = useState<Chat | null>(null)
+  const [chats, setChats] = useState<ChatListItem[]>([])
+  const [currentChat, setCurrentChat] = useState<ChatListItem | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
@@ -78,11 +86,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setError(null)
 
     try {
+      // chatService.getChats now returns the fields matching ChatListItem
       const data = await chatService.getChats(user.id)
-      setChats(data)
+      setChats(data) // This assignment should now be type-compatible
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load chats'))
       console.error('Error loading chats:', err)
+      toast({
+        title: "Error Loading Chats",
+        description: err instanceof Error ? err.message : "Could not load your chat history.",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
     } finally {
       setIsLoading(false)
     }
