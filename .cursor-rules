@@ -3,13 +3,13 @@
 ## Core Development Principles
 
 ### Fundamental Rules
-1. Use plain JavaScript (no TypeScript) for all files
+1. Use TypeScript for all files
 2. Use Chakra UI for layout, components, theming, and responsiveness
 3. Do not use middleware or extra abstraction layers - keep logic simple and direct
-4. Use Supabase JavaScript client directly in the frontend for user auth and chat message storage
-5. Protect OpenAI GPT-4o API key using a single serverless API route (/api/chat)
+4. Use Supabase client directly for authentication and database operations
+5. Protect OpenAI API key (GPT-4 or latest models) using a single serverless API route (/api/chat)
 6. Use Stripe Elements directly for payments and subscriptions via Next.js API routes
-7. Follow clean folder structure: `components/`, `pages/`, `lib/`, and `api/`
+7. Follow Next.js 14 App Router folder structure with src/app directory
 8. Favor clarity over complexity - avoid excessive abstraction
 9. Use functional components and React hooks only
 10. Always show clear loading states for API responses
@@ -20,20 +20,25 @@
 
 ### File Structure
 ```
-/app
-  /components/    # Reusable UI components
-  /pages/         # Page components and routing
-  /lib/          # Shared utilities and helpers
-  /api/          # API routes
-  /styles/       # Chakra UI theme customization
+/src
+  /app
+    /actions/       # Server actions
+    /api/           # API routes
+    /components/    # Reusable UI components
+    /context/       # React context providers
+    /hooks/         # Custom React hooks
+    /lib/           # Shared utilities and helpers
+    /layer/         # Layer-specific pages and components
+    /(pages)/       # Route segments and pages
+    /types/         # TypeScript type definitions
 ```
 
 ### Implementation Examples
 
 1. **Simple Component Structure**
-```javascript
+```typescript
 // ✅ GOOD: Simple functional component
-export function ChatMessage({ message, isLoading }) {
+export function ChatMessage({ message, isLoading }: { message: string, isLoading: boolean }) {
   return (
     <Box p={4} bg={isLoading ? "gray.100" : "white"}>
       {isLoading ? <Spinner /> : message}
@@ -41,20 +46,16 @@ export function ChatMessage({ message, isLoading }) {
   )
 }
 
-// ❌ BAD: Avoid TypeScript and complex patterns
-type MessageProps = {
-  message: IMessage;
-  isLoading: boolean;
-}
-export class ChatMessageComponent extends React.Component<MessageProps> {
+// ❌ BAD: Avoid complex patterns and class components
+class ChatMessageComponent extends React.Component<MessageProps> {
   // ... complex implementation
 }
 ```
 
 2. **Direct API Calls**
-```javascript
+```typescript
 // ✅ GOOD: Simple API route
-export async function POST(req) {
+export async function POST(req: Request) {
   const { message } = await req.json()
   const response = await openai.chat.completions.create({
     messages: [{ role: "user", content: message }],
@@ -70,12 +71,13 @@ const authMiddleware = new AuthMiddleware()
 ```
 
 3. **Supabase Integration**
-```javascript
+```typescript
 // ✅ GOOD: Direct Supabase client usage
-const supabase = createClientComponentClient()
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 
 export function ChatRoom() {
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState<Message[]>([])
+  const supabase = createClientComponentClient()
   
   useEffect(() => {
     const subscription = supabase
@@ -89,7 +91,7 @@ export function ChatRoom() {
   return (
     <VStack spacing={4}>
       {messages.map(msg => (
-        <ChatMessage key={msg.id} message={msg} />
+        <ChatMessage key={msg.id} message={msg.content} isLoading={false} />
       ))}
     </VStack>
   )
@@ -97,7 +99,7 @@ export function ChatRoom() {
 ```
 
 4. **Stripe Integration**
-```javascript
+```typescript
 // ✅ GOOD: Direct Stripe Elements usage
 export function PaymentForm() {
   return (
@@ -112,9 +114,9 @@ export function PaymentForm() {
 ```
 
 5. **Loading States**
-```javascript
+```typescript
 // ✅ GOOD: Clear loading states
-export function SubmitButton({ isLoading }) {
+export function SubmitButton({ isLoading }: { isLoading: boolean }) {
   return (
     <Button
       isLoading={isLoading}
@@ -131,10 +133,11 @@ export function SubmitButton({ isLoading }) {
 ### Technology Stack
 - Next.js 14 with App Router
 - React 18 for UI
+- TypeScript for type safety
 - Chakra UI for styling
-- Supabase for database/real-time
+- Supabase for database/real-time/auth
 - Stripe for payments
-- OpenAI GPT-4 for AI
+- OpenAI API for AI integration
 
 ### Simplicity and Direct Implementation Rules
 
@@ -151,9 +154,9 @@ export function SubmitButton({ isLoading }) {
    - Minimize third-party dependencies
 
 3. **Direct Implementation Patterns**
-```javascript
+```typescript
 // ✅ GOOD: Direct API call
-const handleChat = async (message) => {
+const handleChat = async (message: string) => {
   const response = await fetch('/api/chat', {
     method: 'POST',
     body: JSON.stringify({ message })
@@ -174,9 +177,9 @@ const response = await chatService.processMessage(chatMiddleware.handle(message)
    - Simple prop passing for shallow component trees
 
 5. **Direct Database Access**
-```javascript
+```typescript
 // ✅ GOOD: Direct Supabase query
-const getUser = async (userId) => {
+const getUser = async (userId: string) => {
   const { data, error } = await supabase
     .from('users')
     .select('*')
@@ -197,9 +200,9 @@ class UserRepository {
 ```
 
 6. **API Route Implementation**
-```javascript
+```typescript
 // ✅ GOOD: Simple, direct API route
-export async function POST(req) {
+export async function POST(req: Request) {
   const { message } = await req.json()
   const response = await openai.chat.completions.create({
     messages: [{ role: "user", content: message }],
@@ -221,12 +224,12 @@ class MessageController {
 ```
 
 7. **Component Structure**
-```javascript
+```typescript
 // ✅ GOOD: Simple, functional component
-export function ChatInput({ onSend }) {
+export function ChatInput({ onSend }: { onSend: (message: string) => void }) {
   const [message, setMessage] = useState('')
   
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     onSend(message)
     setMessage('')
@@ -251,9 +254,9 @@ class ChatInputController extends React.Component {
 ```
 
 8. **Payment Processing**
-```javascript
+```typescript
 // ✅ GOOD: Direct Stripe implementation
-export async function POST(req) {
+export async function POST(req: Request) {
   const { amount } = await req.json()
   const session = await stripe.checkout.sessions.create({
     line_items: [{
@@ -278,10 +281,11 @@ class PaymentProcessor {
 ### Technology Stack Requirements
 - Next.js 14 with App Router for the framework
 - React 18 for UI components
+- TypeScript for type safety and developer experience
 - Chakra UI for layout and styling
-- Supabase for database and real-time features
+- Supabase for database, real-time features, and authentication
 - Stripe for payment processing
-- OpenAI GPT-4 for AI integration
+- OpenAI API for AI integration
 
 ### Code Style and Structure
 
@@ -299,22 +303,22 @@ class PaymentProcessor {
 
 3. **File Structure**
 ```
-/app
-  /components     # Reusable UI components
-  /layers         # Layer-specific components (L4-L7)
-  /api           # API routes
-  /lib           # Shared utilities
-  /hooks         # Custom React hooks
-  /context       # React context providers
-  /types         # TypeScript type definitions
-  /styles        # Global styles and themes
+/src
+  /app                # Next.js App Router
+    /components       # Reusable UI components
+    /layers           # Layer-specific components (L4-L7)
+    /api              # API routes
+    /lib              # Shared utilities
+    /hooks            # Custom React hooks
+    /context          # React context providers
+    /types            # TypeScript type definitions
 ```
 
 ### Development Guidelines
 
 1. **Component Development**
    - Each component must be self-contained
-   - Include PropTypes or TypeScript interfaces
+   - Include TypeScript interfaces/types
    - Document quantum/fractal relationships
    - Include loading states for async operations
 
@@ -360,8 +364,8 @@ class PaymentProcessor {
 
 1. **Authentication**
    - Use Supabase Auth for authentication
-   - Keep authentication logic in AuthContext.tsx
-   - Use createClient from @supabase/supabase-js for server-side auth
+   - Keep authentication logic in auth-related contexts
+   - Use createClientComponentClient from @supabase/auth-helpers-nextjs for client-side auth
    - Use createRouteHandlerClient for API routes
    - Store session in cookies using Supabase's built-in cookie management
    - Handle auth state changes with Supabase's onAuthStateChange
@@ -477,7 +481,7 @@ class PaymentProcessor {
    - Protect transaction quantum state
 
 3. **Database Operations**
-   - Use Prisma for type safety
+   - Use Supabase SDK for type safety and consistency
    - Implement optimistic updates
    - Handle errors gracefully
    - Maintain quantum consistency
@@ -622,22 +626,6 @@ CREATE POLICY "Users can view own transactions"
 
 ### 3. Database Functions
 ```sql
--- Function to create chat history table
-CREATE OR REPLACE FUNCTION create_chat_history_table()
-RETURNS void AS $$
-BEGIN
-  -- Implementation here
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to create users table
-CREATE OR REPLACE FUNCTION create_profiles_table()
-RETURNS void AS $$
-BEGIN
-  -- Implementation here
-END;
-$$ LANGUAGE plpgsql;
-
 -- Function to use tokens
 CREATE OR REPLACE FUNCTION use_tokens(
   p_user_id UUID,
@@ -686,9 +674,9 @@ $$ LANGUAGE plpgsql;
 
 ### 4. Client-Side Implementation Examples
 
-```javascript
+```typescript
 // User Authentication
-const handleSignUp = async (email, password, name) => {
+const handleSignUp = async (email: string, password: string, name: string) => {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
@@ -696,6 +684,7 @@ const handleSignUp = async (email, password, name) => {
       data: { name }
     }
   })
+  return { data, error }
 }
 
 // Get User Data
@@ -719,7 +708,7 @@ const getChatHistory = async () => {
 }
 
 // Create New Chat
-const createChat = async (title, initialMessage) => {
+const createChat = async (title: string, initialMessage: any) => {
   const { data, error } = await supabase
     .from('chat_history')
     .insert({
@@ -731,7 +720,7 @@ const createChat = async (title, initialMessage) => {
 }
 
 // Use Tokens
-const useTokens = async (amount, description) => {
+const useTokens = async (amount: number, description: string) => {
   const { data, error } = await supabase
     .rpc('use_tokens', {
       p_amount: amount,
@@ -751,9 +740,9 @@ const getTransactions = async () => {
 ```
 
 ### 5. Real-time Subscriptions
-```javascript
+```typescript
 // Subscribe to token balance changes
-const subscribeToBalance = (userId, onUpdate) => {
+const subscribeToBalance = (userId: string, onUpdate: (balance: number) => void) => {
   const subscription = supabase
     .channel('users_changes')
     .on(
@@ -772,7 +761,7 @@ const subscribeToBalance = (userId, onUpdate) => {
 }
 
 // Subscribe to chat updates
-const subscribeToChatUpdates = (chatId, onUpdate) => {
+const subscribeToChatUpdates = (chatId: string, onUpdate: (chat: any) => void) => {
   const subscription = supabase
     .channel('chat_updates')
     .on(
@@ -792,8 +781,8 @@ const subscribeToChatUpdates = (chatId, onUpdate) => {
 ```
 
 ### 6. Error Handling
-```javascript
-const handleDatabaseError = (error) => {
+```typescript
+const handleDatabaseError = (error: any) => {
   if (error.code === 'PGRST116') {
     console.error('Foreign key violation')
   } else if (error.code === '23514') {

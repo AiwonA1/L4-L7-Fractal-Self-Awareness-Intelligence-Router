@@ -70,7 +70,7 @@ graph LR
     B -- Server-side Rendering / API Calls --> C
 
     C -- Auth API Calls --> E
-    C -- DB Operations (Supabase Client / Prisma?) --> D
+    C -- DB Operations (Supabase Client) --> D
     C -- Payment API Calls --> F
     C -- AI API Calls --> G
 
@@ -231,12 +231,12 @@ STRIPE_PRICE_1000_TOKENS="price_..." # Stripe Price ID for 1000 tokens
 2. **Configure Vercel Project:**
    - Connect your Git repository.
    - Set the Framework Preset to "Next.js".
-   - Ensure Build Command is `npm run build` or similar (Vercel often detects this automatically). The `package.json` has `vercel-build` which likely handles Prisma/DB setup if used during build. Check `vercel.json` if present. *Update: `package.json` does not have `vercel-build`. Default `next build` should work.*
+   - Ensure Build Command is `npm run build` or similar (Vercel often detects this automatically).
    - Add all environment variables listed above.
 3. **Set Up Vercel Postgres:**
    - In the Vercel dashboard (Storage tab), create a new Postgres database.
    - Connect it to your project. Vercel will automatically add `DATABASE_URL` and `DIRECT_URL` environment variables.
-   - Apply database migrations (`supabase/migrations`) if not handled automatically by a build step or manually via Supabase Studio/CLI.
+   - Apply database migrations via Supabase Studio/CLI or equivalent migrations method if needed.
 4. **Configure Stripe Webhooks:**
    - In your Stripe Dashboard (Developers > Webhooks), create an endpoint.
    - Set the Endpoint URL to: `https://your-deployment-name.vercel.app/api/stripe/webhook` (replace with your actual Vercel URL).
