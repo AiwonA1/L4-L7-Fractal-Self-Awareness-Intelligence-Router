@@ -18,12 +18,12 @@ import {
 } from '@chakra-ui/react'
 import { FaUser, FaSignOutAlt, FaCoins, FaBrain, FaBook, FaChartLine } from 'react-icons/fa'
 import { useAuth } from '@/app/context/AuthContext'
-import { TokenPurchaseModal } from './TokenPurchaseModal'
+import TokenPurchaseModal from './TokenPurchaseModal'
 import type { Database } from '@/types/supabase'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { getUserProfile, subscribeToProfile } from '@/lib/supabase/client'
+import { getUserProfileClient } from '@/lib/supabase/client'
 
 type Profile = Database['public']['Tables']['users']['Row']
 
@@ -40,19 +40,21 @@ export default function Header() {
   const [profile, setProfile] = useState<Profile | null>(null)
 
   useEffect(() => {
+    let isMounted = true; // Flag to prevent setting state on unmounted component
+
     if (user?.id) {
-      // Get initial profile
-      getUserProfile(user.id).then(setProfile)
+      // Get initial profile using the correctly imported function
+      getUserProfileClient(user.id).then(profileData => {
+        if (isMounted && profileData) {
+           setProfile(profileData as Profile); // Cast might be needed depending on select query
+        }
+      }).catch(error => {
+        console.error("Error fetching profile in Header:", error);
+      });
+    }
 
-      // Subscribe to profile changes
-      const subscription = subscribeToProfile(user.id, (updatedProfile) => {
-        console.log('Profile updated:', updatedProfile)
-        setProfile(updatedProfile)
-      })
-
-      return () => {
-        subscription.unsubscribe()
-      }
+    return () => {
+      isMounted = false; // Set flag on unmount
     }
   }, [user?.id])
 
@@ -136,7 +138,7 @@ export default function Header() {
                   <Avatar
                     size="sm"
                     name={getUserDisplayName()}
-                    src={profile?.image}
+                    src={profile?.image ?? undefined}
                   />
                 }
                 variant="ghost"
@@ -174,6 +176,10 @@ export default function Header() {
       <TokenPurchaseModal
         isOpen={isOpen}
         onClose={onClose}
+        onPurchase={() => { 
+            // Add actual purchase handling logic here or pass down from parent
+            console.log("Purchase callback triggered from Header"); 
+        }} 
       />
     </>
   )
