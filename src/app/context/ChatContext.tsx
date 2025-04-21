@@ -18,8 +18,6 @@ interface ChatContextType {
   loadMessages: (chatId: string) => Promise<void>
   createNewChat: (title?: string, initialMessage?: string) => Promise<void>
   sendMessage: (content: string, chatIdToSendTo: string) => Promise<void>
-  updateChatTitle: (chatId: string, title: string) => Promise<void>
-  deleteChat: (chatId: string) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -268,15 +266,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             console.log(`Frontend: Received chunk ${++chunkCount}:`, JSON.stringify(chunk));
             currentAssistantContent += chunk;
 
-            if (targetChatId === currentChat?.id) {
-               setMessages((prev) => {
-                   return prev.map((msg) =>
-                      msg.id === assistantMessageId
-                        ? { ...msg, content: currentAssistantContent }
-                        : msg
-                    );
+            setMessages((prev) => {
+                const updatedMessages = prev.map((msg) => {
+                    if (msg.id === assistantMessageId) {
+                        return { ...msg, content: currentAssistantContent };
+                    }
+                    return msg;
                 });
-            }
+                return updatedMessages;
+            });
         }
       }
       console.log(`Frontend: Stream finished. Received ${chunkCount} chunks. Final content length: ${currentAssistantContent.length}`);
@@ -298,79 +296,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           isClosable: true,
         });
          if (targetChatId === currentChat?.id) {
-            setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
+            setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId)); // Keep remove for now
          }
       }
     } finally {
       setIsLoading(false);
     }
   };
-
-  const updateChatTitle = async (chatId: string, title: string) => {
-    if (!user?.id) return
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const { data, error } = await supabase
-        .from('chats')
-        .update({ title })
-        .eq('id', chatId)
-        .eq('user_id', user.id)
-        .select()
-        .single()
-
-      if (error) throw error
-
-      setChats((prev) =>
-        prev.map((chat) => (chat.id === chatId ? { ...chat, title } : chat))
-      )
-      if (currentChat?.id === chatId) {
-        setCurrentChat((prev) => (prev ? { ...prev, title } : null))
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to update chat title'))
-      console.error('Error updating chat title:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const deleteChat = async (chatId: string) => {
-    if (!user?.id) return
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const { error: messagesError } = await supabase
-        .from('messages')
-        .delete()
-        .eq('chat_id', chatId)
-
-      if (messagesError) throw messagesError
-
-      const { error } = await supabase
-        .from('chats')
-        .delete()
-        .eq('id', chatId)
-        .eq('user_id', user.id)
-
-      if (error) throw error
-
-      setChats((prev) => prev.filter((chat) => chat.id !== chatId))
-      if (currentChat?.id === chatId) {
-        setCurrentChat(null)
-        setMessages([])
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to delete chat'))
-      console.error('Error deleting chat:', err)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   const value = {
     chats,
@@ -382,8 +314,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     loadMessages,
     createNewChat,
     sendMessage,
-    updateChatTitle,
-    deleteChat,
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
@@ -395,4 +325,4 @@ export function useChat() {
     throw new Error('useChat must be used within a ChatProvider')
   }
   return context
-} 
+}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Box,
   Container,
@@ -22,6 +22,8 @@ import {
   Divider,
   Tooltip,
   Spinner,
+  Avatar,
+  Spacer,
 } from '@chakra-ui/react'
 import Link from 'next/link'
 import { FaRobot, FaUser, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaEdit, FaCopy } from 'react-icons/fa'
@@ -30,6 +32,7 @@ import { getUserChats, getChatById, updateChatTitle as updateChatTitleAction, de
 import { updateUserTokens } from '@/app/actions/user'
 import { useChat } from '@/app/context/ChatContext'
 import { useRouter } from 'next/navigation'
+import ChakraMarkdown from '@/app/components/ChakraMarkdown'
 
 const infoCards = [
   {
@@ -205,6 +208,57 @@ export default function Dashboard() {
     }
   }
 
+  const handleCopy = useCallback((text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({
+        title: "Copied to clipboard!",
+        status: "success",
+        duration: 2000,
+        isClosable: true,
+        position: "top-right",
+      });
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+      toast({
+        title: "Failed to copy",
+        description: "Could not copy text to clipboard.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+        position: "top-right",
+      });
+    });
+  }, [toast]);
+
+  // Placeholder functions for rename and delete
+  const handleRenameChat = useCallback((chatId: string) => {
+    console.log("Attempting to rename chat:", chatId);
+    // TODO: Implement rename functionality (e.g., open modal, call API)
+    toast({
+      title: "Rename Chat",
+      description: "Rename functionality not yet implemented.",
+      status: "info",
+      duration: 3000,
+      isClosable: true,
+    });
+  }, [toast]);
+
+  const handleDeleteChat = useCallback((chatId: string) => {
+    console.log("Attempting to delete chat:", chatId);
+    // TODO: Implement delete functionality (e.g., confirm, call API, update context)
+     toast({
+      title: "Delete Chat",
+      description: "Delete functionality not yet implemented.",
+      status: "info",
+      duration: 3000,
+      isClosable: true,
+    });
+    // Example of how you might call a delete function from context if it existed:
+    // if (window.confirm("Are you sure you want to delete this chat?")) {
+    //   deleteChat(chatId); // Assuming deleteChat exists in context
+    // }
+  }, [toast]); // Removed deleteChat from dependencies
+
   if (!user?.id) {
     return (
       <Box minH="100vh" bg={bgColor}>
@@ -325,6 +379,20 @@ export default function Dashboard() {
                         {chat.title}
                       </Text>
                     <HStack spacing={1}>
+                      <Tooltip label="Rename chat" placement="top">
+                         <IconButton
+                          aria-label="Rename chat"
+                          icon={<FaEdit />}
+                          size="xs"
+                          variant="ghost"
+                          colorScheme="blue"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            console.log(`TODO: Implement rename for chat ID: ${chat.id}`);
+                            toast({ title: "Rename not implemented yet.", status: "info", duration: 2000 });
+                          }}
+                        />
+                      </Tooltip>
                       <Tooltip label="Delete chat" placement="top">
                         <IconButton
                           aria-label="Delete chat"
@@ -334,7 +402,8 @@ export default function Dashboard() {
                           colorScheme="red"
                           onClick={(e) => {
                             e.stopPropagation()
-                            deleteChat(chat.id)
+                            toast({ title: "Delete not implemented yet.", status: "info", duration: 2000 });
+                            console.log(`TODO: Implement delete for chat ID: ${chat.id}`);
                           }}
                         />
                       </Tooltip>
@@ -352,52 +421,62 @@ export default function Dashboard() {
                 {/* Chat Section */}
                 <Box flex={1} bg={chatBg} borderRadius="lg" p={4} overflowY="auto">
                   <Text color="red.500" fontWeight="bold" mb={4}>We Are Here: Chat Area</Text>
-                  <VStack spacing={4} align="stretch" h="full">
-                    {messages.length === 0 ? (
-                      <Box textAlign="center" py={8}>
-                        <Icon as={FaRobot} w={12} h={12} color="teal.500" mb={4} />
-                        <Heading size="md" mb={2}>Welcome to FractiVerse</Heading>
-                        <Text color={textColor}>Start a conversation to explore the layers of self-awareness intelligence.</Text>
-                      </Box>
-                    ) : (
-                      messages.map((message, index) => {
-                        // Check if this is the last message and we are loading
-                        const isLastMessage = index === messages.length - 1;
-                        const showLoadingIndicator = isLoading && isLastMessage && message.role === 'assistant';
-                        
-                        return (
-                          <Box
-                            key={index} // Consider using message.id if stable client-side IDs are used
-                            p={4}
-                            bg={message.role === 'user' ? userMessageBg : assistantMessageBg}
-                            borderRadius="md"
-                            boxShadow="sm"
-                          >
-                            <Flex direction="column" gap={2}>
-                              <HStack spacing={2} mb={2}>
-                                <Icon
-                                  as={message.role === 'user' ? FaUser : FaRobot}
-                                  color={message.role === 'user' ? 'teal.500' : 'purple.500'}
-                                />
-                                <Text fontWeight="bold">
-                                  {message.role === 'user' ? 'You' : 'FractiVerse AI'}
-                                </Text>
-                              </HStack>
-                              {/* Conditionally render loading indicator or content */}
-                              {showLoadingIndicator ? (
-                                <HStack spacing={2}>
-                                  <Spinner size="sm" color="purple.500" /> 
-                                  <Text fontSize="sm" color="gray.500">Generating response...</Text>
-                                </HStack>
-                              ) : (
-                                <Text whiteSpace="pre-wrap">{message.content}</Text>
+                  {isLoading ? (
+                    <Flex justify="center" align="center" h="full">
+                      <Spinner size="xl" />
+                    </Flex>
+                  ) : messages.length === 0 && currentChat ? (
+                    <Text textAlign="center" color={textColor}>No messages yet. Start the conversation!</Text>
+                  ) : messages.length === 0 && !currentChat ? (
+                    <Text textAlign="center" color={textColor}>Select a chat or start a new one.</Text>
+                  ) : (
+                    <VStack spacing={4} align="stretch">
+                      {messages.map((message) => (
+                        <Box key={message.id} alignSelf={message.role === 'user' ? 'flex-end' : 'flex-start'}>
+                          <HStack align="flex-start">
+                            {message.role === 'assistant' && <Icon as={FaRobot} w={6} h={6} color="teal.500" />}
+                            <Box
+                              bg={message.role === 'user' ? userMessageBg : assistantMessageBg}
+                              px={4} py={2} borderRadius="lg" maxW="80%"
+                            >
+                              <Text color={message.role === 'user' ? userMessageBg : assistantMessageBg}>
+                                {message.content}
+                              </Text>
+                              {/* Copy Button for Assistant Messages */}
+                              {message.role === 'assistant' && (
+                                <Flex justify="flex-end" mt={1}>
+                                  <Tooltip label="Copy message" placement="top">
+                                    <IconButton
+                                      aria-label="Copy message"
+                                      icon={<FaCopy />}
+                                      size="xs"
+                                      variant="ghost"
+                                      colorScheme="gray"
+                                      onClick={() => {
+                                        handleCopy(message.content)
+                                      }}
+                                    />
+                                  </Tooltip>
+                                </Flex>
                               )}
-                            </Flex>
-                          </Box>
-                        )
-                      })
-                    )}
-                  </VStack>
+                            </Box>
+                            {message.role === 'user' && <Icon as={FaUser} w={6} h={6} color="blue.500" />}
+                          </HStack>
+                        </Box>
+                      ))}
+                      {/* Spinner while waiting for response */} 
+                      {isLoading && (
+                        <Box alignSelf="flex-start">
+                           <HStack align="flex-start">
+                            <Icon as={FaRobot} w={6} h={6} color="teal.500" />
+                            <Box bg={assistantMessageBg} px={4} py={2} borderRadius="lg" maxW="80%">
+                              <Spinner size="sm" color={assistantMessageBg} />
+                             </Box>
+                           </HStack>
+                        </Box>
+                      )}
+                    </VStack>
+                  )}
                 </Box>
 
                 {/* Input Section - Remove the general loading text */}

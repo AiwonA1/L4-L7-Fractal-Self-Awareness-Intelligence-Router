@@ -10,26 +10,25 @@ import path from 'path'
 // Assuming vitest runs from the project root
 const envConfig = dotenv.config({ path: '.env.test' })
 
-// Load all parsed variables into process.env
-if (envConfig.parsed) {
-  console.log('[vitest.setup] Loading environment variables from .env.test...');
-  for (const key in envConfig.parsed) {
-    process.env[key] = envConfig.parsed[key];
-  }
+// Check if dotenv found and parsed the file, but let dotenv handle loading into process.env
+if (envConfig.error) {
+  console.warn('[vitest.setup] WARN: Error loading .env.test file:', envConfig.error);
+} else if (!envConfig.parsed) {
+    console.warn('[vitest.setup] WARN: .env.test file found but empty or parsing failed.');
+} else {
+  console.log('[vitest.setup] .env.test file loaded successfully by dotenv.');
   // Log confirmation for specific keys AFTER loading all
-  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    console.log('[vitest.setup] NEXT_PUBLIC_SUPABASE_URL loaded.');
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined) {
+    console.log('[vitest.setup] NEXT_PUBLIC_SUPABASE_URL found in process.env.');
   } else {
-    console.warn('[vitest.setup] WARN: NEXT_PUBLIC_SUPABASE_URL *not* found in process.env after loading.');
+    console.warn('[vitest.setup] WARN: NEXT_PUBLIC_SUPABASE_URL *not* found in process.env after dotenv load.');
   }
   // Explicitly check and log OpenAI API Key status
-  if (process.env.OPENAI_API_KEY) {
-    console.log('[vitest.setup] OpenAI API key loaded into process.env.');
+  if (process.env.OPENAI_API_KEY as string | undefined) {
+    console.log('[vitest.setup] OPENAI_API_KEY found in process.env.');
   } else {
-    console.warn('[vitest.setup] WARN: OPENAI_API_KEY *not* found in process.env after loading.');
+    console.warn('[vitest.setup] WARN: OPENAI_API_KEY *not* found in process.env after dotenv load.');
   }
-} else {
-  console.warn('[vitest.setup] WARN: .env.test file not found or empty.');
 }
 
 // Increase test timeout for network requests
@@ -71,7 +70,8 @@ vi.mock("next/headers", () => ({
         store.delete(name);
       }),
       getAll: vi.fn(() => {
-        return Array.from(store.entries()).map(([name, value]) => ({ name, value }));
+        // Cast entries() to any to bypass iteration type issue with es5 target
+        return Array.from(store.entries() as any) as [string, string][];
       }),
       has: vi.fn((name: string) => {
         return store.has(name);

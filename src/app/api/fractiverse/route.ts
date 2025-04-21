@@ -8,13 +8,17 @@ import { rateLimitCheck } from '@/lib/rate-limit'
 import { streamText, CoreMessage } from 'ai';
 import { openai as vercelOpenAIProvider } from '@ai-sdk/openai'; // Use the provider from the AI SDK
 
+// Get OpenAI API key from environment variables
+const openaiApiKey = process.env.OPENAI_API_KEY as string | undefined;
+
 // Initialize OpenAI instance (apiKey will be checked before use)
 // We still need the OpenAI client for checks, but will use the Vercel provider for the stream call
 let openaiClientCheck: OpenAI | null = null;
 try {
-  if (process.env.OPENAI_API_KEY) {
+  if (openaiApiKey) {
     openaiClientCheck = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: openaiApiKey,
+      dangerouslyAllowBrowser: true
     });
   } else {
     console.warn("OpenAI API key not found in environment variables. OpenAI client not initialized.");
@@ -78,9 +82,9 @@ export async function POST(req: NextRequest) {
            console.warn(`User ID ${userId} provided in request not found in database.`);
            return NextResponse.json({ error: 'User specified in request not found' }, { status: 404 });
       }
-      if (data.token_balance < 10) { // Keep minimum check for initiating call
+      if (!data.token_balance || data.token_balance < 1) {
         return NextResponse.json(
-          { error: 'Insufficient tokens. Minimum 10 tokens required.' },
+          { error: 'Insufficient FractiTokens. You need at least 1 token to send a message.' },
           { status: 400 }
         );
       }
@@ -112,9 +116,9 @@ export async function POST(req: NextRequest) {
     }
     
     // --- Check OpenAI Client ---
-    if (!openaiClientCheck || !openaiClientCheck.apiKey) {
+    if (!openaiClientCheck || !openaiApiKey) {
         console.error('OpenAI client check failed or API key missing. Cannot proceed with API call.')
-        const errorMsg = process.env.OPENAI_API_KEY
+        const errorMsg = openaiApiKey
             ? 'OpenAI client initialization failed despite API key presence. Check constructor/logs.'
             : 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.';
         return NextResponse.json(
@@ -143,13 +147,67 @@ export async function POST(req: NextRequest) {
       messages: coreMessages,
       temperature: 0.7,
       maxTokens: 1000,
+      // Add onFinish callback to log completion details
+      onFinish: async (result) => {
+        console.log("\\u001b[32mBackend: Stream finished.\\u001b[0m", {
+          finishReason: result.finishReason,
+          usage: result.usage,
+          // text: result.text // Contains full text if needed
+        });
+
+        // Token deduction and message saving logic
+        if (result.finishReason === 'stop' || result.finishReason === 'length') {
+          try {
+            // 1. Deduct 1 token using the use_tokens RPC
+            const { data: tokenSuccess, error: tokenError } = await supabaseAdmin.rpc(
+              'use_tokens',
+              {
+                p_user_id: userId!, // Assert non-null as it's checked earlier
+                p_amount: 1,       // Deduct 1 token
+                p_description: `Chat completion for chat ${chatId}`
+              }
+            );
+
+            if (tokenError || !tokenSuccess) {
+              console.error(`Failed to deduct token for user ${userId}, chat ${chatId}:`, tokenError);
+              // Decide if we should proceed with saving message despite token failure
+            } else {
+               console.log(`\\u001b[34mBackend: Token deducted successfully for user ${userId}.\\u001b[0m`);
+            }
+
+            // 2. Save the assistant's message
+            const assistantMessage = result.text; // Get the full text response
+            const { error: saveError } = await supabaseAdmin
+              .from('messages')
+              .insert({
+                chat_id: chatId!, // Assert non-null
+                user_id: userId!, // Assert non-null
+                role: 'assistant',
+                content: assistantMessage
+              });
+
+            if (saveError) {
+              console.error(`Failed to save assistant message for chat ${chatId}:`, saveError);
+              // Handle message saving error (e.g., log, notify)
+            } else {
+                console.log(`\\u001b[34mBackend: Assistant message saved successfully for chat ${chatId}.\\u001b[0m`);
+            }
+
+          } catch (finishError) {
+            console.error('Error during onFinish processing (token deduction/message save):', finishError);
+          }
+        } else {
+          console.warn(`Stream finished with reason '${result.finishReason}', skipping token deduction and message save.`);
+        }
+      },
     });
 
     // --- Return the stream response ---
     return result.toTextStreamResponse();
 
     /* === COMMENTED OUT - Needs rework for streaming ===
-      Token deduction & Message Saving Logic 
+      Token deduction & Message Saving Logic
+      MOVED TO onFinish callback
     */
 
   } catch (error) {
