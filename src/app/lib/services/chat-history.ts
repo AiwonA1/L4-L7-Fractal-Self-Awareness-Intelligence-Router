@@ -1,0 +1,1 @@
+// Service functions for chat history management (using Supabase client) 
