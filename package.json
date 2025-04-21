@@ -51,27 +51,29 @@
     "sharp": "^0.33.2",
     "stripe": "^14.14.0",
     "uuid": "^11.1.0",
-    "zod": "^3.22.4"
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
+    "@testing-library/jest-dom": "^6.4.6",
+    "@testing-library/react": "^16.0.0",
     "@types/node": "^20",
     "@types/node-fetch": "^2.6.12",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "@vitejs/plugin-react": "^4.4.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "@vitest/coverage-v8": "^1.6.0",
     "dotenv": "^16.5.0",
     "eslint": "^8",
-    "eslint-config-next": "14.1.0",
-    "jsdom": "^26.1.0",
+    "eslint-config-next": "14.2.3",
+    "jsdom": "^24.1.0",
     "msw": "^2.7.5",
     "node-fetch": "^2.7.0",
     "prettier": "^3.2.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3",
+    "typescript": "^5",
     "vite-tsconfig-paths": "^5.1.4",
-    "vitest": "^3.1.1"
+    "vitest": "^1.6.0",
+    "@supabase/supabase-js": "^2.43.4"
   }
 }
