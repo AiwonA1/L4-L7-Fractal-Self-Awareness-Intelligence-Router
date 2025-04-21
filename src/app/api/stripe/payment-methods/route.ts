@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient } from '@/lib/supabase/supabase-server'
 import type { Database } from '@/types/supabase'
 import Stripe from 'stripe'
 
