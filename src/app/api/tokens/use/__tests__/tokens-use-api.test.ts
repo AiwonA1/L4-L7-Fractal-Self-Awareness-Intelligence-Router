@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock the admin Supabase client used in this route
-vi.mock('@/lib/supabase-admin', () => ({
+vi.mock('@/lib/supabase/supabase-admin', () => ({
   supabaseAdmin: {
     from: vi.fn(() => ({
       select: vi.fn(() => ({
@@ -18,10 +18,37 @@ vi.mock('@/lib/supabase-admin', () => ({
 }))
 
 // Import AFTER mocking
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { supabaseAdmin } from '@/lib/supabase/supabase-admin'
 // Import the actual handler function to test
-import { POST } from '../src/app/app/api/tokens/use/route'
+import { POST } from '../route'
 import { NextResponse } from 'next/server'
+
+// Mock necessary modules
+// vi.mock('@/lib/supabase-admin');
+// vi.mock('@/lib/openai', () => ({
+//   openai: {
+//     chat: {
+//       completions: {
+//         create: vi.fn(),
+//       },
+//     },
+//   }
+// }));
+// vi.mock('next/headers', () => ({
+//     cookies: vi.fn().mockReturnValue({
+//       get: vi.fn().mockReturnValue({ value: 'test-session-token' }),
+//     }),
+//   }));
+vi.mock('@/lib/supabase-admin');
+vi.mock('@/lib/config/openai', () => ({
+    getOpenAIClient: vi.fn(() => ({ // Mock the function that returns the client
+      chat: {
+        completions: {
+          create: vi.fn(), // Mock the create method
+        },
+      },
+    })),
+  }));
 
 describe('Token Usage API Route (/api/tokens/use)', () => {
   // Get mock instances

@@ -15,7 +15,7 @@ vi.mock('@/lib/supabase-server', () => ({
 // Import AFTER mocking
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 // Import the actual handler functions to test
-import { POST, GET } from '../src/app/app/api/auth/route' // Assuming GET might be tested too
+import { POST, GET } from '../route' // Assuming GET might be tested too
 import { NextResponse } from 'next/server'
 
 describe('Auth API Route (/api/auth)', () => {

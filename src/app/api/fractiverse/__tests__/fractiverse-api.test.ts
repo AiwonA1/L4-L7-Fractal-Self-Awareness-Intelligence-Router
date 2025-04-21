@@ -76,6 +76,7 @@ vi.mock('@/app/lib/supabase/supabase-admin', () => ({
 
 describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
   let requestMock: { json: any; url: string }
+  let jsonSpy; // Declare a variable to hold the spy (type inferred)
   
   beforeEach(async () => {
     // Mock fs readFileSync here to ensure it's set for every test
@@ -97,15 +98,12 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
       })
     );
 
-    // Re-mock NextResponse after resetModules
-    const actualServer = await vi.importActual<typeof import('next/server')>('next/server');
-    vi.doMock('next/server', () => ({
-      ...actualServer,
-      NextResponse: {
-        ...actualServer.NextResponse,
-        json: vi.fn((body, init) => actualServer.NextResponse.json(body, init))
-      }
-    }));
+    // Spy on NextResponse.json AFTER resetModules
+    jsonSpy = vi.spyOn(NextResponse, 'json').mockImplementation((body, init) => {
+        // Call the original implementation if needed, or just return a mock response
+        // For simplicity here, we might not need the original implementation if just checking calls
+        return new NextResponse(JSON.stringify(body), init);
+    });
 
     // Setup a default request mock
     requestMock = {
@@ -132,18 +130,33 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
       // Temporarily override fetch mock for this specific test to avoid side effects
       global.fetch = vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
 
+      // Mock NextResponse specifically for this test case, just before import
+      // const actualServer = await vi.importActual<typeof import('next/server')>('next/server');
+      // vi.doMock('next/server', () => ({
+      //     ...actualServer,
+      //     NextResponse: {
+      //         ...actualServer.NextResponse,
+      //         json: vi.fn((body, init) => actualServer.NextResponse.json(body, init))
+      //     }
+      // }));
+
       // Import the POST handler AFTER resetting modules and deleting the key
-      const { POST } = await import('../src/app/app/api/fractiverse/route');
+      const { POST } = await import('../route');
 
       // Act
       const response = await POST(requestMock as unknown as Request)
 
       // Assert: Check that NextResponse.json was called with the correct error
-      expect(NextResponse.json).toHaveBeenCalledTimes(1);
-      expect(NextResponse.json).toHaveBeenCalledWith(
-        { error: 'OpenAI client initialization failed. Please check server logs.' },
-        { status: 500 }
-      );
+      if (jsonSpy) {
+          expect(jsonSpy).toHaveBeenCalledTimes(1);
+          expect(jsonSpy).toHaveBeenCalledWith(
+            { error: 'OpenAI client initialization failed. Please check server logs.' },
+            { status: 500 }
+          );
+      } else {
+        // Fail the test explicitly if the spy wasn't created
+        throw new Error('jsonSpy was not initialized in beforeEach');
+      }
       // Optional: check the actual response status if needed, but spying is more direct
       // expect(response.status).toBe(500)
     
@@ -167,7 +180,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     }
       
     // The POST function uses the key loaded by vitest.setup.ts
-    const { POST: PostWithKey } = await import('../src/app/app/api/fractiverse/route')
+    const { POST: PostWithKey } = await import('../route')
 
     // Act
     const response = await PostWithKey(requestMock as unknown as Request)
@@ -214,7 +227,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     })
 
     // Import POST handler for this test
-    const { POST } = await import('../src/app/app/api/fractiverse/route');
+    const { POST } = await import('../route');
 
     // Act
     const response = await POST(requestMock as unknown as Request)
@@ -249,7 +262,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     })
 
     // Import POST handler for this test
-    const { POST } = await import('../src/app/app/api/fractiverse/route');
+    const { POST } = await import('../route');
 
     // Act
     const response = await POST(requestMock as unknown as Request)
@@ -279,7 +292,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     )
 
     // Import POST handler for this test
-    const { POST } = await import('../src/app/app/api/fractiverse/route');
+    const { POST } = await import('../route');
 
     // Act
     const response = await POST(requestMock as unknown as Request)

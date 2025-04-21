@@ -1,42 +1,69 @@
 import { Redis } from '@upstash/redis'
 import { Ratelimit } from '@upstash/ratelimit'
 
-// Make Redis optional for development
-const redis = process.env.UPSTASH_REDIS_REST_URL
-  ? new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN,
-    })
-  : null
+// Ensure Upstash environment variables are set in your .env file
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
 
-// Create a fallback rate limiter for development
-const createRateLimit = (requests: number, duration: number) => {
-  if (!redis) {
-    // Return a mock rate limiter for development
-    return {
-      limit: async () => ({ success: true, reset: Date.now() + duration }),
-    }
-  }
+let redis: Redis | null = null;
+let apiLimiter: Ratelimit | { limit: (id: string) => Promise<{ success: boolean }> };
+let authLimiter: Ratelimit | { limit: (id: string) => Promise<{ success: boolean }> };
+let paymentLimiter: Ratelimit | { limit: (id: string) => Promise<{ success: boolean }> };
 
-  return new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(requests, `${duration} ms`),
+if (redisUrl && redisToken) {
+  redis = new Redis({
+    url: redisUrl,
+    token: redisToken,
   })
-}
 
-// Rate limiters with different configurations
-export const apiLimiter = createRateLimit(100, 60000) // 100 requests per minute
-export const authLimiter = createRateLimit(5, 60000)  // 5 attempts per minute
-export const paymentLimiter = createRateLimit(10, 60000) // 10 attempts per minute
+  // Production rate limiters
+  apiLimiter = new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(100, '60 s'), // 100 requests per 60 seconds
+    prefix: 'ratelimit:api',
+  })
+
+  authLimiter = new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(5, '60 s'), // 5 requests per 60 seconds
+    prefix: 'ratelimit:auth',
+  })
+
+  paymentLimiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(10, '60 s'), // 10 requests per 60 seconds
+      prefix: 'ratelimit:payment',
+  })
+
+} else {
+  console.warn('Upstash Redis environment variables not set. Using mock rate limiter.')
+  // Mock rate limiter for development or if Redis is not configured
+  const mockLimiter = { limit: async (id: string) => ({ success: true }) };
+  apiLimiter = mockLimiter;
+  authLimiter = mockLimiter;
+  paymentLimiter = mockLimiter;
+}
 
 export type LimiterType = 'api' | 'auth' | 'payment'
 
-export async function rateLimit(identifier: string, type: LimiterType) {
+export async function rateLimitCheck(identifier: string, type: LimiterType): Promise<{ success: boolean }> {
   const limiter = {
     'api': apiLimiter,
     'auth': authLimiter,
     'payment': paymentLimiter,
   }[type]
 
-  return await limiter.limit(identifier)
+  if (!limiter) {
+    console.error(`Invalid rate limiter type: ${type}`);
+    return { success: false }; // Or handle as appropriate
+  }
+
+  try {
+      return await limiter.limit(identifier);
+  } catch (error) {
+      console.error(`Rate limit check failed for type ${type}:`, error);
+      // Fail open or closed depending on security requirements
+      // Failing open here for simplicity, but consider failing closed in production.
+      return { success: true }; 
+  }
 } 
