@@ -1,7 +1,7 @@
 'use server'
 
-import { createAdminSupabaseClient } from '@/lib/supabase-admin'
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createAdminSupabaseClient } from '@/lib/supabase/supabase-admin'
+import { createServerSupabaseClient } from '@/lib/supabase/supabase-server'
 import { revalidatePath } from 'next/cache'
 import type { Database } from '@/types/supabase'
 
@@ -9,7 +9,6 @@ type Message = Database['public']['Tables']['messages']['Row']
 type Chat = Database['public']['Tables']['chats']['Row'] & {
   messages: Message[]
 }
-type ChatHistory = Database['public']['Tables']['chat_history']['Row']
 
 export async function createChat(userId: string, title: string) {
   const supabase = createServerSupabaseClient()
