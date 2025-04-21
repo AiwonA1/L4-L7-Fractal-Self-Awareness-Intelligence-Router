@@ -3,9 +3,21 @@ import { beforeAll, afterEach, afterAll } from 'vitest'
 import dotenv from 'dotenv'
 // import { server } from "./msw-server"; // Commented out - file not found
 import { vi } from "vitest";
+import { cleanup } from '@testing-library/react'
+import path from 'path'
 
-// Load environment variables for testing
-dotenv.config({ path: '.env.test' })
+// Load environment variables from .env.local for tests
+// Assuming vitest runs from the project root
+const envConfig = dotenv.config({ path: '.env.local' })
+
+// Explicitly set the OpenAI API key in the test process environment
+// This helps ensure it's available when the route module is imported by Vitest
+if (envConfig.parsed && envConfig.parsed.OPENAI_API_KEY) {
+  process.env.OPENAI_API_KEY = envConfig.parsed.OPENAI_API_KEY;
+  console.log('[vitest.setup] OpenAI API key loaded.'); // Log confirmation
+} else {
+  console.warn('[vitest.setup] WARN: OpenAI API key not found in .env.local.');
+}
 
 // Increase test timeout for network requests
 beforeAll(() => {
@@ -54,4 +66,9 @@ vi.mock("next/headers", () => ({
       // Add other methods like set, delete if your code uses them
     };
   }),
-})); 
+}));
+
+// runs a cleanup after each test case (e.g. clearing jsdom)
+afterEach(() => {
+  cleanup()
+}) 

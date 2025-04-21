@@ -6,7 +6,10 @@ import path from 'path'
 
 // Initialize OpenAI with the provided API key
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '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',
+  // Use environment variable for API key, fall back to an empty string if not set
+  apiKey: process.env.OPENAI_API_KEY || '',
+  // Allow running in test environment that might appear browser-like
+  dangerouslyAllowBrowser: true 
 })
 
 // Load the FractiVerse prompt from the file
@@ -14,10 +17,11 @@ const promptFilePath = path.join(process.cwd(), 'src/lib/fractiverse-prompt.txt'
 const FRACTIVERSE_PROMPT = fs.readFileSync(promptFilePath, 'utf-8')
 
 export async function POST(req: Request) {
+  // Check if the API key is actually configured
   if (!openai.apiKey) {
     console.error('OpenAI API key is not configured')
     return NextResponse.json(
-      { error: 'OpenAI API key is not configured' },
+      { error: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.' },
       { status: 500 }
     )
   }

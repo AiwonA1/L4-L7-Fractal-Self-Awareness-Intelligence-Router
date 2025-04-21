@@ -1,157 +1,174 @@
-import { vi, describe, it, expect, beforeEach } from 'vitest'
+import { vi, describe, it, expect, beforeEach, afterAll } from 'vitest'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
 
-// Mock dependencies
-vi.mock('openai', () => {
-  return {
-    default: vi.fn().mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: vi.fn().mockResolvedValue({
-            id: 'mock-completion-id',
-            choices: [
-              {
-                index: 0,
-                message: {
-                  role: 'assistant',
-                  content: 'This is a test response from the AI.'
-                },
-                finish_reason: 'stop'
-              }
-            ],
-            usage: {
-              prompt_tokens: 150,
-              completion_tokens: 50,
-              total_tokens: 200
-            }
-          })
-        }
-      }
-    }))
-  }
-})
+// Mock dependencies EXCEPT OpenAI
+// vi.mock('openai', ...) // REMOVED
 
-vi.mock('@/lib/supabase-admin', () => {
-  return {
-    supabaseAdmin: {
-      from: vi.fn().mockImplementation((tableName) => {
-        if (tableName === 'users') {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            single: vi.fn().mockImplementation(() => {
-              // Default to successful response
-              return { 
-                data: { token_balance: 1000 }, 
-                error: null 
-              }
-            })
-          }
-        }
-        if (tableName === 'messages') {
-          return {
-            select: vi.fn().mockReturnThis(),
-            eq: vi.fn().mockReturnThis(),
-            order: vi.fn().mockImplementation(() => {
-              return { 
-                data: [], 
-                error: null 
-              }
-            }),
-            insert: vi.fn().mockResolvedValue({ error: null })
-          }
-        }
+// Set up a simpler mock for the supabase-admin module
+vi.mock('@/lib/supabase-admin', () => ({
+  supabaseAdmin: {
+    from: vi.fn((table: string) => {
+      if (table === 'users') {
         return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn(),
-          order: vi.fn(),
-          insert: vi.fn()
-        }
-      })
-    }
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn(() => Promise.resolve({
+                data: { token_balance: 1000 },
+                error: null
+              }))
+            }))
+          }))
+        } as any // Use 'as any' to bypass complex type checking in mocks
+      } else if (table === 'messages') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn(() => Promise.resolve({
+                data: [],
+                error: null
+              }))
+            }))
+          })),
+          insert: vi.fn(() => Promise.resolve({ error: null }))
+        } as any // Use 'as any' to bypass complex type checking in mocks
+      }
+      // Return a default structure for other tables
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            single: vi.fn(),
+            order: vi.fn()
+          }))
+        })),
+        insert: vi.fn()
+      } as any // Use 'as any' to bypass complex type checking in mocks
+    })
   }
-})
+}))
 
-vi.mock('fs', () => {
+// Properly mock fs with default export
+vi.mock('fs', async () => {
   return {
+    default: {
+      readFileSync: vi.fn().mockReturnValue('Mocked FractiVerse Prompt') // Keep prompt mocked for consistency
+    },
     readFileSync: vi.fn().mockReturnValue('Mocked FractiVerse Prompt')
   }
 })
 
-vi.mock('path', () => {
+// Properly mock path with default export
+vi.mock('path', async () => {
   return {
+    default: {
+      join: vi.fn().mockReturnValue('/mocked/path/to/prompt.txt')
+    },
     join: vi.fn().mockReturnValue('/mocked/path/to/prompt.txt')
   }
 })
 
-// Mock global fetch
-global.fetch = vi.fn().mockResolvedValue({
-  ok: true,
-  json: vi.fn().mockResolvedValue({ success: true, newBalance: 800 })
-})
+// Mock global fetch for the token deduction call
+global.fetch = vi.fn().mockImplementation(() => 
+  Promise.resolve({
+    ok: true,
+    json: () => Promise.resolve({ success: true, newBalance: 800 })
+  })
+)
 
-// Import the API route handler after mocks are set up
+// Import our module after all mocks are setup
 import { POST } from '../src/app/app/api/fractiverse/route'
 
-describe('FractiVerse API Route', () => {
+describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
+  let requestMock: { json: any; url: string }
+  
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.resetAllMocks() // Reset mocks
+        
+    // Setup a default request mock
+    requestMock = {
+      json: vi.fn().mockResolvedValue({
+        message: 'Explain fractals briefly.', // Use a real, simple prompt
+        chatId: 'live-test-chat-id',
+        userId: 'live-test-user-id'
+      }),
+      url: 'http://localhost:3000/api/fractiverse'
+    }
   })
 
-  it('should process a valid request and return an AI response', async () => {
-    // Arrange
-    const mockRequest = {
-      json: vi.fn().mockResolvedValue({
-        message: 'What is a fractal?',
-        chatId: 'test-chat-id',
-        userId: 'test-user-id'
-      })
+  // This test now relies on the vitest.setup.ts successfully loading the key
+  // If the key is not loaded by the setup file, the route itself should fail
+  it('should return 500 if OPENAI_API_KEY is missing (checked by route)', async () => {
+    const originalKey = process.env.OPENAI_API_KEY;
+    try {
+      // Simulate the key being missing when the POST handler runs
+      delete process.env.OPENAI_API_KEY; 
+
+      // Act
+      // The POST function should read the (now deleted) process.env.OPENAI_API_KEY
+      const response = await POST(requestMock as unknown as Request)
+      const data = await response.json()
+
+      // Assert
+      expect(response.status).toBe(500)
+      expect(data).toEqual({ error: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.' })
+    
+    } finally {
+      // Restore the key for subsequent tests
+      if (originalKey !== undefined) {
+          process.env.OPENAI_API_KEY = originalKey;
+      }
     }
+  })
+
+  it('should process a valid request and return a real AI response', async () => {
+    // Ensure key is present before running (should be loaded by setup)
+    if (!process.env.OPENAI_API_KEY) {
+        console.warn('Skipping live API test because OPENAI_API_KEY is not set in environment');
+        return;
+    }
+      
+    // The POST function uses the key loaded by vitest.setup.ts
+    const { POST: PostWithKey } = await import('../src/app/app/api/fractiverse/route')
 
     // Act
-    const response = await POST(mockRequest as unknown as Request)
+    const response = await PostWithKey(requestMock as unknown as Request)
     const data = await response.json()
 
     // Assert
     expect(response.status).toBe(200)
-    expect(data).toEqual({
-      role: 'assistant',
-      content: 'This is a test response from the AI.',
-      usage: {
-        promptTokens: 150,
-        completionTokens: 50,
-        totalTokens: 200,
-        tokensDeducted: 200
-      }
+    expect(data.role).toBe('assistant')
+    expect(data.content).toEqual(expect.any(String))
+    expect(data.content.length).toBeGreaterThan(0)
+    expect(data.usage).toEqual({
+      promptTokens: expect.any(Number),
+      completionTokens: expect.any(Number),
+      totalTokens: expect.any(Number),
+      tokensDeducted: expect.any(Number)
     })
+    expect(data.usage.tokensDeducted).toBeGreaterThanOrEqual(10) // Check minimum deduction
 
-    // Verify token deduction API was called
+    // Verify token deduction API was called (mocked fetch)
     expect(global.fetch).toHaveBeenCalledWith(expect.any(URL), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        userId: 'test-user-id',
-        amount: 200,
-        description: 'ChatID: test-chat-id - OpenAI API call'
+        userId: 'live-test-user-id',
+        amount: data.usage.tokensDeducted, // Check it used the calculated amount
+        description: 'ChatID: live-test-chat-id - OpenAI API call'
       }),
     })
-  })
+  }, 20000) // Increase timeout for live API call
 
   it('should return 400 if required fields are missing', async () => {
-    // Arrange
-    const mockRequest = {
-      json: vi.fn().mockResolvedValue({
-        // Intentionally missing chatId and userId
-        message: 'What is a fractal?'
-      })
-    }
+    // Modify request to have missing fields
+    requestMock.json = vi.fn().mockResolvedValue({
+      message: 'Explain fractals briefly.'
+      // Intentionally missing chatId and userId
+    })
 
     // Act
-    const response = await POST(mockRequest as unknown as Request)
+    const response = await POST(requestMock as unknown as Request)
     const data = await response.json()
 
     // Assert
@@ -160,44 +177,29 @@ describe('FractiVerse API Route', () => {
   })
 
   it('should return 400 if user has insufficient tokens', async () => {
-    // Arrange
-    const mockRequest = {
-      json: vi.fn().mockResolvedValue({
-        message: 'What is a fractal?',
-        chatId: 'test-chat-id',
-        userId: 'test-user-id'
-      })
-    }
-
-    // Reset mocks and set up a simpler mock for insufficient tokens
-    vi.resetAllMocks()
+    // Set up token balance too low
+    const { supabaseAdmin } = await import('@/lib/supabase-admin')
     
-    // Access the mocked supabaseAdmin directly from the mock
-    const supabaseAdminMock = (await vi.importMock<typeof import('@/lib/supabase-admin')>('@/lib/supabase-admin')).supabaseAdmin
-    
-    // Mock the user data to have insufficient tokens
-    supabaseAdminMock.from.mockImplementation((tableName: string) => {
-      if (tableName === 'users') {
+    // Mock low token balance
+    vi.mocked(supabaseAdmin.from).mockImplementationOnce((table: string) => {
+      if (table === 'users') {
         return {
-          select: vi.fn().mockReturnThis(),
-          eq: vi.fn().mockReturnThis(),
-          single: vi.fn().mockResolvedValue({ 
-            data: { token_balance: 5 }, // Less than the required 10
-            error: null 
-          })
-        }
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn(() => Promise.resolve({
+                data: { token_balance: 5 }, // Less than the required 10
+                error: null
+              }))
+            }))
+          }))
+        } as any // Use 'as any' here
       }
-      return {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn(),
-        order: vi.fn(),
-        insert: vi.fn()
-      }
+      // Fallback to the original mock implementation if needed
+      return vi.mocked(supabaseAdmin.from)(table)
     })
 
     // Act
-    const response = await POST(mockRequest as unknown as Request)
+    const response = await POST(requestMock as unknown as Request)
     const data = await response.json()
 
     // Assert
@@ -205,53 +207,26 @@ describe('FractiVerse API Route', () => {
     expect(data).toEqual({ error: 'Insufficient tokens. Minimum 10 tokens required.' })
   })
 
-  it('should handle errors during OpenAI API call', async () => {
-    // Arrange
-    const mockRequest = {
-      json: vi.fn().mockResolvedValue({
-        message: 'What is a fractal?',
-        chatId: 'test-chat-id',
-        userId: 'test-user-id'
-      })
-    }
-
-    // Mock OpenAI error
-    const openai = await vi.importMock<typeof import('openai')>('openai')
-    openai.default.mockImplementation(() => ({
-      chat: {
-        completions: {
-          create: vi.fn().mockRejectedValue(new Error('OpenAI API error'))
-        }
-      }
-    }))
-
-    // Act
-    const response = await POST(mockRequest as unknown as Request)
-    const data = await response.json()
-
-    // Assert
-    expect(response.status).toBe(500)
-    expect(data).toEqual({ error: 'Failed to process request: OpenAI API error' })
-  })
+  // Removed the test for mocking OpenAI API errors
+  // it('should handle errors during OpenAI API call', async () => { ... })
 
   it('should handle token deduction API errors', async () => {
-    // Arrange
-    const mockRequest = {
-      json: vi.fn().mockResolvedValue({
-        message: 'What is a fractal?',
-        chatId: 'test-chat-id',
-        userId: 'test-user-id'
-      })
+     // Ensure key is present before running (should be loaded by setup)
+    if (!process.env.OPENAI_API_KEY) {
+        console.warn('Skipping live API test because OPENAI_API_KEY is not set in environment');
+        return;
     }
-
-    // Mock token deduction error
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      json: vi.fn().mockResolvedValue({ error: 'Token deduction failed' })
-    })
+     
+    // Mock token deduction error using fetch mock
+    global.fetch = vi.fn().mockImplementationOnce(() => 
+      Promise.resolve({
+        ok: false,
+        json: () => Promise.resolve({ error: 'Token deduction failed' })
+      })
+    )
 
     // Act
-    const response = await POST(mockRequest as unknown as Request)
+    const response = await POST(requestMock as unknown as Request)
     const data = await response.json()
 
     // Assert

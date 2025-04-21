@@ -4,52 +4,125 @@ This document outlines the general coding style conventions and principles to fo
 
 ## 1. Language: TypeScript
 
-- **Strict Typing:** Utilize TypeScript's static typing features rigorously. Avoid `any` where possible; prefer specific types, `unknown`, or generics.
-- **Type Inference:** Leverage type inference where it enhances readability, but explicitly type variables and function returns when clarity is needed, especially for complex types or public APIs.
-- **Interfaces vs. Types:** Prefer `interface` for defining object shapes and `type` for unions, intersections, primitives, or more complex type manipulations.
+- **Strict Typing:** Utilize TypeScript's static typing features rigorously. Enable `strict` mode in `tsconfig.json`. Avoid `any` where possible; prefer specific types, `unknown`, or generics.
+- **Type Inference:** Leverage type inference for simple cases, but explicitly type function parameters, return values, and complex variables for clarity.
+- **Interfaces vs. Types:** 
+    - Prefer `interface` for defining object shapes or implementing class structures, as they are easily extendable.
+      ```typescript
+      interface UserProfile {
+        id: string;
+        name: string | null;
+        email: string;
+        tokenBalance: number;
+      }
+      ```
+    - Use `type` for unions, intersections, primitives, tuples, or function signatures.
+      ```typescript
+      type TransactionStatus = 'COMPLETED' | 'PENDING' | 'FAILED';
+      type UserId = string;
+      type FetchDataFunction = (url: string) => Promise<unknown>;
+      ```
 
 ## 2. Naming Conventions
 
-- **Variables & Functions:** Use `camelCase` (e.g., `tokenBalance`, `getUserData`).
-- **Components & Interfaces/Types:** Use `PascalCase` (e.g., `ChatWindow`, `UserProfile`, `TransactionType`).
-- **Constants:** Use `UPPER_SNAKE_CASE` for true constants (e.g., `MAX_RETRIES`, `DEFAULT_TIMEOUT`).
-- **File Names:** Use `kebab-case` for files (e.g., `chat-message.tsx`, `api-client.ts`), except for component files which should use `PascalCase.tsx` (e.g., `ChatMessage.tsx`).
-- **Boolean Variables:** Prefix with `is`, `has`, `should`, `can` (e.g., `isLoading`, `hasToken`, `shouldUpdate`).
-- **Descriptive Names:** Choose meaningful names that clearly indicate the purpose of the variable, function, or component. Avoid overly generic names like `data`, `temp`, `handle`.
+- **Variables & Functions:** `camelCase` (e.g., `tokenBalance`, `getUserData`).
+- **Components & Interfaces/Types:** `PascalCase` (e.g., `ChatWindow`, `UserProfile`, `TransactionType`).
+- **Constants:** `UPPER_SNAKE_CASE` (e.g., `MAX_RETRIES`, `DEFAULT_TIMEOUT`, `STRIPE_PRICE_IDS`).
+- **File Names:** `kebab-case` for non-component files (e.g., `api-client.ts`, `auth-helpers.ts`), `PascalCase.tsx` for component files (e.g., `ChatMessage.tsx`).
+- **Boolean Variables:** Prefix with `is`, `has`, `should`, `can` (e.g., `isLoading`, `hasActiveSubscription`, `shouldRefresh`).
+- **Descriptive Names:** Choose names that clearly convey intent. For UI components, reflect their visual function. For functions, indicate their action.
 
 ## 3. Formatting
 
-- **Consistency:** Adhere to the project's Prettier configuration (if configured) for automatic formatting. Run the formatter before committing code.
-- **Indentation:** Use spaces (typically 2 or 4, follow project config).
-- **Line Length:** Keep lines reasonably short (e.g., 80-120 characters) to improve readability.
-- **Whitespace:** Use whitespace effectively to separate logical blocks of code.
+- **Prettier:** Ensure Prettier is configured and run automatically (e.g., via VS Code settings or pre-commit hooks) to enforce consistent formatting based on project configuration (`.prettierrc` if present).
+- **Indentation:** Use 2 spaces (configurable via Prettier).
+- **Line Length:** Target ~100-120 characters (configurable via Prettier).
+- **Whitespace:** Use blank lines to separate logical blocks of code (e.g., between functions, import groups).
 
 ## 4. Comments
 
-- **Purpose:** Write comments to explain *why* something is done, not *what* the code does (the code should be self-explanatory). Explain complex logic, assumptions, or workarounds.
-- **Style:** Use `//` for single-line comments and `/** ... */` for multi-line documentation blocks (JSDoc/TSDoc).
-- **TODO/FIXME:** Use standard markers like `// TODO:` or `// FIXME:` with a brief explanation or issue reference.
+- **Purpose:** Explain *why*, not *what*. Focus on complex logic, trade-offs, or workarounds.
+- **Style:** Use `//` for single lines. Use TSDoc (`/** ... */`) for documenting functions, interfaces, and types, especially for reusable code or library functions.
+  ```typescript
+  /**
+   * Fetches the user's profile data from the server.
+   * @param userId - The ID of the user to fetch.
+   * @returns A promise resolving to the UserProfile or null if not found.
+   */
+  async function fetchUserProfile(userId: string): Promise<UserProfile | null> {
+    // ... implementation
+  }
+  ```
+- **TODO/FIXME:** `// TODO(username): Description` or `// FIXME: Description (#issueNumber)`.
 
 ## 5. Simplicity and Clarity
 
-- **KISS Principle:** Keep It Simple, Stupid. Avoid unnecessary complexity or abstraction.
-- **DRY Principle:** Don't Repeat Yourself. Use functions, components, or constants to avoid duplicating code. Balance DRY with clarity; sometimes slight repetition is clearer than overly complex abstractions.
-- **Readability:** Write code that is easy for others (and your future self) to understand. Break down complex functions into smaller, manageable units.
-- **Avoid Magic Values:** Use named constants instead of hardcoding numbers or strings directly in the code.
+- **KISS & YAGNI:** Keep It Simple, Stupid & You Ain't Gonna Need It. Avoid premature optimization or overly complex abstractions.
+- **DRY:** Don't Repeat Yourself. Refactor common logic into reusable functions/hooks/components. Balance with readability.
+- **Readability:** Use clear variable names, break down complex operations, and maintain consistent structure.
+- **Avoid Magic Values:** Define constants for recurring strings, numbers, or configuration values.
+  ```typescript
+  // Bad
+  if (status === 3) { /* ... */ }
+  const role = 'admin_user';
+
+  // Good
+  const STATUS_COMPLETED = 3;
+  if (status === STATUS_COMPLETED) { /* ... */ }
+
+  const ADMIN_ROLE = 'admin_user';
+  const role = ADMIN_ROLE;
+  ```
 
 ## 6. Error Handling
 
-- **Explicit Handling:** Handle potential errors explicitly using `try...catch` blocks or `.catch()` for promises.
-- **Informative Errors:** Provide clear and informative error messages.
-- **Logging:** Log errors appropriately (see specific backend/frontend guides).
+- **Explicit Handling:** Use `try...catch` for synchronous code that might throw, and `.catch()` or `async/await` with `try...catch` for promises.
+- **Custom Errors:** Consider defining custom error classes for specific error scenarios to allow for more granular catching and handling.
+  ```typescript
+  class TokenError extends Error {
+    constructor(message: string) {
+      super(message);
+      this.name = 'TokenError';
+    }
+  }
+  // ... later
+  try {
+    await deductTokens(userId, amount);
+  } catch (error) {
+    if (error instanceof TokenError) {
+      // Handle specific token deduction error
+    } else {
+      // Handle generic error
+    }
+  }
+  ```
+- **Informative Errors:** Errors logged or thrown should provide context.
+- **Logging:** Integrate with project logging standards (see Frontend/Backend guides).
 
 ## 7. Imports
 
-- **Organization:** Group imports logically (e.g., React/Next imports, library imports, local module imports).
-- **Absolute Paths:** Prefer absolute paths (e.g., `@/components/Button`) over relative paths (`../../../components/Button`) for imports outside the immediate directory, configured via `tsconfig.json`.
+- **Organization:** Group imports logically and separate them with blank lines:
+    1. React / Next.js imports
+    2. External library imports (alphabetical)
+    3. Internal absolute imports (`@/components`, `@/lib`, etc.) (alphabetical)
+    4. Relative imports (`./`, `../`) (alphabetical)
+    5. Type imports (`import type { ... }`)
+- **Absolute Paths:** Configure and use absolute paths via `tsconfig.json` (`compilerOptions.paths`) for imports outside the immediate module directory.
+  ```json
+  // tsconfig.json example
+  {
+    "compilerOptions": {
+      "baseUrl": ".",
+      "paths": {
+        "@/*": ["src/*"]
+      }
+    }
+  }
+  ```
+- **Avoid Default Exports (Generally):** Prefer named exports for better discoverability and easier refactoring. Use default exports primarily for page/layout components in Next.js App Router as per convention.
 
 ## 8. General Best Practices
 
-- **Immutability:** Prefer immutable data structures where possible, especially when working with state.
-- **Pure Functions:** Write pure functions (functions that always return the same output for the same input and have no side effects) when feasible.
-- **Dependencies:** Keep dependencies updated and remove unused ones. Evaluate the need for new dependencies carefully. 
+- **Immutability:** Treat state and props as immutable. Use non-mutating array/object methods (e.g., `map`, `filter`, spread syntax `{...obj}`) instead of direct mutation.
+- **Pure Functions:** Write pure functions where practical for predictability and testability.
+- **Dependencies:** Regularly review and prune unused dependencies (`depcheck`). Keep core dependencies (Next.js, React, Supabase) updated, managing breaking changes carefully. 
