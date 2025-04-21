@@ -16,8 +16,8 @@ interface ChatContextType {
   error: Error | null
   loadChats: () => Promise<void>
   loadMessages: (chatId: string) => Promise<void>
-  createNewChat: (title: string, initialMessage: string) => Promise<void>
-  sendMessage: (content: string) => Promise<void>
+  createNewChat: (title?: string, initialMessage?: string) => Promise<void>
+  sendMessage: (content: string, chatIdToSendTo?: string) => Promise<void>
   updateChatTitle: (chatId: string, title: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
 }
@@ -26,6 +26,7 @@ const ChatContext = createContext<ChatContextType | undefined>(undefined)
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth()
+  const toast = useToast()
   const [chats, setChats] = useState<Chat[]>([])
   const [currentChat, setCurrentChat] = useState<Chat | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -59,15 +60,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       // Subscribe to message updates for current chat
       const subscription = chatService.subscribeToChatMessages(currentChat.id, (message) => {
         setMessages((prevMessages) => {
-          const index = prevMessages.findIndex((m) => m.id === message.id)
-          if (index >= 0) {
-            const newMessages = [...prevMessages]
-            newMessages[index] = message
-            return newMessages
+          if (prevMessages.some(m => m.id === message.id)) {
+            return prevMessages;
           }
-          return [...prevMessages, message]
-        })
-      })
+          return [...prevMessages, message];
+        });
+      });
 
       return () => {
         subscription.unsubscribe()
@@ -102,53 +100,174 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const chat = chats.find((c) => c.id === chatId)
       if (chat) {
         setCurrentChat(chat)
-        setMessages(chat.messages || [])
+        const { data: fetchedMessages, error: msgError } = await supabase
+          .from('messages')
+          .select('*')
+          .eq('chat_id', chatId)
+          .order('created_at', { ascending: true });
+          
+        if (msgError) throw msgError;
+        
+        const sortedMessages = (fetchedMessages || []).sort((a: Message, b: Message) => 
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        );
+        setMessages(sortedMessages);
+      } else {
+        setCurrentChat(null);
+        setMessages([]);
+        toast({
+          title: "Chat not found",
+          description: "The selected chat may have been deleted.",
+          status: "warning",
+          duration: 3000,
+          isClosable: true,
+        });
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load messages'))
       console.error('Error loading messages:', err)
+       toast({
+        title: "Error Loading Chat",
+        description: err instanceof Error ? err.message : "Could not load the chat messages.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
     } finally {
       setIsLoading(false)
     }
   }
 
-  const createNewChat = async (title: string, initialMessage: string) => {
-    if (!user?.id) return
+  const createNewChat = async (title: string = "New Chat", initialMessage?: string) => {
+    if (!user?.id) return;
 
-    setIsLoading(true)
-    setError(null)
-
+    setIsLoading(true);
+    setError(null);
+    let newChat: Chat | null = null;
     try {
-      const chat = await chatService.createChat(user.id, title)
-      if (chat) {
-        await chatService.addMessage(chat.id, initialMessage, 'user')
-        await loadChats()
-        setCurrentChat(chat)
+      newChat = await chatService.createChat(user.id, title);
+      if (!newChat) {
+        throw new Error("Failed to create chat record.");
       }
+
+      setChats((prev) => [newChat!, ...prev]);
+      setCurrentChat(newChat);
+      setMessages([]);
+
+      if (initialMessage) {
+        await sendMessage(initialMessage, newChat.id); 
+      } else {
+         const defaultAssistantMsg: Message = {
+          id: crypto.randomUUID(),
+          chat_id: newChat.id,
+          role: 'assistant',
+          content: 'Hello! How can I assist you within the FractiVerse framework today?',
+          created_at: new Date().toISOString(),
+        };
+        setMessages([defaultAssistantMsg]);
+      }
+
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to create chat'))
-      console.error('Error creating chat:', err)
+      setError(err instanceof Error ? err : new Error("Failed to create chat"));
+      console.error("Error creating chat:", err);
+      toast({
+        title: "Error Creating Chat",
+        description: err instanceof Error ? err.message : "Could not start a new chat.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      if (newChat && !chats.some(c => c.id === newChat!.id)) {
+         setCurrentChat(null);
+      }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  const sendMessage = async (content: string) => {
-    if (!currentChat?.id || !user?.id) return
+  const sendMessage = async (content: string, chatIdToSendTo?: string) => {
+    const targetChatId = chatIdToSendTo || currentChat?.id;
+    if (!targetChatId || !user?.id) {
+      console.error("Cannot send message: Missing chat ID or user ID.");
+      toast({
+        title: "Cannot Send Message",
+        description: "No active chat selected or user not logged in.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
 
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true);
+    setError(null);
+
+    const userMessage: Message = {
+      id: crypto.randomUUID(),
+      chat_id: targetChatId,
+      role: 'user',
+      content: content,
+      created_at: new Date().toISOString(),
+    };
+    
+    if (targetChatId === currentChat?.id) {
+      setMessages((prev) => [...prev, userMessage]);
+    } else {
+       console.log(`Sending message to chat ${targetChatId}, but current view is ${currentChat?.id}`);
+     }
 
     try {
-      const message = await chatService.addMessage(currentChat.id, content, 'user')
-      setMessages((prev) => [...prev, message])
+      const response = await fetch('/api/fractiverse', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: content,
+          chatId: targetChatId,
+          userId: user.id,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Failed to parse error response" }));
+        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      const assistantMessage: Message = {
+        id: data.id || crypto.randomUUID(),
+        chat_id: targetChatId,
+        role: 'assistant',
+        content: data.content,
+        created_at: data.created_at || new Date().toISOString(),
+      };
+      
+      if (targetChatId === currentChat?.id) {
+          setMessages((prev) => [...prev.filter(m => m.id !== userMessage.id), userMessage, assistantMessage]);
+       } else {
+          console.log(`Received assistant message for chat ${targetChatId}, but current view is ${currentChat?.id}`);
+       }
+
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to send message'))
-      console.error('Error sending message:', err)
+      setError(err instanceof Error ? err : new Error('Failed to send message and get response'));
+      console.error('Error in sendMessage:', err);
+      toast({
+        title: 'Error Sending Message',
+        description: err instanceof Error ? err.message : 'Could not get response from AI',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      });
+      
+      if (targetChatId === currentChat?.id) {
+          setMessages((prev) => prev.filter(m => m.id !== userMessage.id));
+      }
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const updateChatTitle = async (chatId: string, title: string) => {
     if (!user?.id) return
@@ -157,7 +276,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setError(null)
 
     try {
-      // Update chat title in Supabase
       const { data, error } = await supabase
         .from('chats')
         .update({ title })
@@ -168,7 +286,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error
 
-      // Update local state
       setChats((prev) =>
         prev.map((chat) => (chat.id === chatId ? { ...chat, title } : chat))
       )
@@ -190,7 +307,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setError(null)
 
     try {
-      // Delete chat in Supabase
       const { error: messagesError } = await supabase
         .from('messages')
         .delete()
@@ -206,7 +322,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       if (error) throw error
 
-      // Update local state
       setChats((prev) => prev.filter((chat) => chat.id !== chatId))
       if (currentChat?.id === chatId) {
         setCurrentChat(null)
