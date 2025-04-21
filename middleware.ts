@@ -56,14 +56,19 @@ export async function middleware(req: NextRequest) {
 
     // Determine redirect based on session state and current route
     if (session) {
-      // Logged in users
+      // --- Logged in users --- 
       if (isAuthRoute) {
+        // Already logged in, redirect from auth pages to dashboard
+        redirectUrl = '/dashboard'
+      } else if (currentPath === '/') {
+        // Already logged in, redirect from home page to dashboard
         redirectUrl = '/dashboard'
       }
     } else {
-      // Not logged in users
+      // --- Not logged in users --- 
       if (isProtectedRoute) {
-        redirectUrl = '/signin'
+        // Trying to access protected route, redirect to signin
+        redirectUrl = '/signin' 
       }
     }
 

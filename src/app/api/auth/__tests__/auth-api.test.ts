@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock the module containing the Supabase client creation function
-vi.mock('@/lib/supabase-server', () => ({
+vi.mock('../../../../lib/supabase/supabase-server', () => ({
   createServerSupabaseClient: vi.fn(() => ({
     auth: {
       // Mock specific auth methods needed
@@ -13,14 +13,14 @@ vi.mock('@/lib/supabase-server', () => ({
 }))
 
 // Import AFTER mocking
-import { createServerSupabaseClient } from '@/lib/supabase-server'
+import { createServerSupabaseClient as mockedCreateServerSupabaseClientImport } from '../../../../lib/supabase/supabase-server' // Import the *mocked* module
 // Import the actual handler functions to test
 import { POST, GET } from '../route' // Assuming GET might be tested too
 import { NextResponse } from 'next/server'
 
 describe('Auth API Route (/api/auth)', () => {
-  // Get the mocked function instance
-  const mockedCreateServerSupabaseClient = vi.mocked(createServerSupabaseClient)
+  // Get the mocked function instance from the import
+  const mockedCreateServerSupabaseClient = vi.mocked(mockedCreateServerSupabaseClientImport)
   let mockSignInWithPassword: ReturnType<typeof vi.fn>
   let mockGetSession: ReturnType<typeof vi.fn> // For GET handler tests
 
@@ -31,7 +31,7 @@ describe('Auth API Route (/api/auth)', () => {
     mockSignInWithPassword = vi.fn()
     mockGetSession = vi.fn()
 
-    // Configure the mock Supabase client factory
+    // Configure the mock Supabase client factory using the correctly imported mocked function
     mockedCreateServerSupabaseClient.mockReturnValue({
       auth: {
         signInWithPassword: mockSignInWithPassword,

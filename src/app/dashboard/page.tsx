@@ -23,7 +23,7 @@ import {
   Tooltip,
 } from '@chakra-ui/react'
 import Link from 'next/link'
-import { FaRobot, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaUser, FaEdit, FaCopy } from 'react-icons/fa'
+import { FaRobot, FaUser, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaEdit, FaCopy } from 'react-icons/fa'
 import { useAuth } from '@/app/context/AuthContext'
 import { getUserChats, getChatById, updateChatTitle as updateChatTitleAction, deleteChat as deleteChatAction, createMessage } from '@/app/actions/chat'
 import { updateUserTokens } from '@/app/actions/user'

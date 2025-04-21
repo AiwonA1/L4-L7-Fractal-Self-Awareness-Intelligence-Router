@@ -19,14 +19,19 @@ export async function GET() {
       .eq('email', session.user.email)
       .single()
 
-    if (userError || !user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 })
+    if (userError) {
+      console.error('Error fetching user profile from Supabase:', userError);
+      return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 });
+    }
+
+    if (!user) {
+      return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
     return NextResponse.json(user)
   } catch (error) {
-    console.error('Error getting user profile:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    console.error('Error in GET /api/user/profile:', error)
+    return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
   }
 }
 

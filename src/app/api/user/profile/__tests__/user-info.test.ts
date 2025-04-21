@@ -1,26 +1,37 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 // Mock the module containing the Supabase client creation function
-vi.mock('@/lib/supabase-server', () => ({
+vi.mock('../../../../../lib/supabase/supabase-server', () => ({
   createServerSupabaseClient: vi.fn(() => ({
     auth: {
       getSession: vi.fn(),
     },
+    // Revert to original mock structure for chained methods
     from: vi.fn(() => ({
       select: vi.fn(() => ({
         eq: vi.fn(() => ({
-          single: vi.fn()
+          single: vi.fn(), // Mock for GET
+          // Mock for PUT chain (if needed)
+          select: vi.fn(() => ({ // .eq().select()
+             single: vi.fn() // .select().single()
+          })) 
+        })),
+        // Mock for PUT update chain
+        update: vi.fn(() => ({ // .from().update()
+          eq: vi.fn(() => ({ // .update().eq()
+             select: vi.fn(() => ({ // .eq().select()
+               single: vi.fn() // .select().single()
+             })) 
+          }))
         }))
       }))
     }))
-    // Cast to any to satisfy TypeScript for the mock object
   }) as any),
 }))
 
 // Import AFTER mocking
-// Revert back to using the '@/' alias
-import { createServerSupabaseClient } from '@/lib/supabase-server'
-// Import the actual handler function to test
-import { GET } from '../route'
+import { createServerSupabaseClient as mockedCreateServerSupabaseClientImport } from '../../../../../lib/supabase/supabase-server' // Import the *mocked* module
+import { GET, PUT } from '../route'
+import { NextResponse } from 'next/server'
 
 describe('User Info API Route', () => {
   const mockSession = {
@@ -32,123 +43,160 @@ describe('User Info API Route', () => {
     // Add other necessary session fields if needed
   }
 
-  // Get the mocked function instance
-  const mockedCreateServerSupabaseClient = vi.mocked(createServerSupabaseClient)
-  let mockSupabaseClient: any
-  let mockGetSession: ReturnType<typeof vi.fn>
-  let mockFrom: ReturnType<typeof vi.fn>
-  let mockSelect: ReturnType<typeof vi.fn>
-  let mockEq: ReturnType<typeof vi.fn>
-  let mockSingle: ReturnType<typeof vi.fn>
+  // Get mocked function instance from import
+  const mockedCreateServerSupabaseClient = vi.mocked(mockedCreateServerSupabaseClientImport)
+  
+  // We will access the mocks via the configured factory return value below
+  let mockGetSession: ReturnType<typeof vi.fn>;
+  let mockFrom: ReturnType<typeof vi.fn>;
+  let mockSelect: ReturnType<typeof vi.fn>;
+  let mockEq: ReturnType<typeof vi.fn>;
+  let mockSingle: ReturnType<typeof vi.fn>;
+  let mockUpdate: ReturnType<typeof vi.fn>;
+  // Nested mocks for PUT
+  let mockUpdateEq: ReturnType<typeof vi.fn>;
+  let mockUpdateSelect: ReturnType<typeof vi.fn>;
+  let mockUpdateSingle: ReturnType<typeof vi.fn>;
+  let mockEqSelect: ReturnType<typeof vi.fn>; // For .eq().select() in PUT
+  let mockEqSelectSingle: ReturnType<typeof vi.fn>; // For .eq().select().single() in PUT
 
   beforeEach(() => {
-    vi.clearAllMocks()
+    vi.clearAllMocks();
 
-    // Create mock functions for the chain
-    mockSingle = vi.fn()
-    mockEq = vi.fn(() => ({ single: mockSingle }))
-    mockSelect = vi.fn(() => ({ eq: mockEq }))
-    mockFrom = vi.fn(() => ({ select: mockSelect }))
-    mockGetSession = vi.fn()
+    // Define the mock functions
+    mockGetSession = vi.fn();
+    mockSingle = vi.fn();
+    mockEqSelectSingle = vi.fn();
+    mockEqSelect = vi.fn(() => ({ single: mockEqSelectSingle }));
+    mockEq = vi.fn(() => ({ single: mockSingle, select: mockEqSelect })); // .eq() can lead to .single() or .select()
+    mockUpdateSingle = vi.fn();
+    mockUpdateSelect = vi.fn(() => ({ single: mockUpdateSingle }));
+    mockUpdateEq = vi.fn(() => ({ select: mockUpdateSelect }));
+    mockUpdate = vi.fn(() => ({ eq: mockUpdateEq })); 
+    mockSelect = vi.fn(() => ({ eq: mockEq, update: mockUpdate })); // .select() can lead to .eq() or .update()
+    mockFrom = vi.fn(() => ({ select: mockSelect, update: mockUpdate })); // .from() can lead to .select() or .update()
 
-    // Configure the mock Supabase client factory to return the specific mocks
+    // Configure the factory mock to return the nested structure
     mockedCreateServerSupabaseClient.mockReturnValue({
-      auth: {
-        getSession: mockGetSession
-      },
-      from: mockFrom
-    } as any)
+      auth: { getSession: mockGetSession },
+      from: mockFrom,
+    } as any);
 
-    // Default mocks (can be overridden in specific tests)
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: null })
-    mockSingle.mockResolvedValue({ data: null, error: { message: 'Default mock: No user found' } }) // Default to no user found
-  })
+    // Default mock resolved values
+    mockGetSession.mockResolvedValue({ data: { session: { user: { id: 'test-user-id', email: 'test@example.com' } } }, error: null });
+    mockSingle.mockResolvedValue({ data: { id: 'test-user-id', name: 'Test User', email: 'test@example.com' }, error: null }); 
+    mockUpdateSingle.mockResolvedValue({ data: { id: 'test-user-id', name: 'Updated Name', email: 'test@example.com' }, error: null }); // Default success for update
+    mockEqSelectSingle.mockResolvedValue({ data: { id: 'test-user-id', name: 'Updated Name', email: 'test@example.com' }, error: null }); // Default success for update path after .eq().select()
+  });
 
-  it('should return user data when authenticated', async () => {
-    // Configure mocks for this specific test case
-    mockGetSession.mockResolvedValue({ data: { session: mockSession }, error: null })
+  it('GET should return user profile when authenticated', async () => {
+    const mockUserData = { id: 'test-user-id', name: 'Test User', email: 'test@example.com' };
+    mockSingle.mockResolvedValue({ data: mockUserData, error: null }); 
 
-    const mockUserData = {
-      id: 'test-user-id',
-      email: 'test@example.com',
-      name: 'Test User',
-      token_balance: 100, // Add all fields returned by select('*')
-      created_at: '2024-03-20T00:00:00Z',
-      updated_at: '2024-03-20T00:00:00Z',
-    }
-    mockSingle.mockResolvedValue({ data: mockUserData, error: null })
+    const response = await GET();
+    const body = await response.json();
 
-    // Call the actual API route handler
-    const response = await GET()
-    const data = await response.json()
+    expect(response.status).toBe(200);
+    expect(body).toEqual(mockUserData);
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    expect(mockFrom).toHaveBeenCalledWith('users');
+    expect(mockSelect).toHaveBeenCalledWith('*');
+    expect(mockEq).toHaveBeenCalledWith('email', 'test@example.com');
+    expect(mockSingle).toHaveBeenCalledTimes(1);
+  });
 
-    // Assertions
-    expect(response.status).toBe(200)
-    expect(data).toEqual({ user: mockUserData })
+  it('GET should return 401 if not authenticated', async () => {
+    mockGetSession.mockResolvedValueOnce({ data: { session: null }, error: null });
 
-    // Verify mocks were called as expected
-    expect(mockGetSession).toHaveBeenCalledTimes(1)
-    expect(mockFrom).toHaveBeenCalledWith('users')
-    expect(mockSelect).toHaveBeenCalledWith('*')
-    expect(mockEq).toHaveBeenCalledWith('id', mockSession.user.id)
-    expect(mockSingle).toHaveBeenCalledTimes(1)
-  })
+    const response = await GET();
+    const body = await response.json();
 
-  it('should return 401 when not authenticated', async () => {
-    // Mock setup: Default beforeEach already sets session to null
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: null })
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ error: 'Unauthorized' });
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
 
-    // Call the actual API route handler
-    const response = await GET()
-    const data = await response.json()
+  it('GET should return 500 if database error occurs fetching profile', async () => {
+    const dbError = new Error('Database connection lost');
+    mockSingle.mockRejectedValueOnce(dbError); // Simulate error at final .single()
 
-    // Assertions
-    expect(response.status).toBe(401)
-    expect(data).toEqual({ error: 'Not authenticated' })
+    const response = await GET();
+    const body = await response.json();
 
-    // Verify mocks
-    expect(mockGetSession).toHaveBeenCalledTimes(1)
-    expect(mockFrom).not.toHaveBeenCalled()
-  })
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: 'Failed to fetch profile' });
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    expect(mockFrom).toHaveBeenCalledWith('users');
+    expect(mockSelect).toHaveBeenCalledWith('*');
+    expect(mockEq).toHaveBeenCalledWith('email', 'test@example.com');
+    expect(mockSingle).toHaveBeenCalledTimes(1);
+  });
 
-  it('should return 401 on session error', async () => {
-    // Mock setup: Simulate an error during session retrieval
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: new Error('Session fetch failed') })
+  it('PUT should update user profile successfully', async () => {
+    const updates = { name: 'Updated Name' };
+    const updatedProfileData = { id: 'test-user-id', name: 'Updated Name', email: 'test@example.com' };
+    mockUpdateSingle.mockResolvedValue({ data: updatedProfileData, error: null });
 
-    // Call the actual API route handler
-    const response = await GET()
-    const data = await response.json()
+    const request = new Request('http://localhost/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
 
-    // Assertions
-    expect(response.status).toBe(401)
-    expect(data).toEqual({ error: 'Not authenticated' })
+    const response = await PUT(request);
+    const body = await response.json();
 
-    // Verify mocks
-    expect(mockGetSession).toHaveBeenCalledTimes(1)
-    expect(mockFrom).not.toHaveBeenCalled()
-  })
+    expect(response.status).toBe(200);
+    expect(body).toEqual(updatedProfileData);
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    expect(mockFrom).toHaveBeenCalledWith('users');
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining(updates));
+    expect(mockUpdateEq).toHaveBeenCalledWith('id', 'test-user-id');
+    expect(mockUpdateSelect).toHaveBeenCalledTimes(1);
+    expect(mockUpdateSingle).toHaveBeenCalledTimes(1);
+  });
 
-  it('should return 500 on database error', async () => {
-    // Mock authenticated session
-    mockGetSession.mockResolvedValue({ data: { session: mockSession }, error: null })
+   it('PUT should return 401 if not authenticated', async () => {
+    mockGetSession.mockResolvedValueOnce({ data: { session: null }, error: null });
+    const updates = { name: 'Updated Name' };
 
-    // Mock database error during select/single
-    const dbError = { message: 'Database connection failed' }
-    mockSingle.mockResolvedValue({ data: null, error: dbError })
+    const request = new Request('http://localhost/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
 
-    // Call the actual API route handler
-    const response = await GET()
-    const data = await response.json()
+    const response = await PUT(request);
+    const body = await response.json();
 
-    // Assertions
-    expect(response.status).toBe(500)
-    expect(data).toEqual({ error: dbError.message })
+    expect(response.status).toBe(401);
+    expect(body).toEqual({ error: 'Unauthorized' });
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    expect(mockFrom).not.toHaveBeenCalled(); 
+  });
 
-    // Verify mocks
-    expect(mockGetSession).toHaveBeenCalledTimes(1)
-    expect(mockFrom).toHaveBeenCalledWith('users')
-    expect(mockSelect).toHaveBeenCalledWith('*')
-    expect(mockEq).toHaveBeenCalledWith('id', mockSession.user.id)
-    expect(mockSingle).toHaveBeenCalledTimes(1)
-  })
-}) 
+  it('PUT should return 500 if database update fails', async () => {
+    const updates = { name: 'Updated Name' };
+    const dbError = new Error('Update failed due to constraint');
+    mockUpdateSingle.mockRejectedValue(dbError); // Simulate error at final .single() of update chain
+
+    const request = new Request('http://localhost/api/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates),
+    });
+
+    const response = await PUT(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(body).toEqual({ error: 'Internal Server Error' });
+    expect(mockGetSession).toHaveBeenCalledTimes(1);
+    expect(mockFrom).toHaveBeenCalledWith('users');
+    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining(updates));
+    expect(mockUpdateEq).toHaveBeenCalledWith('id', 'test-user-id');
+    expect(mockUpdateSelect).toHaveBeenCalledTimes(1);
+    expect(mockUpdateSingle).toHaveBeenCalledTimes(1);
+  });
+}); 

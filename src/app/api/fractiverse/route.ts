@@ -34,23 +34,6 @@ try {
 
 
 export async function POST(req: NextRequest) {
-  // Check if OpenAI client initialized successfully
-  if (!openai) {
-    console.error('OpenAI client not initialized. Check API Key and constructor.')
-    return NextResponse.json(
-      { error: 'OpenAI client initialization failed. Please check server logs.' },
-      { status: 500 }
-    )
-  }
-  // Double-check the key just in case (belt and suspenders)
-  if (!openai.apiKey) {
-     console.error('OpenAI API key is not configured even after initialization attempt.')
-    return NextResponse.json(
-      { error: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.' },
-      { status: 500 }
-    )
-  }
-
   let userId: string | null = null;
   let chatId: string | null = null;
   let message: string | null = null;
@@ -58,7 +41,7 @@ export async function POST(req: NextRequest) {
   let tokenResponse: Response | undefined = undefined;
 
   try {
-    // 1. Parse Request Body & Get userId
+    // 1. Parse Request Body & Get userId (Moved up)
     try {
       const body = await req.json();
       message = body.message;
@@ -75,24 +58,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
-    // --- Rate Limiting (Authenticated User via userId in body) ---
-    const { success: limitReached } = await rateLimitCheck(userId, 'api');
+    // --- Rate Limiting (Authenticated User via userId in body) (Moved up) ---
+    const { success: limitReached } = await rateLimitCheck(userId, 'api'); // userId is guaranteed non-null here
     if (!limitReached) {
         return NextResponse.json({ error: 'Too many API requests' }, { status: 429 });
     }
     // --- End Rate Limiting ---
 
-    // 2. Check User Token Balance
+    // 2. Check User Token Balance (Moved up)
     let userData;
     try {
       const { data, error: userError } = await supabaseAdmin
         .from('users')
         .select('token_balance')
-        .eq('id', userId)
+        .eq('id', userId) // userId is guaranteed non-null here
         .single();
 
-      if (userError) throw userError;
-      if (!data) throw new Error('User not found');
+      if (userError) throw userError; // Propagate error to outer catch
+      if (!data) {
+           // Handle case where userId from request body doesn't exist in DB
+           console.warn(`User ID ${userId} provided in request not found in database.`);
+           return NextResponse.json({ error: 'User specified in request not found' }, { status: 404 });
+      }
       userData = data;
 
       if (userData.token_balance < 10) {
@@ -103,16 +90,17 @@ export async function POST(req: NextRequest) {
       }
     } catch (dbError) {
       console.error('Error checking user token balance:', dbError);
-      return NextResponse.json({ error: 'Failed to fetch user data' }, { status: 500 });
+      // Distinguish DB error from user not found or insufficient tokens
+      return NextResponse.json({ error: 'Failed to verify user token balance' }, { status: 500 });
     }
 
-    // 3. Fetch Chat History (Optional, proceed even if it fails)
+    // 3. Fetch Chat History (Remains here - happens before OpenAI call)
     let formattedMessages: Array<{role: string, content: string}> = [];
     try {
       const { data: messages, error: messagesError } = await supabaseAdmin
         .from('messages')
         .select('role, content') // Select only needed fields
-        .eq('chat_id', chatId)
+        .eq('chat_id', chatId) // chatId is guaranteed non-null here
         .order('created_at', { ascending: true });
 
       if (messagesError) {
@@ -127,7 +115,20 @@ export async function POST(req: NextRequest) {
        console.warn('Warning: Exception fetching chat history:', histError);
     }
 
-    // 4. Call OpenAI API
+    // Check if OpenAI client initialized successfully (Moved down - check just before use)
+    if (!openai || !openai.apiKey) {
+        console.error('OpenAI client not initialized or API key missing. Cannot proceed with API call.')
+        // Check OPENAI_API_KEY env var existence for a more specific error message
+        const errorMsg = process.env.OPENAI_API_KEY
+            ? 'OpenAI client initialization failed despite API key presence. Check constructor/logs.'
+            : 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.';
+        return NextResponse.json(
+          { error: errorMsg },
+          { status: 500 }
+        )
+    }
+
+    // 4. Call OpenAI API (Remains here)
     let completion;
     let promptTokens = 0;
     let completionTokens = 0;

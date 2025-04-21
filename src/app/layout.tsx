@@ -3,7 +3,7 @@ import { Providers } from './providers'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import type { CookieOptions } from '@supabase/ssr'
-import { redirect } from 'next/navigation'
+// import { redirect } from 'next/navigation' // No longer needed here
 import { LayoutContent } from './components/LayoutContent'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -23,6 +23,7 @@ export default async function RootLayout({
 }) {
   const cookieStore = cookies()
   
+  // Create Supabase client for passing session down (but not for redirects)
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -41,15 +42,18 @@ export default async function RootLayout({
     }
   )
 
+  // Get session to pass to Providers
   const { data: { session } } = await supabase.auth.getSession()
 
-  // If user is authenticated and trying to access root, redirect to dashboard
+  // REMOVED REDIRECT LOGIC - Now handled by middleware.ts
+  /*
   if (session?.user) {
     const pathname = new URL(cookieStore.get('next-url')?.value || '/', 'http://localhost').pathname
     if (pathname === '/') {
       redirect('/dashboard')
     }
   }
+  */
 
   return (
     <html lang="en">

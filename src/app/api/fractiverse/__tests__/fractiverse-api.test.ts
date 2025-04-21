@@ -188,7 +188,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
       if (jsonSpy) {
           expect(jsonSpy).toHaveBeenCalledTimes(1);
           expect(jsonSpy).toHaveBeenCalledWith(
-            { error: 'OpenAI client initialization failed. Please check server logs.' },
+            { error: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.' },
             { status: 500 }
           );
       } else {
