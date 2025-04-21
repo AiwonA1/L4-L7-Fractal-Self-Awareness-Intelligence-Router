@@ -186,12 +186,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   };
 
   const sendMessage = async (content: string, chatIdToSendTo?: string) => {
-    const targetChatId = chatIdToSendTo || currentChat?.id;
-    if (!targetChatId || !user?.id) {
-      console.error("Cannot send message: Missing chat ID or user ID.");
-      toast({
-        title: "Cannot Send Message",
-        description: "No active chat selected or user not logged in.",
+    let targetChatId = chatIdToSendTo || currentChat?.id;
+
+    if (!user?.id) {
+       console.error("Cannot send message: User not logged in.");
+       toast({
+        title: "Authentication Error",
+        description: "User not logged in.",
         status: "error",
         duration: 3000,
         isClosable: true,
@@ -199,22 +200,51 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setIsLoading(true);
+    if (!targetChatId) {
+      console.log("No active chat, creating a new one...");
+      setIsLoading(true);
+      try {
+        const newChat = await chatService.createChat(user.id, "New Chat");
+        if (!newChat) {
+           throw new Error("Failed to create new chat before sending message.");
+        }
+        setChats((prev) => [newChat!, ...prev]); 
+        setCurrentChat(newChat); 
+        setMessages([]);
+        targetChatId = newChat.id;
+        console.log("New chat created with ID:", targetChatId);
+      } catch (createErr) {
+        setError(createErr instanceof Error ? createErr : new Error("Failed to create chat"));
+        console.error("Error creating new chat in sendMessage:", createErr);
+        toast({
+          title: "Error Starting Chat",
+          description: createErr instanceof Error ? createErr.message : "Could not start a new chat.",
+          status: "error",
+          duration: 3000,
+          isClosable: true,
+        });
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    setIsLoading(true); 
     setError(null);
 
+    // 1. Add user message locally for immediate feedback
     const userMessage: Message = {
-      id: crypto.randomUUID(),
-      chat_id: targetChatId,
+      id: crypto.randomUUID(), // Temporary client-side ID
+      chat_id: targetChatId!, // Assert targetChatId is non-null here
       role: 'user',
       content: content,
       created_at: new Date().toISOString(),
     };
     
     if (targetChatId === currentChat?.id) {
-      setMessages((prev) => [...prev, userMessage]);
+       setMessages((prev) => [...prev, userMessage]);
     } else {
-       console.log(`Sending message to chat ${targetChatId}, but current view is ${currentChat?.id}`);
-     }
+        console.log(`Adding user message to chat ${targetChatId}, which should be the current chat.`);
+    }
 
     try {
       const response = await fetch('/api/fractiverse', {
@@ -236,34 +266,38 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       const data = await response.json();
 
+      // 3. Add the assistant's message locally
       const assistantMessage: Message = {
-        id: data.id || crypto.randomUUID(),
-        chat_id: targetChatId,
+        id: data.id || crypto.randomUUID(), // Prefer server ID if available
+        chat_id: targetChatId!, // Assert targetChatId is non-null here
         role: 'assistant',
         content: data.content,
         created_at: data.created_at || new Date().toISOString(),
       };
       
       if (targetChatId === currentChat?.id) {
-          setMessages((prev) => [...prev.filter(m => m.id !== userMessage.id), userMessage, assistantMessage]);
+         setMessages((prev) => {
+            const messagesWithoutTemp = prev.filter(m => m.id !== userMessage.id);
+            return [...messagesWithoutTemp, userMessage, assistantMessage]; 
+         });
        } else {
           console.log(`Received assistant message for chat ${targetChatId}, but current view is ${currentChat?.id}`);
        }
 
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to send message and get response'));
-      console.error('Error in sendMessage:', err);
+      console.error('Error in sendMessage during API call:', err);
       toast({
         title: 'Error Sending Message',
         description: err instanceof Error ? err.message : 'Could not get response from AI',
         status: 'error',
-        duration: 5000,
+        duration: 5000, 
         isClosable: true,
       });
-      
+       
       if (targetChatId === currentChat?.id) {
           setMessages((prev) => prev.filter(m => m.id !== userMessage.id));
-      }
+       }
     } finally {
       setIsLoading(false);
     }
