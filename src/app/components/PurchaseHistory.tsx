@@ -11,7 +11,7 @@ import {
   Td,
   Badge,
 } from '@chakra-ui/react';
-import { formatPrice } from '@/app/lib/stripe';
+import { formatPrice } from '@/lib/stripe-client';
 
 interface Transaction {
   id: string;

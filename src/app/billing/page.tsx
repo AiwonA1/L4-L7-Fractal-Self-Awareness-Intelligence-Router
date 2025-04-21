@@ -31,7 +31,7 @@ import {
   useStripe,
   useElements,
 } from '@stripe/react-stripe-js'
-import { FRACTIVERSE_PRICES, formatPrice, TokenTier } from '@/app/lib/stripe-client'
+import { FRACTIVERSE_PRICES, formatPrice, TokenTier } from '@/lib/stripe-client'
 
 const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || '')
 
@@ -99,7 +99,7 @@ function CheckoutForm({ clientSecret, onSuccess }: { clientSecret: string, onSuc
 }
 
 export default function BillingPage() {
-  const { user } = useAuth()
+  const { user, userProfile } = useAuth()
   const [selectedTier, setSelectedTier] = useState<keyof typeof FRACTIVERSE_PRICES | null>(null)
   const [clientSecret, setClientSecret] = useState('')
   const toast = useToast()
@@ -108,23 +108,27 @@ export default function BillingPage() {
 
   const handlePurchase = async (tier: keyof typeof FRACTIVERSE_PRICES) => {
     try {
-      const response = await fetch('/api/stripe/config', {
+      const response = await fetch('/api/payment/create-intent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tier }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to initialize payment')
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to initialize payment');
       }
 
       const data = await response.json()
+      if (!data.clientSecret) {
+          throw new Error('Client secret not received from server');
+      }
       setClientSecret(data.clientSecret)
       setSelectedTier(tier)
     } catch (error) {
       toast({
-        title: 'Error',
-        description: 'Failed to initialize payment. Please try again.',
+        title: 'Error Initializing Payment',
+        description: error instanceof Error ? error.message : 'Please try again.',
         status: 'error',
         duration: 5000,
         isClosable: true,
@@ -149,6 +153,11 @@ export default function BillingPage() {
         <Box textAlign="center">
           <Heading size="xl" mb={2}>Billing & Payments</Heading>
           <Text color="gray.500">Purchase FractiTokens to continue your journey</Text>
+          {userProfile && (
+            <Text fontSize="lg" mt={2}>
+              Current Balance: <Badge colorScheme="green">{userProfile.token_balance ?? 0} Tokens</Badge>
+            </Text>
+          )}
         </Box>
 
         {/* CERN Quantum Validation Card */}
@@ -242,7 +251,9 @@ export default function BillingPage() {
             <Icon as={FaCoins} boxSize={6} color="yellow.500" />
             <VStack align="start" spacing={0}>
               <Text fontWeight="bold">Current Balance</Text>
-              <Text fontSize="2xl">{user?.tokenBalance || 0} FractiTokens</Text>
+              <Text fontSize="2xl">
+                {userProfile ? (userProfile.token_balance ?? 0) : 0} FractiTokens
+              </Text>
             </VStack>
           </HStack>
         </Box>

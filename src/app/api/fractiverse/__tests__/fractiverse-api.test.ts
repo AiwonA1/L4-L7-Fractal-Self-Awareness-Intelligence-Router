@@ -1,4 +1,4 @@
-import { vi, describe, it, expect, beforeEach, afterAll } from 'vitest'
+import { vi, describe, it, expect, beforeEach, afterAll, afterEach, type MockInstance } from 'vitest'
 import { NextResponse } from 'next/server'
 
 // Mock dependencies EXCEPT OpenAI
@@ -74,38 +74,52 @@ vi.mock('@/app/lib/supabase/supabase-admin', () => ({
 // Import our module after all mocks are setup - MOVED to within tests where needed after resetModules
 // import { POST } from '../src/app/app/api/fractiverse/route'
 
+// Mock the Supabase admin client globally
+vi.mock('@/lib/supabase/supabase-admin', () => ({
+  supabaseAdmin: {
+    from: vi.fn(),
+    // Add rpc mock if needed by any test in this file, otherwise omit
+    // rpc: vi.fn(), 
+  },
+}))
+
+// Import the mocked instance AFTER vi.mock
+import { supabaseAdmin } from '@/lib/supabase/supabase-admin'
+
 describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
-  let requestMock: { json: any; url: string }
-  let jsonSpy; // Declare a variable to hold the spy (type inferred)
-  
+  // Get the globally mocked instance
+  const mockedSupabaseFrom = vi.mocked(supabaseAdmin.from)
+  // const mockedSupabaseRpc = vi.mocked(supabaseAdmin.rpc) // If rpc is mocked globally
+
+  let jsonSpy: MockInstance<any[], any>;
+  let requestMock: { json: MockInstance, url: string };
+  let originalFetch: typeof global.fetch;
+
   beforeEach(async () => {
-    // Mock fs readFileSync here to ensure it's set for every test
-    vi.doMock('fs', () => ({
-      default: {
-        readFileSync: vi.fn().mockReturnValue('Mocked FractiVerse System Prompt For Test')
-      },
-      readFileSync: vi.fn().mockReturnValue('Mocked FractiVerse System Prompt For Test')
-    }));
+    vi.resetModules() // Reset modules to ensure clean state for imports
+    vi.clearAllMocks();
 
-    vi.resetAllMocks() // Reset other mocks
-    vi.resetModules() // Reset modules before each test to ensure clean state
-
-    // Re-mock fetch after resetModules
-    global.fetch = vi.fn().mockImplementation(() =>
-      Promise.resolve({
-        ok: true,
-        json: () => Promise.resolve({ success: true, newBalance: 800 })
-      })
-    );
-
-    // Spy on NextResponse.json AFTER resetModules
-    jsonSpy = vi.spyOn(NextResponse, 'json').mockImplementation((body, init) => {
-        // Call the original implementation if needed, or just return a mock response
-        // For simplicity here, we might not need the original implementation if just checking calls
-        return new NextResponse(JSON.stringify(body), init);
+    // Mock fetch globally first
+    originalFetch = global.fetch;
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true }), // Mock token deduction success by default
     });
 
-    // Setup a default request mock
+    // Mock NextResponse.json using doMock before any route import
+    const actualServer = await vi.importActual<typeof import('next/server')>('next/server');
+    vi.doMock('next/server', () => ({
+        ...actualServer,
+        NextResponse: {
+            ...actualServer.NextResponse,
+            json: vi.fn((body, init) => actualServer.NextResponse.json(body, init))
+        }
+    }));
+    // Capture the spy AFTER mocking
+    const { NextResponse } = await import('next/server');
+    jsonSpy = vi.mocked(NextResponse.json);
+
+    // Reset request mock
     requestMock = {
       json: vi.fn().mockResolvedValue({
         message: 'Explain fractals briefly.', // Use a real, simple prompt
@@ -114,6 +128,30 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
       }),
       url: 'http://localhost:3000/api/fractiverse'
     }
+
+    // Default implementation for supabaseAdmin.from for most tests
+    mockedSupabaseFrom.mockImplementation((table: string) => {
+      // Default mock for users table returning sufficient balance
+      if (table === 'users') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              single: vi.fn(() => Promise.resolve({ data: { token_balance: 1000 }, error: null }))
+            }))
+          }))
+        } as any
+      }
+      // Provide a generic fallback if needed
+      return {
+        select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn(() => Promise.resolve({ data: {}, error: null })) })) })),
+        update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: null, error: null })) })),
+        insert: vi.fn(() => Promise.resolve({ data: null, error: null }))
+      } as any
+    })
+  })
+
+  afterEach(() => {
+    global.fetch = originalFetch; // Restore original fetch
   })
 
   it('should return 500 if OPENAI_API_KEY is missing (checked by route)', async () => {
@@ -240,11 +278,9 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
   })
 
   it('should return 400 if user has insufficient tokens', async () => {
-    // Set up token balance too low
-    const { supabaseAdmin } = await import('@/app/lib/supabase/supabase-admin')
-    
-    // Mock low token balance
-    vi.mocked(supabaseAdmin.from).mockImplementationOnce((table: string) => {
+    // Set up mock for insufficient balance specifically for this test
+    // Use the globally mocked instance
+    mockedSupabaseFrom.mockImplementationOnce((table: string) => { // Use mockImplementationOnce
       if (table === 'users') {
         return {
           select: vi.fn(() => ({
@@ -257,11 +293,13 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
           }))
         } as any // Use 'as any' here
       }
-      // Fallback to the original mock implementation if needed
-      return vi.mocked(supabaseAdmin.from)(table)
+      // Fallback for any other table access in this specific case (shouldn't happen)
+      return {
+        select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn(() => Promise.resolve({ data: {}, error: null })) })) }))
+      } as any
     })
 
-    // Import POST handler for this test
+    // Import POST handler for this test (uses the mocked supabase client)
     const { POST } = await import('../route');
 
     // Act
@@ -271,6 +309,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     // Assert
     expect(response.status).toBe(400)
     expect(data).toEqual({ error: 'Insufficient tokens. Minimum 10 tokens required.' })
+    expect(mockedSupabaseFrom).toHaveBeenCalledWith('users') // Verify the mock was called
   })
 
   // Removed the test for mocking OpenAI API errors

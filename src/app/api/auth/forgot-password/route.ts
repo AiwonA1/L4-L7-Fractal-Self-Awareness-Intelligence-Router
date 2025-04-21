@@ -1,11 +1,20 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase'
+import { rateLimitCheck, getIp } from '@/lib/rate-limit'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  // --- Rate Limiting ---
+  const ip = getIp(request) ?? 'unknown_ip';
+  const { success: limitReached } = await rateLimitCheck(ip, 'auth');
+  if (!limitReached) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+  }
+  // --- End Rate Limiting ---
+
   const supabase = createClient<Database>(supabaseUrl, supabaseKey)
   
   try {
@@ -29,7 +38,7 @@ export async function POST(request: Request) {
 
     // Send password reset email using Supabase Auth
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`
+      redirectTo: `${process.env.NEXT_PUBLIC_URL}/reset-password`
     })
 
     if (resetError) {

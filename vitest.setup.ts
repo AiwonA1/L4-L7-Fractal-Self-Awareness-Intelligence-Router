@@ -6,17 +6,25 @@ import { vi } from "vitest";
 import { cleanup } from '@testing-library/react'
 import path from 'path'
 
-// Load environment variables from .env.local for tests
+// Load environment variables from .env.test for tests
 // Assuming vitest runs from the project root
-const envConfig = dotenv.config({ path: '.env.local' })
+const envConfig = dotenv.config({ path: '.env.test' })
 
-// Explicitly set the OpenAI API key in the test process environment
-// This helps ensure it's available when the route module is imported by Vitest
-if (envConfig.parsed && envConfig.parsed.OPENAI_API_KEY) {
-  process.env.OPENAI_API_KEY = envConfig.parsed.OPENAI_API_KEY;
-  console.log('[vitest.setup] OpenAI API key loaded.'); // Log confirmation
+// Load all parsed variables into process.env
+if (envConfig.parsed) {
+  console.log('[vitest.setup] Loading environment variables from .env.test...');
+  for (const key in envConfig.parsed) {
+    process.env[key] = envConfig.parsed[key];
+  }
+  // Log confirmation for specific keys if needed (optional)
+  if (process.env.OPENAI_API_KEY) {
+    console.log('[vitest.setup] OpenAI API key loaded.');
+  }
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    console.log('[vitest.setup] NEXT_PUBLIC_SUPABASE_URL loaded.');
+  }
 } else {
-  console.warn('[vitest.setup] WARN: OpenAI API key not found in .env.local.');
+  console.warn('[vitest.setup] WARN: .env.test file not found or empty.');
 }
 
 // Increase test timeout for network requests

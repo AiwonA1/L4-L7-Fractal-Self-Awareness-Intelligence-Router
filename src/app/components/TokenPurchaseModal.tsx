@@ -22,7 +22,7 @@ import {
 } from '@chakra-ui/react';
 import { FaCoins, FaRocket, FaCrown } from 'react-icons/fa';
 import { useAuth } from '@/app/context/AuthContext';
-import { FRACTIVERSE_PRICES, TokenTier, formatPrice } from '@/app/lib/stripe-client';
+import { FRACTIVERSE_PRICES, TokenTier, formatPrice } from '@/lib/stripe-client';
 
 interface TokenPurchaseModalProps {
   isOpen: boolean;
@@ -67,43 +67,8 @@ export default function TokenPurchaseModal({ isOpen, onClose, onPurchase }: Toke
       });
       return;
     }
-
-    try {
-      setLoading(prev => ({ ...prev, [tier]: true }));
-
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ tier }),
-        credentials: 'include',
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create checkout session');
-      }
-
-      if (!data.url) {
-        throw new Error('No checkout URL received');
-      }
-
-      // Redirect to Stripe Checkout
-      window.location.href = data.url;
-    } catch (error) {
-      console.error('Purchase error:', error);
-      toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to start checkout process',
-        status: 'error',
-        duration: 5000,
-        isClosable: true,
-      });
-    } finally {
-      setLoading(prev => ({ ...prev, [tier]: false }));
-    }
+    console.log(`Purchase initiated for tier: ${tier}, closing modal.`);
+    onClose();
   };
 
   return (
@@ -148,11 +113,9 @@ export default function TokenPurchaseModal({ isOpen, onClose, onPurchase }: Toke
                         colorScheme={tierInfo.color}
                         size="lg"
                         onClick={() => handlePurchase(tierInfo.tier)}
-                        isLoading={loading[tierInfo.tier]}
-                        loadingText="Processing..."
                         isDisabled={!user}
                       >
-                        {user ? 'Purchase Now' : 'Sign in to Purchase'}
+                        {user ? 'Select Package' : 'Sign in to Purchase'}
                       </Button>
                     </VStack>
                   </CardBody>

@@ -1,6 +1,6 @@
-import { supabase } from '@/app/lib/supabase/client' // Corrected path
+import { supabase } from '@/lib/supabase/client' // Corrected path
 import type { Database } from '@/types/supabase' // Assuming global types
-import type { User, Transaction } from '@/app/lib/types' // Use shared types
+import type { User, Transaction } from '@/lib/types' // Use shared types from @/lib
 
 // Functions intended for CLIENT-SIDE usage (using anon key)
 

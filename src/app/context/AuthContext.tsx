@@ -3,11 +3,14 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase/client'
-import type { User, Session } from '@supabase/supabase-js'
+import type { User as SupabaseUser, Session } from '@supabase/supabase-js'
+import type { User as UserProfile } from '@/lib/types'
+import { getUserProfile } from '@/lib/services/user'
 
 interface AuthContextType {
-  user: User | null;
+  user: SupabaseUser | null;
   session: Session | null;
+  userProfile: UserProfile | null;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   isLoading: boolean;
@@ -21,34 +24,48 @@ interface AuthProviderProps {
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children, initialSession }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(initialSession?.user ?? null)
+  const [user, setUser] = useState<SupabaseUser | null>(initialSession?.user ?? null)
   const [session, setSession] = useState<Session | null>(initialSession)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [isLoading, setIsLoading] = useState(!initialSession)
   const router = useRouter()
 
+  const fetchUserProfile = async (userId: string) => {
+    const profile = await getUserProfile(userId)
+    setUserProfile(profile)
+  }
+
   useEffect(() => {
     const initializeAuth = async () => {
+      setIsLoading(true)
       try {
-        // Get initial session if not provided
-        if (!initialSession) {
-          const { data: { session } } = await supabase.auth.getSession()
-          
-          if (session) {
-            setSession(session)
-            setUser(session.user)
-            
-            // Update auth token for realtime subscriptions
-            supabase.realtime.setAuth(session.access_token)
-            
-            // If we're on an auth page, redirect to dashboard
-            const path = window.location.pathname
-            if (path === '/login' || path === '/signup' || path === '/signin' || path === '/') {
-              router.replace('/dashboard')
-            }
+        let currentSession = initialSession
+        if (!currentSession) {
+          const { data } = await supabase.auth.getSession()
+          currentSession = data.session
+        }
+
+        if (currentSession) {
+          setSession(currentSession)
+          setUser(currentSession.user)
+          await fetchUserProfile(currentSession.user.id)
+
+          supabase.realtime.setAuth(currentSession.access_token)
+
+          const path = window.location.pathname
+          if (['/login', '/signup', '/signin', '/'].includes(path)) {
+            router.replace('/dashboard')
           }
+        } else {
+          setUser(null)
+          setSession(null)
+          setUserProfile(null)
         }
       } catch (error) {
         console.error('Error initializing auth:', error)
+        setUser(null)
+        setSession(null)
+        setUserProfile(null)
       } finally {
         setIsLoading(false)
       }
@@ -56,20 +73,22 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
 
     initializeAuth()
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth state changed:', event, session?.user?.id)
-      
+
       setSession(session)
       setUser(session?.user ?? null)
-      
+
       if (session) {
-        // Update auth token for realtime subscriptions
         supabase.realtime.setAuth(session.access_token)
+        await fetchUserProfile(session.user.id)
+      } else {
+        setUserProfile(null)
       }
-      
+
       if (event === 'SIGNED_IN') {
-        router.replace('/dashboard')
+        // Redirect handled by initializeAuth potentially, or add explicit check if needed
+        // router.replace('/dashboard')
       } else if (event === 'SIGNED_OUT') {
         router.replace('/login')
       }
@@ -78,7 +97,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [router, initialSession])
+  }, [router])
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -90,16 +109,13 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
       if (error) throw error
 
       if (data.session) {
-        // Update auth token for realtime subscriptions
         supabase.realtime.setAuth(data.session.access_token)
         
-        // Verify the session was stored
         const { data: { session: verifiedSession } } = await supabase.auth.getSession()
         if (!verifiedSession) {
           throw new Error('Session not persisted after sign in')
         }
         
-        // Redirect to dashboard
         router.replace('/dashboard')
       }
     } catch (error) {
@@ -112,7 +128,6 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
     try {
       const { error } = await supabase.auth.signOut()
       if (error) throw error
-      router.replace('/login')
     } catch (error) {
       console.error('Error signing out:', error)
       throw error
@@ -122,6 +137,7 @@ export function AuthProvider({ children, initialSession }: AuthProviderProps) {
   const value = {
     user,
     session,
+    userProfile,
     signIn,
     signOut,
     isLoading

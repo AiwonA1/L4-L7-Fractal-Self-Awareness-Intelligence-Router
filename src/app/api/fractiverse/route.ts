@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 import OpenAI from 'openai'
-import { supabaseAdmin } from '@/app/lib/supabase/supabase-admin'
+import { supabaseAdmin } from '@/lib/supabase/supabase-admin'
 import fs from 'fs'
 import path from 'path'
+import { rateLimitCheck } from '@/lib/rate-limit'
 
 // Initialize OpenAI instance (apiKey will be checked before use)
 let openai: OpenAI | null = null;
@@ -10,8 +11,11 @@ try {
   if (process.env.OPENAI_API_KEY) {
     openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-      dangerouslyAllowBrowser: true // Allow in test environment
+      // dangerouslyAllowBrowser: true // REMOVED: Unsafe for backend code
     });
+  } else {
+    // Added explicit warning if key is missing during initialization
+    console.warn("OpenAI API key not found in environment variables. OpenAI client not initialized.");
   }
 } catch (error) {
   console.error("Failed to initialize OpenAI client:", error);
@@ -29,7 +33,7 @@ try {
 }
 
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   // Check if OpenAI client initialized successfully
   if (!openai) {
     console.error('OpenAI client not initialized. Check API Key and constructor.')
@@ -54,7 +58,7 @@ export async function POST(req: Request) {
   let tokenResponse: Response | undefined = undefined;
 
   try {
-    // 1. Parse Request Body
+    // 1. Parse Request Body & Get userId
     try {
       const body = await req.json();
       message = body.message;
@@ -70,6 +74,13 @@ export async function POST(req: Request) {
       console.error('Error parsing request body:', parseError);
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
+
+    // --- Rate Limiting (Authenticated User via userId in body) ---
+    const { success: limitReached } = await rateLimitCheck(userId, 'api');
+    if (!limitReached) {
+        return NextResponse.json({ error: 'Too many API requests' }, { status: 429 });
+    }
+    // --- End Rate Limiting ---
 
     // 2. Check User Token Balance
     let userData;
@@ -154,24 +165,49 @@ export async function POST(req: Request) {
     }
     
     // 5. Deduct Tokens
+    let tokenDeductionSuccess = false;
     try {
       tokenResponse = await fetch(new URL('/api/tokens/use', req.url).href, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, amount: tokensToDeduct, description: `ChatID: ${chatId} - OpenAI API call` }),
       });
-      
-      if (!tokenResponse.ok) {
-        let tokenErrorBody = {};
+
+      if (tokenResponse.ok) {
+        tokenDeductionSuccess = true;
+      } else {
+        let tokenErrorBody = { error: 'Unknown deduction error' };
         try { tokenErrorBody = await tokenResponse.json(); } catch { /* ignore parsing error */ }
         console.error('Error deducting tokens:', { status: tokenResponse.status, body: tokenErrorBody });
-        // Do NOT return error here; proceed to store message & return response
-        // Log it as a critical failure for monitoring
-        console.error(`CRITICAL: Failed to deduct ${tokensToDeduct} tokens for user ${userId} after successful OpenAI call.`);
+        // CRITICAL: Failed to deduct tokens after successful OpenAI call.
+        // Return an error to the user instead of proceeding.
+        return NextResponse.json(
+          { 
+            error: `AI response generated, but failed to deduct tokens: ${tokenErrorBody.error}. Please contact support.`,
+            // Optionally include AI response here if needed for retry/support
+            // generatedContent: completion.choices[0].message.content 
+          },
+          // Use 500 or a more specific code like 402 Payment Required or 409 Conflict
+          { status: 500 } 
+        );
       }
     } catch (fetchError) {
         console.error(`CRITICAL: Exception during token deduction fetch for user ${userId}:`, fetchError);
-         // Do NOT return error here either.
+        // Return an error to the user instead of proceeding.
+        return NextResponse.json(
+          { error: 'AI response generated, but encountered an error during token deduction. Please contact support.' },
+          { status: 500 }
+        );
+    }
+
+    // Ensure deduction succeeded before proceeding (redundant check, but safe)
+    if (!tokenDeductionSuccess) {
+        // This should ideally not be reached due to returns above, but acts as a failsafe
+        console.error(`CRITICAL: Token deduction flag was false after fetch block for user ${userId}.`);
+        return NextResponse.json(
+          { error: 'Internal server error during token processing finalization.' },
+          { status: 500 }
+        );
     }
 
     // 6. Store Messages (Optional, proceed even if it fails)

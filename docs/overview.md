@@ -4,36 +4,38 @@ This document provides a high-level overview of the FractiVerse project, includi
 
 ## 1. Project Structure
 
-The repository follows a structure typical for a Next.js 14 application using the App Router, with some specific additions:
+The repository follows a structure typical for a Next.js 14 application using the App Router, now consolidated primarily within the `src/` directory:
 
 ```plaintext
 /
 ├── .next/           # Next.js build output (cache)
 ├── .vscode/         # VSCode settings
 ├── __tests__/       # Vitest tests
-├── app/             # Next.js App Router core (pages, layouts, API routes, components)
-│   ├── actions/
-│   ├── api/         # Backend API endpoints
-│   ├── components/  # Reusable React components
-│   ├── constants/
-│   ├── context/     # React context for state management
-│   ├── hooks/
-│   ├── layer/       # Specific layer pages (e.g., [id], 4, 5, 6, 7)
-│   ├── lib/         # Shared utilities, Supabase client, etc.
-│   └── types/       # TypeScript type definitions
 ├── config/          # Configuration files (potentially Stripe, etc.)
 ├── dist/            # Distribution output (likely not used for Next.js)
 ├── docs/            # Project documentation (this file)
-├── lib/             # Top-level library folder (potentially redundant with app/lib)
 ├── node_modules/    # Project dependencies
-├── prisma/          # Prisma schema and migration files
 ├── public/          # Static assets (images, icons)
 ├── scripts/         # Utility/automation scripts
-├── src/             # Additional source code (purpose unclear alongside app/)
-│   ├── app/         # Contains layer-specific code?
-│   └── data/
-├── supabase/        # Supabase specific files (migrations? policies?) - potentially redundant
-├── types/           # Global type definitions
+├── src/             # Main source code
+│   ├── app/         # Next.js App Router core
+│   │   ├── actions/     # Server Actions (if used)
+│   │   ├── api/         # Backend API endpoints
+│   │   ├── components/  # Reusable React UI components
+│   │   ├── constants/   # Application constants
+│   │   ├── context/     # React context providers (e.g., AuthContext)
+│   │   ├── hooks/       # Custom React hooks
+│   │   ├── layer/       # Layer-specific page routes (e.g., /layer/4, /layer/[id])
+│   │   ├── layers/      # UI components specific to Layers (used by pages in /layer)
+│   │   └── (other page routes, layouts, etc.)
+│   ├── lib/           # Shared utilities, clients, services, types, prompts
+│   │   ├── services/    # Backend/Client service functions (e.g., user access)
+│   │   ├── supabase/    # Supabase client configurations (client, server, admin)
+│   │   ├── prompts/     # AI prompts
+│   │   └── (utils, clients: stripe, openai, email, etc.)
+│   └── types/         # Global TypeScript types (e.g., Supabase generated)
+├── supabase/        # Supabase specific files (migrations? policies?)
+├── types/           # (Potentially redundant with src/types, check usage)
 ├── .env.*           # Environment variable files
 ├── .gitignore
 ├── .npmrc
@@ -49,12 +51,13 @@ The repository follows a structure typical for a Next.js 14 application using th
 ```
 
 **Observations:**
-*   Uses Next.js App Router (`app/` directory).
+*   Uses Next.js App Router (`src/app/` directory).
+*   Code is primarily organized within the `src/` directory.
 *   Clear separation of concerns (API, components, lib).
+*   Shared utilities/services consolidated in `src/lib`.
 *   Includes testing (`__tests__`, Vitest) and documentation (`docs/`).
-*   Presence of both `prisma/` and `supabase/` directories needs clarification regarding database management strategy.
-*   Presence of both `app/` and `src/` at the root is slightly unconventional for App Router projects.
-*   Presence of both `app/lib` and a root `lib` directory might be redundant.
+*   Presence of both `prisma/` and `supabase/` directories needs clarification regarding database management strategy (Prisma might be only for migrations).
+*   Presence of both `src/types/` and a root `types/` directory might be redundant; standardize usage.
 
 ## 2. Core Technologies & Packages
 
@@ -146,7 +149,7 @@ graph LR
 
 *   **Database ORM/Client Strategy:** The presence of both `prisma/` and `supabase/` directories, along with Supabase client libraries in `package.json`, suggests a potential lack of clarity or redundancy in how the database is accessed and managed. Using *both* Prisma and the Supabase client library for runtime operations against the *same* database is generally not recommended. Choose one primary method (likely Supabase client based on dependencies, with Prisma potentially just for migrations).
 *   **Styling Conflicts:** The inclusion of Tailwind CSS development dependencies alongside Chakra UI conflicts with the project rule "Keep styling Chakra UI only". This can lead to increased bundle size, styling conflicts, and developer confusion. Recommend removing Tailwind dependencies unless there's a specific, isolated use case.
-*   **Directory Structure (`src/` vs `app/`, `lib/` duplication):** The top-level `src/` directory's purpose alongside `app/` is unclear in a standard App Router setup. Consolidating into `src/app/` is conventional. Similarly, having `lib/` both at the root and within `app/` might indicate redundancy.
+*   **Directory Structure (`src/` vs `app/`, `lib/` duplication):** The previous structure had some potential redundancy (e.g., `app/lib` vs `lib`). This has been addressed by consolidating shared code into `src/lib`. Ensure the top-level `src/` vs `app/` convention aligns with team preference (using `src/app` is common). The root `types/` dir might be unused.
 *   **State Management Scalability:** Relying solely on React Context/Hooks might become complex for managing global state (user auth, token balance, chat state) as the application grows. Evaluate if a dedicated state management library (like Zustand or Jotai) would be beneficial, weighing against the "no extra abstraction layers" guideline.
 *   **Error Reporting:** No dedicated error reporting service (e.g., Sentry) seems to be integrated. Relying only on Vercel logs might be insufficient for proactive issue detection and debugging in production.
 *   **Environment Variable Template:** Having both `.env.example` and `.env.template` is redundant. Standardize on `.env.example`.
@@ -155,7 +158,7 @@ graph LR
 
 *   **Clarify Database Strategy:** Decide on using *either* Prisma *or* the Supabase client library for runtime database operations and remove/refactor accordingly. Use Prisma primarily for migrations if desired.
 *   **Consolidate Styling:** Remove Tailwind CSS dependencies and ensure all styling is done via Chakra UI, adhering to project rules.
-*   **Refactor Directory Structure:** Consider moving `app/` into `src/` (`src/app/`) and consolidate shared utilities into a single `lib/` or `utils/` directory (e.g., `src/lib/`).
+*   **Refactor Directory Structure:** The structure has been partially refactored to consolidate into `src/lib`. Verify the `src/types` vs root `types` usage and standardize. Ensure Prisma directory is only used for migrations if Supabase client is the runtime choice.
 *   **Review State Management:** Assess if the current Context/Hook approach is sufficient or if a lightweight state library is needed for maintainability.
 *   **Implement Error Reporting:** Integrate a service like Sentry for better production monitoring.
 *   **Standardize Env Template:** Remove `.env.template` and use only `.env.example`.

@@ -10,10 +10,11 @@ vi.mock('@/lib/supabase/supabase-admin', () => ({
         })),
       })),
       update: vi.fn(() => ({
-        eq: vi.fn(() => ({})), // Mock the chained .eq after update
+        eq: vi.fn(() => ({})),
       })),
-      insert: vi.fn(() => ({})), // Mock insert for transactions
+      insert: vi.fn(() => ({})),
     })),
+    rpc: vi.fn(), // Add mock for the rpc method
   },
 }))
 
@@ -53,61 +54,31 @@ vi.mock('@/lib/config/openai', () => ({
 describe('Token Usage API Route (/api/tokens/use)', () => {
   // Get mock instances
   const mockedFrom = vi.mocked(supabaseAdmin.from)
-  let mockSelect: ReturnType<typeof vi.fn>
-  let mockEqSelect: ReturnType<typeof vi.fn>
-  let mockSingle: ReturnType<typeof vi.fn>
-  let mockUpdate: ReturnType<typeof vi.fn>
-  let mockEqUpdate: ReturnType<typeof vi.fn>
-  let mockInsert: ReturnType<typeof vi.fn>
+  const mockedRpc = vi.mocked(supabaseAdmin.rpc) // Get mock instance for rpc
 
   beforeEach(() => {
     vi.clearAllMocks()
 
-    // Create specific mock functions for the chain
-    mockSingle = vi.fn()
-    mockEqSelect = vi.fn(() => ({ single: mockSingle }))
-    mockSelect = vi.fn(() => ({ eq: mockEqSelect }))
+    // Remove complex from/select/update/insert mock setup as we're mocking rpc directly
+    // mockedFrom.mockImplementation(/* ... */);
 
-    mockEqUpdate = vi.fn(() => Promise.resolve({ error: null })) // Default update success
-    mockUpdate = vi.fn(() => ({ eq: mockEqUpdate }))
-
-    mockInsert = vi.fn(() => Promise.resolve({ error: null })) // Default insert success
-
-    // Configure the main 'from' mock
-    mockedFrom.mockImplementation((tableName: string) => {
-      if (tableName === 'users') {
-        return {
-          select: mockSelect,
-          update: mockUpdate,
-        } as any
-      }
-      if (tableName === 'transactions') {
-        return {
-          insert: mockInsert,
-        } as any
-      }
-      // Fallback for unexpected table names
-      return {
-        select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn() })) })),
-        update: vi.fn(() => ({ eq: vi.fn() })),
-        insert: vi.fn(),
-      } as any
+    // Default mock: RPC success
+    mockedRpc.mockResolvedValue({
+      data: true,
+      error: null,
+      status: 200,
+      statusText: 'OK',
+      count: null, // RPC doesn't typically return count
     })
-
-    // Default mock implementations
-    mockSingle.mockResolvedValue({ data: null, error: { message: 'User not found' } }) // Default: user doesn't exist
   })
 
-  it('should successfully deduct tokens and record transaction', async () => {
-    const userId = 'user-with-tokens'
-    const initialBalance = 50
+  it('should successfully deduct tokens and record transaction via RPC', async () => {
+    const userId = 'user-rpc-success'
     const amountToDeduct = 10
-    const description = 'Test LLM Call'
+    const description = 'Test RPC Call'
 
-    // Mock user exists with sufficient balance
-    mockSingle.mockResolvedValue({ data: { token_balance: initialBalance }, error: null })
-    // Mock update success (already default)
-    // Mock insert success (already default)
+    // No need to mock user fetch/update/insert if RPC handles it
+    // Ensure rpc mock is set for success (default in beforeEach)
 
     const request = new Request('http://localhost/api/tokens/use', {
       method: 'POST',
@@ -119,35 +90,33 @@ describe('Token Usage API Route (/api/tokens/use)', () => {
     const body = await response.json()
 
     expect(response.status).toBe(200)
-    expect(body).toEqual({ success: true, newBalance: initialBalance - amountToDeduct })
+    expect(body).toEqual({
+      success: true,
+      message: `${amountToDeduct} tokens deducted successfully.`
+    })
 
-    // Verify mocks
-    expect(mockedFrom).toHaveBeenCalledWith('users') // Called for select and update
-    expect(mockedFrom).toHaveBeenCalledWith('transactions') // Called for insert
-    expect(mockSelect).toHaveBeenCalledWith('token_balance')
-    expect(mockEqSelect).toHaveBeenCalledWith('id', userId)
-    expect(mockSingle).toHaveBeenCalledTimes(1)
-
-    expect(mockUpdate).toHaveBeenCalledWith(expect.objectContaining({ token_balance: initialBalance - amountToDeduct }))
-    expect(mockEqUpdate).toHaveBeenCalledWith('id', userId)
-
-    expect(mockInsert).toHaveBeenCalledWith(expect.objectContaining({
-      user_id: userId,
-      type: 'USE',
-      amount: amountToDeduct,
-      description: description,
-      status: 'COMPLETED'
-    }))
+    // Verify rpc mock was called correctly
+    expect(mockedRpc).toHaveBeenCalledWith('use_tokens', {
+      p_user_id: userId,
+      p_amount: amountToDeduct,
+      p_description: description,
+    })
+    expect(mockedFrom).not.toHaveBeenCalled() // Ensure old mocks aren't called
   })
 
-  it('should return 400 if user has insufficient tokens', async () => {
-    const userId = 'user-low-tokens'
-    const initialBalance = 5
-    const amountToDeduct = 10
-    const description = 'Another Test Call'
+  it('should return 400 if RPC indicates insufficient tokens (returns false)', async () => {
+    const userId = 'user-rpc-insufficient'
+    const amountToDeduct = 100
+    const description = 'Insufficient Test RPC Call'
 
-    // Mock user exists with insufficient balance
-    mockSingle.mockResolvedValue({ data: { token_balance: initialBalance }, error: null })
+    // Mock RPC returning false
+    mockedRpc.mockResolvedValue({
+      data: false,
+      error: null,
+      status: 200, // The RPC call itself succeeded
+      statusText: 'OK',
+      count: null,
+    })
 
     const request = new Request('http://localhost/api/tokens/use', {
       method: 'POST',
@@ -160,114 +129,98 @@ describe('Token Usage API Route (/api/tokens/use)', () => {
 
     expect(response.status).toBe(400)
     expect(body).toEqual({ error: 'Insufficient tokens' })
-
-    // Verify only user fetch was attempted
-    expect(mockedFrom).toHaveBeenCalledWith('users')
-    expect(mockedFrom).not.toHaveBeenCalledWith('transactions')
-    expect(mockSelect).toHaveBeenCalledWith('token_balance')
-    expect(mockEqSelect).toHaveBeenCalledWith('id', userId)
-    expect(mockSingle).toHaveBeenCalledTimes(1)
-    expect(mockUpdate).not.toHaveBeenCalled()
-    expect(mockInsert).not.toHaveBeenCalled()
+    expect(mockedRpc).toHaveBeenCalledTimes(1)
   })
 
-  it('should return 500 if fetching user fails', async () => {
-    const userId = 'user-fetch-error'
-    const amountToDeduct = 1
-    const description = 'Fetch Error Test'
-    const dbError = { message: 'Failed to connect' }
+  it('should return 400 if RPC specific insufficient token error occurs', async () => {
+    const userId = 'user-rpc-insufficient-error'
+    const amountToDeduct = 100
+    const description = 'Insufficient Error Test RPC Call'
+    const rpcError = {
+      message: 'custom_error_Insufficient tokens_abc',
+      code: 'P0001',
+      details: '',
+      hint: '',
+      name: 'MockPostgrestError'
+    }
 
-    // Mock user fetch error
-    mockSingle.mockResolvedValue({ data: null, error: dbError })
+    // Mock RPC returning an error
+    mockedRpc.mockResolvedValue({
+      data: null,
+      error: rpcError,
+      status: 400, // Or appropriate error status from DB
+      statusText: 'Bad Request',
+      count: null,
+    })
 
     const request = new Request('http://localhost/api/tokens/use', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId, amount: amountToDeduct, description }),
-    })
-
-    const response = await POST(request)
-    const body = await response.json()
-
-    expect(response.status).toBe(500)
-    expect(body).toEqual({ error: 'Failed to fetch user data' })
-    expect(mockSingle).toHaveBeenCalledTimes(1)
-    expect(mockUpdate).not.toHaveBeenCalled()
-    expect(mockInsert).not.toHaveBeenCalled()
-  })
-
-  it('should return 500 if updating token balance fails', async () => {
-     const userId = 'user-update-error'
-    const initialBalance = 50
-    const amountToDeduct = 10
-    const description = 'Update Error Test'
-    const updateError = { message: 'Update constraint violation' }
-
-    // Mock user fetch success
-    mockSingle.mockResolvedValue({ data: { token_balance: initialBalance }, error: null })
-    // Mock update failure
-    mockEqUpdate.mockResolvedValue({ error: updateError })
-
-    const request = new Request('http://localhost/api/tokens/use', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, amount: amountToDeduct, description }),
-    })
-
-    const response = await POST(request)
-    const body = await response.json()
-
-    expect(response.status).toBe(500)
-    expect(body).toEqual({ error: 'Failed to update token balance' })
-    expect(mockSingle).toHaveBeenCalledTimes(1)
-    expect(mockUpdate).toHaveBeenCalledTimes(1)
-    expect(mockInsert).not.toHaveBeenCalled() // Should not attempt insert if update fails
-  })
-
-   it('should return 200 even if recording transaction fails (token deduction succeeded)', async () => {
-    const userId = 'user-trans-error'
-    const initialBalance = 50
-    const amountToDeduct = 10
-    const description = 'Transaction Error Test'
-    const transactionError = { message: 'Failed to insert transaction' }
-
-    // Mock user fetch success
-    mockSingle.mockResolvedValue({ data: { token_balance: initialBalance }, error: null })
-    // Mock update success (default)
-    // Mock transaction insert failure
-    mockInsert.mockResolvedValue({ error: transactionError })
-
-    const request = new Request('http://localhost/api/tokens/use', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId, amount: amountToDeduct, description }),
-    })
-
-    const response = await POST(request)
-    const body = await response.json()
-
-    // Still returns 200 because token deduction is the critical part
-    expect(response.status).toBe(200)
-    expect(body).toEqual({ success: true, newBalance: initialBalance - amountToDeduct })
-
-    // Verify mocks show insert was attempted
-    expect(mockSingle).toHaveBeenCalledTimes(1)
-    expect(mockUpdate).toHaveBeenCalledTimes(1)
-    expect(mockInsert).toHaveBeenCalledTimes(1)
-  })
-
-  it('should return 400 if required fields are missing', async () => {
-    const request = new Request('http://localhost/api/tokens/use', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ userId: 'some-user' }), // Missing amount and description
     })
 
     const response = await POST(request)
     const body = await response.json()
 
     expect(response.status).toBe(400)
-    expect(body).toEqual({ error: 'Missing required fields' })
-    expect(mockedFrom).not.toHaveBeenCalled()
+    expect(body).toEqual({ error: 'Insufficient tokens' })
+    expect(mockedRpc).toHaveBeenCalledTimes(1)
   })
+
+  it('should return 500 if RPC call fails with a generic error', async () => {
+    const userId = 'user-rpc-error'
+    const amountToDeduct = 5
+    const description = 'RPC Error Test'
+    const rpcError = {
+      message: 'Database connection failed',
+      code: '50000',
+      details: '',
+      hint: '',
+      name: 'MockPostgrestError'
+    }
+
+    // Mock RPC returning a generic error
+    mockedRpc.mockResolvedValue({
+      data: null,
+      error: rpcError,
+      status: 500,
+      statusText: 'Internal Server Error',
+      count: null,
+    })
+
+    const request = new Request('http://localhost/api/tokens/use', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, amount: amountToDeduct, description }),
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body).toEqual({ error: 'Failed to process token usage' })
+    expect(mockedRpc).toHaveBeenCalledTimes(1)
+  })
+
+  // Keep the test for missing fields, it doesn't involve DB calls
+  it('should return 400 if required fields are missing', async () => {
+    const request = new Request('http://localhost/api/tokens/use', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId: 'test-user' }), // Missing amount and description
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(400)
+    // Update assertion to match the specific error message from the route
+    expect(body).toEqual({ error: 'Missing or invalid required fields (userId, amount > 0, description)' })
+    expect(mockedRpc).not.toHaveBeenCalled()
+  })
+
+  // Remove or adapt old tests that relied on mocking .from/.select/.update/.insert
+  // it('should return 500 if fetching user fails', ...) 
+  // it('should return 500 if updating token balance fails', ...)
+  // it('should return 200 even if recording transaction fails ...', ...)
 }) 

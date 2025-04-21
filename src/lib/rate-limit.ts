@@ -1,5 +1,22 @@
 import { Redis } from '@upstash/redis'
 import { Ratelimit } from '@upstash/ratelimit'
+import { NextRequest } from 'next/server'
+
+// Helper to get IP address from request headers
+export function getIp(req: NextRequest): string | null {
+    const forwarded = req.headers.get('x-forwarded-for');
+    if (forwarded) {
+        return forwarded.split(',')[0].trim(); // Get the first IP if multiple
+    }
+    const realIp = req.headers.get('x-real-ip');
+    if (realIp) {
+        return realIp.trim();
+    }
+    // Fallback to connection remoteAddress if available (less reliable behind proxies)
+    // Note: req.ip is often undefined in Next.js Edge/Serverless
+    // return req.ip ?? null; 
+    return null; // Return null if IP cannot be determined reliably
+}
 
 // Ensure Upstash environment variables are set in your .env file
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL

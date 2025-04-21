@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server'
-import { stripe } from '@/app/lib/stripe'
+import { stripe } from '@/lib/stripe'
 import { headers } from 'next/headers'
 import Stripe from 'stripe'
-import { supabaseAdmin } from '@/lib/supabase-admin'
+import { supabaseAdmin } from '@/lib/supabase/supabase-admin'
 
 // Stripe webhook handler
 export async function POST(req: Request) {
@@ -17,65 +17,95 @@ export async function POST(req: Request) {
       signature,
       process.env.STRIPE_WEBHOOK_SECRET as string
     )
-  } catch (error) {
-    console.error('Error verifying webhook signature:', error)
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
+  } catch (error: any) {
+    console.error('Error verifying webhook signature:', error.message)
+    return NextResponse.json({ error: `Webhook Error: ${error.message}` }, { status: 400 })
   }
   
   // Handle the event
   try {
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object as Stripe.Checkout.Session
+    // --- Handle PaymentIntent Succeeded --- 
+    if (event.type === 'payment_intent.succeeded') {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent
       
-      // Extract user and token information from metadata
-      const userId = session.metadata?.userId
-      const tokenAmount = session.metadata?.tokenAmount
+      // Extract user and token information from PaymentIntent metadata
+      const userId = paymentIntent.metadata?.userId
+      const tokenAmountStr = paymentIntent.metadata?.tokens
       
-      if (!userId || !tokenAmount) {
-        throw new Error('Missing metadata in Stripe session')
+      if (!userId || !tokenAmountStr) {
+        console.error('Webhook Error: Missing metadata (userId or tokens) in PaymentIntent:', paymentIntent.id)
+        // Return 200 OK to Stripe to acknowledge receipt, but log error
+        return NextResponse.json({ received: true, error: 'Missing metadata' })
       }
       
-      // Add tokens to user's balance
-      const tokens = parseInt(tokenAmount, 10)
+      const tokens = parseInt(tokenAmountStr, 10)
+      if (isNaN(tokens) || tokens <= 0) {
+         console.error('Webhook Error: Invalid token amount in PaymentIntent metadata:', paymentIntent.id, tokenAmountStr)
+        return NextResponse.json({ received: true, error: 'Invalid metadata' })
+      }
       
-      // Update user's token balance using Supabase
-      const { error: updateError } = await supabaseAdmin
-        .from('users')
-        .update({
-          fract_tokens: supabaseAdmin.rpc('increment_tokens', { amount: tokens }),
-          token_balance: supabaseAdmin.rpc('increment_tokens', { amount: tokens })
-        })
-        .eq('id', userId)
-
+      console.log(`Processing successful payment intent ${paymentIntent.id} for user ${userId}, adding ${tokens} tokens.`);
+      
+      // --- Add tokens to user's balance --- 
+      // Assume 'token_balance' is the correct column and 'increment_tokens' RPC exists
+      const { error: updateError } = await supabaseAdmin.rpc('increment_tokens', {
+         p_user_id: userId,
+         p_amount: tokens
+      })
+      
       if (updateError) {
-        throw new Error(`Failed to update user balance: ${updateError.message}`)
+        console.error(`CRITICAL: Failed to update token balance for user ${userId} after PaymentIntent ${paymentIntent.id}. Error: ${updateError.message}`);
+        // Depending on policy, you might want to retry or flag this user
+        // Return 500 to indicate failure to process *after* acknowledging receipt
+        return NextResponse.json({ error: 'Failed to update user balance after payment.' }, { status: 500 });
       }
       
-      // Update transaction status to completed
+      console.log(`Successfully added ${tokens} tokens to user ${userId}.`);
+      
+      // --- Transaction Logging (Optional/Future) --- 
+      // TODO: If needed, insert a 'PURCHASE' transaction record here.
+      // Link it using userId and potentially paymentIntent.id.
+      // Example:
+      /*
       const { error: transactionError } = await supabaseAdmin
         .from('transactions')
-        .update({
+        .insert({
+          user_id: userId,
+          type: 'PURCHASE',
+          amount: tokens,
+          description: `Purchase via PaymentIntent: ${paymentIntent.id}`,
           status: 'COMPLETED',
-          completed_at: new Date().toISOString()
-        })
-        .eq('stripe_session_id', session.id)
-
+          stripe_payment_intent_id: paymentIntent.id // Example linkage
+        });
       if (transactionError) {
-        console.error('Error updating transaction:', transactionError)
-        // Continue even if transaction update fails
+          console.error(`Webhook Warning: Failed to record transaction for PaymentIntent ${paymentIntent.id}. Error: ${transactionError.message}`);
+          // Don't fail the webhook for this, but log it.
       }
+      */
       
-      console.log(`Added ${tokens} tokens to user ${userId}`)
+    } else if (event.type === 'payment_intent.payment_failed') {
+      const paymentIntent = event.data.object as Stripe.PaymentIntent;
+      console.warn(`PaymentIntent ${paymentIntent.id} failed for user ${paymentIntent.metadata?.userId}. Reason: ${paymentIntent.last_payment_error?.message}`);
+      // Optionally log failed transaction attempt
+      
+    } else {
+      // Handle other event types if needed
+      console.log(`Unhandled webhook event type: ${event.type}`);
     }
     
-    return NextResponse.json({ received: true })
+    // Return 200 OK to Stripe
+    return NextResponse.json({ received: true });
+    
   } catch (error) {
-    console.error('Error processing webhook:', error)
+    console.error('Error processing webhook event:', error);
+    const message = error instanceof Error ? error.message : 'Unknown processing error';
+    // Return 500 for internal processing errors
     return NextResponse.json(
-      { error: 'Error processing webhook' },
+      { error: `Webhook processing error: ${message}` },
       { status: 500 }
     )
   }
 }
 
+// Ensure the handler runs with Node.js runtime if needed for Stripe SDK
 export const runtime = 'nodejs' 

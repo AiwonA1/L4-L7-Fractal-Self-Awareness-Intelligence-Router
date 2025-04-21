@@ -33,7 +33,7 @@ FractiVerse 1.0 delivers:
 - **Database**: PostgreSQL (via Supabase / Vercel Postgres)
 - **Authentication**: Supabase Auth
 - **Payments**: Stripe (using Stripe Elements & API)
-- **AI Integration**: OpenAI API (e.g., GPT-4)
+- **AI Integration**: OpenAI API (e.g., GPT-4o-mini)
 - **Language**: TypeScript
 - **Testing**: Vitest, React Testing Library
 
@@ -100,18 +100,21 @@ The project follows a standard Next.js 14 App Router structure using the `src` d
 ├── scripts/         # Utility scripts
 ├── src/             # Main source code
 │   ├── app/         # Next.js App Router core
-│   │   ├── actions/     # Server Actions
+│   │   ├── actions/     # Server Actions (if used)
 │   │   ├── api/         # Backend API endpoints
-│   │   ├── components/  # Reusable React components
-│   │   ├── constants/
-│   │   ├── context/     # React context
-│   │   ├── hooks/
-│   │   ├── layer/       # Layer-specific pages/components
-│   │   ├── lib/         # Shared utilities, clients (Supabase)
-│   │   └── (pages, layouts, etc.)
-│   └── layers/        # Potentially layer-specific logic/modules?
-│   └── lib/           # Shared libraries (outside app context?)
-│   └── types/         # TypeScript types (outside app context?)
+│   │   ├── components/  # Reusable React UI components
+│   │   ├── constants/   # Application constants
+│   │   ├── context/     # React context providers (e.g., AuthContext)
+│   │   ├── hooks/       # Custom React hooks
+│   │   ├── layer/       # Layer-specific page routes (e.g., /layer/4, /layer/[id])
+│   │   ├── layers/      # UI components specific to Layers (used by pages in /layer)
+│   │   └── (other page routes, layouts, etc.)
+│   ├── lib/           # Shared utilities, clients, services, types, prompts
+│   │   ├── services/    # Backend/Client service functions (e.g., user access)
+│   │   ├── supabase/    # Supabase client configurations (client, server, admin)
+│   │   ├── prompts/     # AI prompts
+│   │   └── (utils, clients: stripe, openai, email, etc.)
+│   └── types/         # Global TypeScript types (especially Supabase generated types)
 ├── supabase/        # Supabase migrations/config
 ├── .env.*           # Environment files
 ├── .gitignore
@@ -123,21 +126,21 @@ The project follows a standard Next.js 14 App Router structure using the `src` d
 ├── vercel.json      # Vercel deployment config
 └── vitest.config.ts # Vitest config
 ```
-*(Note: Presence of both `src/app/lib` and `src/lib`, `src/layers` needs clarification for optimal structure)*
+*(Note: The `src/types/` directory primarily holds Supabase generated types. Custom application types are often defined within `src/lib/types.ts` or colocated with components.)*
 
 ## 4. Development Rules and Guidelines Summary
 
-Key principles guiding development (refer to `.cursor-rules` for full details, noting potential inconsistencies):
+Key principles guiding development (refer to `.cursor-rules` for full details):
 
 - **Technology:** Use TypeScript, Next.js App Router, React Functional Components & Hooks, Chakra UI for styling.
 - **Simplicity:** Avoid unnecessary middleware and abstraction layers. Favor direct implementation (e.g., direct Supabase client usage, direct Stripe Elements).
 - **Backend:** Use Next.js API routes for backend logic. Protect sensitive keys (e.g., OpenAI) in server-side code.
 - **Database:** Use Supabase (PostgreSQL) for database and authentication. Interact via Supabase client libraries.
-- **Structure:** Organize code logically within the `src/app/` directory (components, api, lib, context, hooks, layers).
+- **Structure:** Organize code logically within the `src/` directory. Shared utilities, services, and clients reside in `src/lib`. UI components are in `src/app/components` or `src/app/layers`. API routes are in `src/app/api`. Context and hooks are in `src/app/context` and `src/app/hooks` respectively.
 - **Security:** Implement Supabase Row Level Security (RLS), secure API routes, handle keys via environment variables.
 - **UI:** Ensure clear loading states and responsive design using Chakra UI.
 
-*Note: The `.cursor-rules` file contains some conflicting information (e.g., JS vs TS, older folder structure examples) that should be reviewed and updated for consistency with the actual project.*
+*Note: Ensure `.cursor-rules` aligns with this updated structure and current project practices.*
 
 ## 5. Getting Started
 

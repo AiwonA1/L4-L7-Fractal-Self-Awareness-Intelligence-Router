@@ -20,7 +20,7 @@ vi.mock('@/lib/supabase-server', () => ({
 // Revert back to using the '@/' alias
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 // Import the actual handler function to test
-import { GET } from '../src/app/app/api/user/data/route' // Keep relative for API route import
+import { GET } from '../route'
 
 describe('User Info API Route', () => {
   const mockSession = {
