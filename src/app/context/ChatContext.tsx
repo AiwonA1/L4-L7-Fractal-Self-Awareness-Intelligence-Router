@@ -211,12 +211,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       created_at: new Date().toISOString(),
     };
     
-    if (targetChatId === currentChat?.id) {
-       setMessages((prev) => [...prev, userMessage]);
-    } else {
-       console.warn(`sendMessage called for chat ${targetChatId}, but current chat is ${currentChat?.id}`);
-       setMessages([userMessage]); 
-    }
+    setMessages((prev) => [...prev, userMessage]);
 
     const assistantMessageId = crypto.randomUUID();
     const assistantPlaceholder: Message = {
@@ -227,9 +222,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       created_at: new Date().toISOString(),
     };
     
-    if (targetChatId === currentChat?.id) {
-       setMessages((prev) => [...prev, assistantPlaceholder]);
-    }
+    setMessages((prev) => [...prev, assistantPlaceholder]);
     
     const abortController = new AbortController();
 
