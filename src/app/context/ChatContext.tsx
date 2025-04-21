@@ -17,7 +17,7 @@ interface ChatContextType {
   loadChats: () => Promise<void>
   loadMessages: (chatId: string) => Promise<void>
   createNewChat: (title?: string, initialMessage?: string) => Promise<void>
-  sendMessage: (content: string, chatIdToSendTo?: string) => Promise<void>
+  sendMessage: (content: string, chatIdToSendTo: string) => Promise<void>
   updateChatTitle: (chatId: string, title: string) => Promise<void>
   deleteChat: (chatId: string) => Promise<void>
 }
@@ -185,8 +185,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const sendMessage = async (content: string, chatIdToSendTo?: string) => {
-    let targetChatId = chatIdToSendTo || currentChat?.id;
+  const sendMessage = async (content: string, chatIdToSendTo: string) => {
+    const targetChatId = chatIdToSendTo;
 
     if (!user?.id) {
        console.error("Cannot send message: User not logged in.");
@@ -200,56 +200,28 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    if (!targetChatId) {
-      console.log("No active chat, creating a new one...");
-      setIsLoading(true);
-      try {
-        const newChat = await chatService.createChat(user.id, "New Chat");
-        if (!newChat) {
-           throw new Error("Failed to create new chat before sending message.");
-        }
-        setChats((prev) => [newChat!, ...prev]);
-        setCurrentChat(newChat);
-        setMessages([]);
-        targetChatId = newChat.id;
-        console.log("New chat created with ID:", targetChatId);
-      } catch (createErr) {
-        setError(createErr instanceof Error ? createErr : new Error("Failed to create chat"));
-        console.error("Error creating new chat in sendMessage:", createErr);
-        toast({
-          title: "Error Starting Chat",
-          description: createErr instanceof Error ? createErr.message : "Could not start a new chat.",
-          status: "error",
-          duration: 3000,
-          isClosable: true,
-        });
-        setIsLoading(false);
-        return;
-      }
-    }
-
     setIsLoading(true);
     setError(null);
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
-      chat_id: targetChatId!,
+      chat_id: targetChatId,
       role: 'user',
       content: content,
       created_at: new Date().toISOString(),
     };
     
     if (targetChatId === currentChat?.id) {
-        setMessages((prev) => [...prev, userMessage]);
+       setMessages((prev) => [...prev, userMessage]);
     } else {
-        console.warn(`Sending message to chat ${targetChatId}, but current view is ${currentChat?.id}. Messages might not update live.`);
-        setMessages([userMessage]);
+       console.warn(`sendMessage called for chat ${targetChatId}, but current chat is ${currentChat?.id}`);
+       setMessages([userMessage]); 
     }
 
     const assistantMessageId = crypto.randomUUID();
     const assistantPlaceholder: Message = {
       id: assistantMessageId,
-      chat_id: targetChatId!,
+      chat_id: targetChatId,
       role: 'assistant',
       content: '',
       created_at: new Date().toISOString(),
@@ -258,7 +230,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     if (targetChatId === currentChat?.id) {
        setMessages((prev) => [...prev, assistantPlaceholder]);
     }
-
+    
     const abortController = new AbortController();
 
     try {
@@ -291,33 +263,30 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const decoder = new TextDecoder();
       let done = false;
       let currentAssistantContent = '';
+      let chunkCount = 0;
+
+      console.log("Frontend: Starting stream read loop...");
 
       while (!done) {
         const { value, done: doneReading } = await reader.read();
         done = doneReading;
-        const chunk = decoder.decode(value, { stream: true });
-        currentAssistantContent += chunk;
+        if (value) {
+            const chunk = decoder.decode(value, { stream: true });
+            console.log(`Frontend: Received chunk ${++chunkCount}:`, JSON.stringify(chunk));
+            currentAssistantContent += chunk;
 
-        if (targetChatId === currentChat?.id) {
-           setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: currentAssistantContent }
-                : msg
-            )
-          );
+            if (targetChatId === currentChat?.id) {
+               setMessages((prev) => {
+                   return prev.map((msg) =>
+                      msg.id === assistantMessageId
+                        ? { ...msg, content: currentAssistantContent }
+                        : msg
+                    );
+                });
+            }
         }
       }
-
-      if (targetChatId === currentChat?.id) {
-        setMessages((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMessageId
-              ? { ...msg, content: currentAssistantContent }
-              : msg
-          )
-        );
-      }
+      console.log(`Frontend: Stream finished. Received ${chunkCount} chunks. Final content length: ${currentAssistantContent.length}`);
 
     } catch (err) {
       if ((err as Error).name === 'AbortError') {

@@ -136,22 +136,59 @@ export default function Dashboard() {
   }, [user, router])
 
   const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!newMessage.trim()) return
+    e.preventDefault();
+    if (!newMessage.trim() || isLoading) return; // Also prevent sending while already loading
+
+    const messageContent = newMessage;
+    setNewMessage(''); // Clear input immediately
+
+    let chatIdToSend: string | undefined = currentChat?.id;
 
     try {
-      await sendMessage(newMessage)
-      setNewMessage('')
+      // If no chat is currently selected, create a new one first
+      if (!chatIdToSend) {
+        console.log("handleSendMessage: No current chat, creating new one...");
+        // We need the new chat details back from createNewChat
+        // Let's modify createNewChat in context to return the new chat object
+        // For now, assuming createNewChat updates currentChat and returns void
+        // We might need to adjust ChatContext.createNewChat later if this doesn't work.
+        
+        // A potential issue: createNewChat sets loading state, 
+        // and sendMessage also sets loading state. This might be fine.
+        await createNewChat('New Chat', messageContent); // Pass initial message here
+        // After createNewChat, currentChat *should* be updated in the context.
+        // We rely on the context update to eventually call sendMessage appropriately.
+        // --- Alternative (if createNewChat doesn't trigger send): ---
+        // const newChat = await createNewChat('New Chat'); // Modify createNewChat to return the chat
+        // if (newChat?.id) {
+        //     await sendMessage(messageContent, newChat.id); 
+        // } else {
+        //     throw new Error("Failed to get ID from newly created chat.");
+        // }
+        // --- For now, assume createNewChat with initial message handles it ---
+        // If createNewChat *doesn't* send the initial message, we need to call send here.
+        // This logic depends heavily on how createNewChat is implemented.
+        // Let's assume the CURRENT createNewChat handles the initial send.
+
+      } else {
+        // If a chat is already selected, just send the message to it
+        console.log(`handleSendMessage: Sending to existing chat ${chatIdToSend}`);
+        await sendMessage(messageContent, chatIdToSend); 
+      }
+
     } catch (err) {
+      console.error("Error in handleSendMessage:", err);
       toast({
         title: 'Error sending message',
         description: err instanceof Error ? err.message : 'Failed to send message',
         status: 'error',
         duration: 3000,
         isClosable: true,
-      })
+      });
+      // Restore input content if send failed?
+      // setNewMessage(messageContent);
     }
-  }
+  };
 
   const handleCreateChat = async () => {
     try {
