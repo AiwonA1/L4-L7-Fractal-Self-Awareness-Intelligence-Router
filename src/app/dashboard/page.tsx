@@ -236,33 +236,18 @@ export default function Dashboard() {
   }, [toast]);
 
   // Placeholder functions for rename and delete
-  const handleRenameChat = useCallback((chatId: string) => {
-    console.log("Attempting to rename chat:", chatId);
-    // TODO: Implement rename functionality (e.g., open modal, call API)
-    toast({
-      title: "Rename Chat",
-      description: "Rename functionality not yet implemented.",
-      status: "info",
-      duration: 3000,
-      isClosable: true,
-    });
-  }, [toast]);
+  const handleRenameChat = useCallback(async (chatId: string, currentTitle: string) => {
+    const newTitle = window.prompt("Enter new chat title:", currentTitle);
+    if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
+      // Call the context function (which calls the server action)
+      await updateChatTitle(chatId, newTitle.trim()); 
+    }
+  }, [updateChatTitle, toast]); // Added updateChatTitle dependency
 
-  const handleDeleteChat = useCallback((chatId: string) => {
-    console.log("Attempting to delete chat:", chatId);
-    // TODO: Implement delete functionality (e.g., confirm, call API, update context)
-     toast({
-      title: "Delete Chat",
-      description: "Delete functionality not yet implemented.",
-      status: "info",
-      duration: 3000,
-      isClosable: true,
-    });
-    // Example of how you might call a delete function from context if it existed:
-    // if (window.confirm("Are you sure you want to delete this chat?")) {
-    //   deleteChat(chatId); // Assuming deleteChat exists in context
-    // }
-  }, [toast]); // Removed deleteChat from dependencies
+  const handleDeleteChat = useCallback(async (chatId: string) => {
+    // Confirmation is handled inside the context function now
+    await deleteChat(chatId); 
+  }, [deleteChat]); // Added deleteChat dependency
 
   if (!user?.id) {
     return (
@@ -393,8 +378,8 @@ export default function Dashboard() {
                           colorScheme="blue"
                           onClick={(e) => {
                             e.stopPropagation();
-                            console.log(`TODO: Implement rename for chat ID: ${chat.id}`);
-                            toast({ title: "Rename not implemented yet.", status: "info", duration: 2000 });
+                            // Pass current title to handleRenameChat
+                            handleRenameChat(chat.id, chat.title); 
                           }}
                         />
                       </Tooltip>
@@ -407,8 +392,8 @@ export default function Dashboard() {
                           colorScheme="red"
                           onClick={(e) => {
                             e.stopPropagation()
-                            toast({ title: "Delete not implemented yet.", status: "info", duration: 2000 });
-                            console.log(`TODO: Implement delete for chat ID: ${chat.id}`);
+                            // Call handleDeleteChat
+                            handleDeleteChat(chat.id); 
                           }}
                         />
                       </Tooltip>

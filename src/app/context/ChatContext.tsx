@@ -7,6 +7,7 @@ import type { Chat, Message } from '@/app/services/chat'
 import { supabase } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@chakra-ui/react'
+import { updateChatTitle as updateChatTitleAction, deleteChat as deleteChatAction } from '@/app/actions/chat'
 
 // Type for the list of chats - only includes fields needed for the list
 interface ChatListItem {
@@ -234,29 +235,50 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       });
       return;
     }
-
-    setIsLoading(true);
-    setError(null);
-
+    
+    // Optimistically add user message to local state
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: crypto.randomUUID(), // Use crypto for UUID
       chat_id: targetChatId,
       role: 'user',
       content: content,
       created_at: new Date().toISOString(),
     };
-    
     setMessages((prev) => [...prev, userMessage]);
 
+    // --- Save User Message to DB --- 
+    try {
+      // Use the imported chatService function
+      await chatService.addMessage(targetChatId, content, 'user'); 
+      console.log("ChatContext: User message saved to DB");
+    } catch (dbError) {
+      console.error("ChatContext: Failed to save user message to DB:", dbError);
+      // Optionally remove the optimistic message or show an error
+      setMessages((prev) => prev.filter(msg => msg.id !== userMessage.id)); 
+      toast({
+        title: "Error Saving Message",
+        description: "Could not save your message to the database. Please try again.",
+        status: "error",
+        duration: 5000,
+        isClosable: true,
+      });
+      return; // Stop processing if user message failed to save
+    }
+    // --- End Save User Message --- 
+
+    // Only proceed if user message was saved successfully
+    setIsLoading(true);
+    setError(null);
+
+    // Optimistically add assistant placeholder
     const assistantMessageId = crypto.randomUUID();
     const assistantPlaceholder: Message = {
       id: assistantMessageId,
       chat_id: targetChatId,
       role: 'assistant',
-      content: '',
+      content: '', // Start empty
       created_at: new Date().toISOString(),
     };
-    
     setMessages((prev) => [...prev, assistantPlaceholder]);
     
     const abortController = new AbortController();
@@ -351,15 +373,59 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     loadMessages,
     createNewChat,
     sendMessage,
-    updateChatTitle: async (chatId: string, newTitle: string) => { 
-      console.warn('updateChatTitle not implemented', chatId, newTitle);
-      // TODO: Implement actual logic (e.g., call API/action, update state)
-      toast({ title: "Rename not implemented yet.", status: "info", duration: 2000 });
+    updateChatTitle: async (chatId: string, newTitle: string) => {
+      setIsLoading(true);
+      try {
+        const updatedChat = await updateChatTitleAction(chatId, newTitle);
+        // Update local state optimistically or based on response
+        setChats((prev) => 
+          prev.map((c) => 
+            c.id === chatId ? { ...c, title: updatedChat.title } : c
+          ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        );
+        if (currentChat?.id === chatId) {
+            setCurrentChat((prev) => prev ? { ...prev, title: updatedChat.title } : null);
+        }
+        toast({ title: "Chat renamed successfully", status: "success", duration: 2000 });
+      } catch (err) {
+        console.error("Error renaming chat:", err);
+        setError(err instanceof Error ? err : new Error('Failed to rename chat'));
+        toast({ 
+            title: "Error Renaming Chat", 
+            description: err instanceof Error ? err.message : 'Could not rename the chat.',
+            status: "error", 
+            duration: 3000 
+        });
+      } finally {
+        setIsLoading(false);
+      }
     },
-    deleteChat: async (chatId: string) => { 
-      console.warn('deleteChat not implemented', chatId);
-      // TODO: Implement actual logic (e.g., call API/action, update state)
-      toast({ title: "Delete not implemented yet.", status: "info", duration: 2000 }); 
+    deleteChat: async (chatId: string) => {
+       if (!window.confirm("Are you sure you want to delete this chat permanently?")) {
+         return; // Abort if user cancels
+       }
+       setIsLoading(true);
+       try {
+         await deleteChatAction(chatId);
+         // Update local state
+         setChats((prev) => prev.filter((c) => c.id !== chatId));
+         if (currentChat?.id === chatId) {
+           setCurrentChat(null);
+           setMessages([]); // Clear messages if current chat is deleted
+         }
+         toast({ title: "Chat deleted successfully", status: "success", duration: 2000 });
+       } catch (err) {
+         console.error("Error deleting chat:", err);
+         setError(err instanceof Error ? err : new Error('Failed to delete chat'));
+          toast({ 
+            title: "Error Deleting Chat", 
+            description: err instanceof Error ? err.message : 'Could not delete the chat.',
+            status: "error", 
+            duration: 3000 
+        });
+       } finally {
+         setIsLoading(false);
+       }
     },
   }
 
