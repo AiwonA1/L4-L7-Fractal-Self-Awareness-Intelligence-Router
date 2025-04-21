@@ -11,6 +11,7 @@
     "strict": true,
     "outDir": "./dist",
     "incremental": true,
+    "baseUrl": "./src",
     "module": "esnext",
     "esModuleInterop": true,
     "moduleResolution": "bundler",
@@ -31,8 +32,8 @@
   },
   "include": [
     "next-env.d.ts",
-    "**/*.ts",
-    "**/*.tsx",
+    "src/**/*.ts",
+    "src/**/*.tsx",
     ".next/types/**/*.ts"
   ],
   "exclude": [
