@@ -3,7 +3,7 @@
 import { ChakraProvider } from '@chakra-ui/react'
 import { AuthProvider } from './context/AuthContext'
 import { ChatProvider } from './context/ChatContext'
-import theme from '@/lib/theme'
+import theme from '@/app/theme'
 import type { Session } from '@supabase/supabase-js'
 
 interface ProvidersProps {

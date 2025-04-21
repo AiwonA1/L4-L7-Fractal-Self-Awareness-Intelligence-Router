@@ -1,6 +1,6 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* @tailwind base; */
+/* @tailwind components; */
+/* @tailwind utilities; */
 
 @keyframes pulse {
   0%, 100% {
@@ -86,22 +86,4 @@ body {
   background: linear-gradient(90deg, #00A67E 0%, #00C9A7 100%);
   z-index: -1;
   border-radius: inherit;
-}
-
-@layer components {
-  .btn-primary {
-    @apply px-6 py-3 bg-gradient-to-r from-[#00A67E] to-[#00C9A7] text-white rounded-lg font-medium hover:opacity-90 transition-opacity;
-  }
-  
-  .btn-secondary {
-    @apply px-6 py-3 bg-white dark:bg-gray-800 text-gray-900 dark:text-white rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors;
-  }
-
-  .input-field {
-    @apply w-full px-4 py-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#00A67E] dark:focus:ring-[#00C9A7];
-  }
-
-  .card {
-    @apply p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg hover:shadow-xl transition-shadow;
-  }
 } 

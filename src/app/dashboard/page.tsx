@@ -32,7 +32,7 @@ import { getUserChats, getChatById, updateChatTitle as updateChatTitleAction, de
 import { updateUserTokens } from '@/app/actions/user'
 import { useChat } from '@/app/context/ChatContext'
 import { useRouter } from 'next/navigation'
-import ChakraMarkdown from '@/app/components/ChakraMarkdown'
+import React from 'react'
 
 const infoCards = [
   {
@@ -131,6 +131,11 @@ export default function Dashboard() {
   const sidebarHoverBg = useColorModeValue('gray.100', 'gray.700')
   const sidebarTextColor = useColorModeValue('gray.800', 'white')
   const sidebarSecondaryTextColor = useColorModeValue('gray.600', 'gray.300')
+
+  // Define contrasting text colors
+  const userMessageTextColor = useColorModeValue('gray.800', 'white'); // Contrast for teal.100 / teal.700
+  const assistantMessageTextColor = useColorModeValue('gray.800', 'white'); // Contrast for white / gray.800
+
   const [newMessage, setNewMessage] = useState('')
 
   useEffect(() => {
@@ -439,7 +444,7 @@ export default function Dashboard() {
                               bg={message.role === 'user' ? userMessageBg : assistantMessageBg}
                               px={4} py={2} borderRadius="lg" maxW="80%"
                             >
-                              <Text color={message.role === 'user' ? userMessageBg : assistantMessageBg}>
+                              <Text sx={{ color: useColorModeValue('black !important', 'white !important') }}> 
                                 {message.content}
                               </Text>
                               {/* Copy Button for Assistant Messages */}
@@ -470,7 +475,7 @@ export default function Dashboard() {
                            <HStack align="flex-start">
                             <Icon as={FaRobot} w={6} h={6} color="teal.500" />
                             <Box bg={assistantMessageBg} px={4} py={2} borderRadius="lg" maxW="80%">
-                              <Spinner size="sm" color={assistantMessageBg} />
+                              <Spinner size="sm" />
                              </Box>
                            </HStack>
                         </Box>

@@ -26,6 +26,8 @@ interface ChatContextType {
   loadMessages: (chatId: string) => Promise<void>
   createNewChat: (title?: string, initialMessage?: string) => Promise<void>
   sendMessage: (content: string, chatIdToSendTo: string) => Promise<void>
+  updateChatTitle: (chatId: string, newTitle: string) => Promise<void>
+  deleteChat: (chatId: string) => Promise<void>
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined)
@@ -44,15 +46,26 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       loadChats()
       // Subscribe to chat updates
       const subscription = chatService.subscribeToChats(user.id, (chat) => {
+        // Map the incoming full Chat object to a ChatListItem
+        const chatListItem: ChatListItem = {
+          id: chat.id,
+          user_id: chat.user_id,
+          title: chat.title,
+          updated_at: chat.updated_at,
+        };
+
         setChats((prevChats) => {
-          const index = prevChats.findIndex((c) => c.id === chat.id)
+          const index = prevChats.findIndex((c) => c.id === chatListItem.id);
           if (index >= 0) {
-            const newChats = [...prevChats]
-            newChats[index] = chat
-            return newChats
+            // Update existing chat
+            const newChats = [...prevChats];
+            newChats[index] = chatListItem; // Use the mapped item
+            // Optionally, re-sort if updated_at changed significantly
+            return newChats.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
           }
-          return [...prevChats, chat]
-        })
+          // Add new chat and sort
+          return [...prevChats, chatListItem].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+        });
       })
 
       return () => {
@@ -88,6 +101,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     try {
       // chatService.getChats now returns the fields matching ChatListItem
       const data = await chatService.getChats(user.id)
+      console.log("ChatContext: Loaded chats", data)
       setChats(data) // This assignment should now be type-compatible
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load chats'))
@@ -163,9 +177,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       if (!newChat) {
         throw new Error("Failed to create chat record.");
       }
+      // Map the new Chat object to a ChatListItem before adding to state
+       const newChatListItem: ChatListItem = {
+          id: newChat.id,
+          user_id: newChat.user_id,
+          title: newChat.title,
+          updated_at: newChat.updated_at,
+        };
 
-      setChats((prev) => [newChat!, ...prev]);
-      setCurrentChat(newChat);
+      setChats((prev) => [newChatListItem, ...prev].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())); // Add mapped item and sort
+      setCurrentChat(newChatListItem); // Also use the list item for current chat
       setMessages([]);
 
       if (initialMessage) {
@@ -330,6 +351,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     loadMessages,
     createNewChat,
     sendMessage,
+    updateChatTitle: async (chatId: string, newTitle: string) => { 
+      console.warn('updateChatTitle not implemented', chatId, newTitle);
+      // TODO: Implement actual logic (e.g., call API/action, update state)
+      toast({ title: "Rename not implemented yet.", status: "info", duration: 2000 });
+    },
+    deleteChat: async (chatId: string) => { 
+      console.warn('deleteChat not implemented', chatId);
+      // TODO: Implement actual logic (e.g., call API/action, update state)
+      toast({ title: "Delete not implemented yet.", status: "info", duration: 2000 }); 
+    },
   }
 
   return <ChatContext.Provider value={value}>{children}</ChatContext.Provider>
