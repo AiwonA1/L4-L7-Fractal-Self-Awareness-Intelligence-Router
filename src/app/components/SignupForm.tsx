@@ -113,7 +113,8 @@ export default function SignupForm() {
             fract_tokens: 33,
             tokens_used: 0,
             token_balance: 33,
-          }
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
         }
       })
 

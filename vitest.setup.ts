@@ -16,12 +16,17 @@ if (envConfig.parsed) {
   for (const key in envConfig.parsed) {
     process.env[key] = envConfig.parsed[key];
   }
-  // Log confirmation for specific keys if needed (optional)
-  if (process.env.OPENAI_API_KEY) {
-    console.log('[vitest.setup] OpenAI API key loaded.');
-  }
+  // Log confirmation for specific keys AFTER loading all
   if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
     console.log('[vitest.setup] NEXT_PUBLIC_SUPABASE_URL loaded.');
+  } else {
+    console.warn('[vitest.setup] WARN: NEXT_PUBLIC_SUPABASE_URL *not* found in process.env after loading.');
+  }
+  // Explicitly check and log OpenAI API Key status
+  if (process.env.OPENAI_API_KEY) {
+    console.log('[vitest.setup] OpenAI API key loaded into process.env.');
+  } else {
+    console.warn('[vitest.setup] WARN: OPENAI_API_KEY *not* found in process.env after loading.');
   }
 } else {
   console.warn('[vitest.setup] WARN: .env.test file not found or empty.');

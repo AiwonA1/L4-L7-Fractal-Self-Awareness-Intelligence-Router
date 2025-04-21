@@ -9,7 +9,7 @@
     "lint": "next lint",
     "postinstall": "next telemetry disable",
     "generate-icons": "node scripts/generate-icons.js",
-    "test": "vitest",
+    "test": "vitest run",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
     "test:setup": "ts-node scripts/setup-test-user.ts"

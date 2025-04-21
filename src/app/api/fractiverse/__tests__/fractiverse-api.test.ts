@@ -1,5 +1,5 @@
 import { vi, describe, it, expect, beforeEach, afterAll, afterEach, type MockInstance } from 'vitest'
-import { NextResponse } from 'next/server'
+import { NextResponse, NextRequest } from 'next/server'
 
 // Mock dependencies EXCEPT OpenAI
 // vi.mock('openai', ...) // REMOVED
@@ -91,7 +91,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
   const mockedSupabaseFrom = vi.mocked(supabaseAdmin.from)
   // const mockedSupabaseRpc = vi.mocked(supabaseAdmin.rpc) // If rpc is mocked globally
 
-  let jsonSpy: MockInstance<any[], any>;
+  let jsonSpy: MockInstance;
   let requestMock: { json: MockInstance, url: string };
   let originalFetch: typeof global.fetch;
 
@@ -122,7 +122,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     // Reset request mock
     requestMock = {
       json: vi.fn().mockResolvedValue({
-        message: 'Explain fractals briefly.', // Use a real, simple prompt
+        message: 'Explain fractals briefly.',
         chatId: 'live-test-chat-id',
         userId: 'live-test-user-id'
       }),
@@ -182,7 +182,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
       const { POST } = await import('../route');
 
       // Act
-      const response = await POST(requestMock as unknown as Request)
+      const response = await POST(requestMock as unknown as NextRequest)
 
       // Assert: Check that NextResponse.json was called with the correct error
       if (jsonSpy) {
@@ -221,7 +221,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     const { POST: PostWithKey } = await import('../route')
 
     // Act
-    const response = await PostWithKey(requestMock as unknown as Request)
+    const response = await PostWithKey(requestMock as unknown as NextRequest)
     const data = await response.json()
 
     // Assert
@@ -268,7 +268,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     const { POST } = await import('../route');
 
     // Act
-    const response = await POST(requestMock as unknown as Request)
+    const response = await POST(requestMock as unknown as NextRequest)
     const data = await response.json()
 
     // Assert
@@ -303,7 +303,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     const { POST } = await import('../route');
 
     // Act
-    const response = await POST(requestMock as unknown as Request)
+    const response = await POST(requestMock as unknown as NextRequest)
     const data = await response.json()
 
     // Assert
@@ -334,7 +334,7 @@ describe('FractiVerse API Route (Integration with Live OpenAI)', () => {
     const { POST } = await import('../route');
 
     // Act
-    const response = await POST(requestMock as unknown as Request)
+    const response = await POST(requestMock as unknown as NextRequest)
     const data = await response.json()
 
     // Assert: Expect 200 OK even though token deduction failed
