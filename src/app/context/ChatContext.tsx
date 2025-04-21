@@ -208,8 +208,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         if (!newChat) {
            throw new Error("Failed to create new chat before sending message.");
         }
-        setChats((prev) => [newChat!, ...prev]); 
-        setCurrentChat(newChat); 
+        setChats((prev) => [newChat!, ...prev]);
+        setCurrentChat(newChat);
         setMessages([]);
         targetChatId = newChat.id;
         console.log("New chat created with ID:", targetChatId);
@@ -228,76 +228,117 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    setIsLoading(true); 
+    setIsLoading(true);
     setError(null);
 
-    // 1. Add user message locally for immediate feedback
     const userMessage: Message = {
-      id: crypto.randomUUID(), // Temporary client-side ID
-      chat_id: targetChatId!, // Assert targetChatId is non-null here
+      id: crypto.randomUUID(),
+      chat_id: targetChatId!,
       role: 'user',
       content: content,
       created_at: new Date().toISOString(),
     };
     
     if (targetChatId === currentChat?.id) {
-       setMessages((prev) => [...prev, userMessage]);
+        setMessages((prev) => [...prev, userMessage]);
     } else {
-        console.log(`Adding user message to chat ${targetChatId}, which should be the current chat.`);
+        console.warn(`Sending message to chat ${targetChatId}, but current view is ${currentChat?.id}. Messages might not update live.`);
+        setMessages([userMessage]);
     }
+
+    const assistantMessageId = crypto.randomUUID();
+    const assistantPlaceholder: Message = {
+      id: assistantMessageId,
+      chat_id: targetChatId!,
+      role: 'assistant',
+      content: '',
+      created_at: new Date().toISOString(),
+    };
+    
+    if (targetChatId === currentChat?.id) {
+       setMessages((prev) => [...prev, assistantPlaceholder]);
+    }
+
+    const abortController = new AbortController();
 
     try {
       const response = await fetch('/api/fractiverse', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: content,
           chatId: targetChatId,
           userId: user.id,
         }),
+        signal: abortController.signal,
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to parse error response" }));
+        let errorData = { error: `API request failed with status ${response.status}` };
+        try {
+          errorData = await response.json();
+        } catch (parseError) {
+          console.error("Failed to parse non-streaming error response body:", parseError);
+        }
         throw new Error(errorData.error || `API request failed with status ${response.status}`);
       }
 
-      const data = await response.json();
+      if (!response.body) {
+        throw new Error("Response body is null");
+      }
 
-      // 3. Add the assistant's message locally
-      const assistantMessage: Message = {
-        id: data.id || crypto.randomUUID(), // Prefer server ID if available
-        chat_id: targetChatId!, // Assert targetChatId is non-null here
-        role: 'assistant',
-        content: data.content,
-        created_at: data.created_at || new Date().toISOString(),
-      };
-      
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let currentAssistantContent = '';
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        const chunk = decoder.decode(value, { stream: true });
+        currentAssistantContent += chunk;
+
+        if (targetChatId === currentChat?.id) {
+           setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: currentAssistantContent }
+                : msg
+            )
+          );
+        }
+      }
+
       if (targetChatId === currentChat?.id) {
-         setMessages((prev) => {
-            const messagesWithoutTemp = prev.filter(m => m.id !== userMessage.id);
-            return [...messagesWithoutTemp, userMessage, assistantMessage]; 
-         });
-       } else {
-          console.log(`Received assistant message for chat ${targetChatId}, but current view is ${currentChat?.id}`);
-       }
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMessageId
+              ? { ...msg, content: currentAssistantContent }
+              : msg
+          )
+        );
+      }
 
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Failed to send message and get response'));
-      console.error('Error in sendMessage during API call:', err);
-      toast({
-        title: 'Error Sending Message',
-        description: err instanceof Error ? err.message : 'Could not get response from AI',
-        status: 'error',
-        duration: 5000, 
-        isClosable: true,
-      });
-       
-      if (targetChatId === currentChat?.id) {
-          setMessages((prev) => prev.filter(m => m.id !== userMessage.id));
-       }
+      if ((err as Error).name === 'AbortError') {
+         console.log("Fetch aborted by user.");
+         if (targetChatId === currentChat?.id) {
+            setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
+         }
+      } else {
+        setError(err instanceof Error ? err : new Error('Failed to send message or process stream'));
+        console.error('Error Sending Message / Processing Stream:', err);
+        toast({
+          title: "Error Processing Response",
+          description: err instanceof Error ? err.message : "Could not process the AI response stream.",
+          status: "error",
+          duration: 5000,
+          isClosable: true,
+        });
+         if (targetChatId === currentChat?.id) {
+            setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
+         }
+      }
     } finally {
       setIsLoading(false);
     }

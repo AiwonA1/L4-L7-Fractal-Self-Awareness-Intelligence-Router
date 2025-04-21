@@ -349,25 +349,31 @@ export default function Dashboard() {
                 </Box>
 
                 {/* Input Section */}
-                <Box bg={bgColor} p={4} borderRadius="lg" borderWidth="1px" borderColor="gray.200">
-                  <form onSubmit={handleSendMessage} className="flex gap-2">
-                    <Input
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type your message..."
-                      onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage(e)}
-                      size="lg"
-                      disabled={isLoading}
-                    />
-                    <Button
-                      type="submit"
-                      colorScheme="teal"
-                      isLoading={isLoading}
-                      loadingText="Sending..."
-                    >
-                      Send
-                    </Button>
+                <Box mt="auto" pt={4}>
+                  <form onSubmit={handleSendMessage}>
+                    <HStack>
+                      <Input
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        placeholder="Ask FractiVerse anything..."
+                        bg={bgColor}
+                        disabled={isLoading}
+                      />
+                      <Button 
+                        type="submit" 
+                        colorScheme="teal" 
+                        isLoading={isLoading}
+                        disabled={isLoading}
+                      >
+                        Send
+                      </Button>
+                    </HStack>
                   </form>
+                  {isLoading && (
+                    <Text fontSize="sm" color="gray.500" mt={2} textAlign="center">
+                      Assistant is thinking...
+                    </Text>
+                  )}
                 </Box>
               </VStack>
             </Container>

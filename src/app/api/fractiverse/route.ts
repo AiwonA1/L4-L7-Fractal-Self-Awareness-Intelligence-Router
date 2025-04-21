@@ -4,22 +4,24 @@ import { supabaseAdmin } from '@/lib/supabase/supabase-admin'
 import fs from 'fs'
 import path from 'path'
 import { rateLimitCheck } from '@/lib/rate-limit'
+// Import the core streamText utility and the OpenAI provider
+import { streamText, CoreMessage } from 'ai';
+import { openai as vercelOpenAIProvider } from '@ai-sdk/openai'; // Use the provider from the AI SDK
 
 // Initialize OpenAI instance (apiKey will be checked before use)
-let openai: OpenAI | null = null;
+// We still need the OpenAI client for checks, but will use the Vercel provider for the stream call
+let openaiClientCheck: OpenAI | null = null;
 try {
   if (process.env.OPENAI_API_KEY) {
-    openai = new OpenAI({
+    openaiClientCheck = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
-      // dangerouslyAllowBrowser: true // REMOVED: Unsafe for backend code
     });
   } else {
-    // Added explicit warning if key is missing during initialization
     console.warn("OpenAI API key not found in environment variables. OpenAI client not initialized.");
   }
 } catch (error) {
   console.error("Failed to initialize OpenAI client:", error);
-  openai = null;
+  openaiClientCheck = null;
 }
 
 // Load the FractiVerse prompt from the file
@@ -29,19 +31,18 @@ try {
   FRACTIVERSE_PROMPT = fs.readFileSync(promptFilePath, 'utf-8');
 } catch (error) {
    console.error("Failed to read fractiverse-prompt.txt:", error);
-   // Keep the default prompt
 }
 
 
 export async function POST(req: NextRequest) {
+  // NOTE: Keep initial checks for userId, chatId, message, rate limiting, token balance etc.
+  // These should return standard JSON errors *before* attempting the stream.
   let userId: string | null = null;
   let chatId: string | null = null;
   let message: string | null = null;
-  let tokensToDeduct: number = 10; // Default minimum
-  let tokenResponse: Response | undefined = undefined;
 
   try {
-    // 1. Parse Request Body & Get userId (Moved up)
+    // 1. Parse Request Body & Get userId
     try {
       const body = await req.json();
       message = body.message;
@@ -58,31 +59,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
     }
 
-    // --- Rate Limiting (Authenticated User via userId in body) (Moved up) ---
-    const { success: limitReached } = await rateLimitCheck(userId, 'api'); // userId is guaranteed non-null here
+    // --- Rate Limiting ---
+    const { success: limitReached } = await rateLimitCheck(userId, 'api');
     if (!limitReached) {
         return NextResponse.json({ error: 'Too many API requests' }, { status: 429 });
     }
-    // --- End Rate Limiting ---
 
-    // 2. Check User Token Balance (Moved up)
-    let userData;
+    // --- Check User Token Balance ---
     try {
       const { data, error: userError } = await supabaseAdmin
         .from('users')
         .select('token_balance')
-        .eq('id', userId) // userId is guaranteed non-null here
+        .eq('id', userId)
         .single();
 
-      if (userError) throw userError; // Propagate error to outer catch
+      if (userError) throw userError;
       if (!data) {
-           // Handle case where userId from request body doesn't exist in DB
            console.warn(`User ID ${userId} provided in request not found in database.`);
            return NextResponse.json({ error: 'User specified in request not found' }, { status: 404 });
       }
-      userData = data;
-
-      if (userData.token_balance < 10) {
+      if (data.token_balance < 10) { // Keep minimum check for initiating call
         return NextResponse.json(
           { error: 'Insufficient tokens. Minimum 10 tokens required.' },
           { status: 400 }
@@ -90,35 +86,34 @@ export async function POST(req: NextRequest) {
       }
     } catch (dbError) {
       console.error('Error checking user token balance:', dbError);
-      // Distinguish DB error from user not found or insufficient tokens
       return NextResponse.json({ error: 'Failed to verify user token balance' }, { status: 500 });
     }
 
-    // 3. Fetch Chat History (Remains here - happens before OpenAI call)
-    let formattedMessages: Array<{role: string, content: string}> = [];
+    // --- Fetch Chat History ---
+    let dbMessages: Array<{ role: string; content: string }> = [];
     try {
-      const { data: messages, error: messagesError } = await supabaseAdmin
-        .from('messages')
-        .select('role, content') // Select only needed fields
-        .eq('chat_id', chatId) // chatId is guaranteed non-null here
-        .order('created_at', { ascending: true });
+        const { data, error: messagesError } = await supabaseAdmin
+            .from('messages')
+            .select('role, content')
+            .eq('chat_id', chatId)
+            .order('created_at', { ascending: true });
 
-      if (messagesError) {
-        console.warn('Warning: Error fetching chat history:', messagesError);
-      } else if (messages) {
-        formattedMessages = messages.map(msg => ({ 
-          role: msg.role as string, // Assume role is string
-          content: msg.content as string // Assume content is string
-        })); 
-      }
+        if (messagesError) {
+            console.warn('Warning: Error fetching chat history:', messagesError);
+        } else if (data) {
+            // Ensure content is always treated as string for simplicity here
+            dbMessages = data.map(msg => ({ 
+                role: msg.role as string, 
+                content: msg.content as string 
+            })); 
+        }
     } catch (histError) {
-       console.warn('Warning: Exception fetching chat history:', histError);
+        console.warn('Warning: Exception fetching chat history:', histError);
     }
-
-    // Check if OpenAI client initialized successfully (Moved down - check just before use)
-    if (!openai || !openai.apiKey) {
-        console.error('OpenAI client not initialized or API key missing. Cannot proceed with API call.')
-        // Check OPENAI_API_KEY env var existence for a more specific error message
+    
+    // --- Check OpenAI Client ---
+    if (!openaiClientCheck || !openaiClientCheck.apiKey) {
+        console.error('OpenAI client check failed or API key missing. Cannot proceed with API call.')
         const errorMsg = process.env.OPENAI_API_KEY
             ? 'OpenAI client initialization failed despite API key presence. Check constructor/logs.'
             : 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.';
@@ -128,124 +123,41 @@ export async function POST(req: NextRequest) {
         )
     }
 
-    // 4. Call OpenAI API (Remains here)
-    let completion;
-    let promptTokens = 0;
-    let completionTokens = 0;
-    let totalTokens = 0;
-    try {
-      const apiMessages = [
+    // --- Prepare Core Messages for Vercel AI SDK ---
+    const historyMessages: CoreMessage[] = dbMessages
+        .filter(msg => msg.role === 'user' || msg.role === 'assistant') // Filter for valid roles
+        .map(msg => ({ 
+            role: msg.role as 'user' | 'assistant', // Cast to specific roles
+            content: msg.content // Assuming content is always string here
+        }));
+
+    const coreMessages: CoreMessage[] = [
         { role: "system", content: FRACTIVERSE_PROMPT },
-        ...formattedMessages,
+        ...historyMessages,
         { role: "user", content: message }
-      ];
+    ];
 
-      completion = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: apiMessages as OpenAI.Chat.ChatCompletionMessageParam[],
-        temperature: 0.7,
-        max_tokens: 1000,
-      });
-
-      if (!completion?.choices?.[0]?.message?.content) {
-        throw new Error('Invalid response structure from OpenAI');
-      }
-
-      promptTokens = completion.usage?.prompt_tokens || 0;
-      completionTokens = completion.usage?.completion_tokens || 0;
-      totalTokens = promptTokens + completionTokens;
-      tokensToDeduct = Math.max(10, totalTokens);
-
-    } catch (openaiError) {
-      console.error('Error calling OpenAI API:', openaiError);
-      const errorMessage = openaiError instanceof Error ? openaiError.message : 'Unknown OpenAI error';
-      return NextResponse.json(
-        { error: `OpenAI API request failed: ${errorMessage}` },
-        { status: 502 } // Use 502 Bad Gateway for upstream errors
-      );
-    }
-    
-    // 5. Deduct Tokens
-    let tokenDeductionSuccess = false;
-    try {
-      tokenResponse = await fetch(new URL('/api/tokens/use', req.url).href, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, amount: tokensToDeduct, description: `ChatID: ${chatId} - OpenAI API call` }),
-      });
-
-      if (tokenResponse.ok) {
-        tokenDeductionSuccess = true;
-      } else {
-        let tokenErrorBody = { error: 'Unknown deduction error' };
-        try { tokenErrorBody = await tokenResponse.json(); } catch { /* ignore parsing error */ }
-        console.error('Error deducting tokens:', { status: tokenResponse.status, body: tokenErrorBody });
-        // CRITICAL: Failed to deduct tokens after successful OpenAI call.
-        // Return an error to the user instead of proceeding.
-        return NextResponse.json(
-          { 
-            error: `AI response generated, but failed to deduct tokens: ${tokenErrorBody.error}. Please contact support.`,
-            // Optionally include AI response here if needed for retry/support
-            // generatedContent: completion.choices[0].message.content 
-          },
-          // Use 500 or a more specific code like 402 Payment Required or 409 Conflict
-          { status: 500 } 
-        );
-      }
-    } catch (fetchError) {
-        console.error(`CRITICAL: Exception during token deduction fetch for user ${userId}:`, fetchError);
-        // Return an error to the user instead of proceeding.
-        return NextResponse.json(
-          { error: 'AI response generated, but encountered an error during token deduction. Please contact support.' },
-          { status: 500 }
-        );
-    }
-
-    // Ensure deduction succeeded before proceeding (redundant check, but safe)
-    if (!tokenDeductionSuccess) {
-        // This should ideally not be reached due to returns above, but acts as a failsafe
-        console.error(`CRITICAL: Token deduction flag was false after fetch block for user ${userId}.`);
-        return NextResponse.json(
-          { error: 'Internal server error during token processing finalization.' },
-          { status: 500 }
-        );
-    }
-
-    // 6. Store Messages (Optional, proceed even if it fails)
-    try {
-      const assistantContent = completion.choices[0].message.content;
-      const { error: insertError } = await supabaseAdmin
-        .from('messages')
-        .insert([
-          { chat_id: chatId, user_id: userId, role: 'user', content: message },
-          { chat_id: chatId, user_id: userId, role: 'assistant', content: assistantContent }
-        ]);
-
-      if (insertError) {
-        console.warn('Warning: Error storing messages:', insertError);
-      }
-    } catch (storeError) {
-       console.warn('Warning: Exception storing messages:', storeError);
-    }
-
-    // 7. Return Success Response
-    return NextResponse.json({
-      role: 'assistant',
-      content: completion.choices[0].message.content,
-      usage: {
-        promptTokens,
-        completionTokens,
-        totalTokens,
-        tokensDeducted: tokensToDeduct
-      }
+    // --- Call OpenAI API using Vercel AI SDK's streamText ---
+    const result = await streamText({
+      model: vercelOpenAIProvider('gpt-4o-mini'),
+      messages: coreMessages,
+      temperature: 0.7,
+      maxTokens: 1000,
     });
 
+    // --- Return the stream response ---
+    return result.toTextStreamResponse();
+
+    /* === COMMENTED OUT - Needs rework for streaming ===
+      Token deduction & Message Saving Logic 
+    */
+
   } catch (error) {
-    // General catch block for unexpected errors not caught above
-    console.error('Unhandled error in FractiVerse API POST handler:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    // --- General Error Handling for non-streaming errors ---
+    console.error('Unhandled error in FractiVerse API POST handler (before stream):', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown server error before streaming';
     return NextResponse.json(
-      { error: `Failed to process request due to unexpected server error: ${errorMessage}` },
+      { error: `Failed to process request: ${errorMessage}` },
       { status: 500 }
     )
   }
