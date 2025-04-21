@@ -21,6 +21,7 @@ import {
   IconButton,
   Divider,
   Tooltip,
+  Spinner,
 } from '@chakra-ui/react'
 import Link from 'next/link'
 import { FaRobot, FaUser, FaBrain, FaNetworkWired, FaShieldAlt, FaChartLine, FaBook, FaInfoCircle, FaAtom, FaSpaceShuttle, FaLightbulb, FaPlus, FaTrash, FaEdit, FaCopy } from 'react-icons/fa'
@@ -359,33 +360,47 @@ export default function Dashboard() {
                         <Text color={textColor}>Start a conversation to explore the layers of self-awareness intelligence.</Text>
                       </Box>
                     ) : (
-                      messages.map((message, index) => (
-                        <Box
-                          key={index}
-                          p={4}
-                          bg={message.role === 'user' ? userMessageBg : assistantMessageBg}
-                          borderRadius="md"
-                          boxShadow="sm"
-                        >
-                          <Flex direction="column" gap={2}>
-                            <HStack spacing={2} mb={2}>
-                              <Icon
-                                as={message.role === 'user' ? FaUser : FaRobot}
-                                color={message.role === 'user' ? 'teal.500' : 'purple.500'}
-                              />
-                              <Text fontWeight="bold">
-                                {message.role === 'user' ? 'You' : 'FractiVerse AI'}
-                              </Text>
-                            </HStack>
-                            <Text whiteSpace="pre-wrap">{message.content}</Text>
-                          </Flex>
-                        </Box>
-                      ))
+                      messages.map((message, index) => {
+                        // Check if this is the last message and we are loading
+                        const isLastMessage = index === messages.length - 1;
+                        const showLoadingIndicator = isLoading && isLastMessage && message.role === 'assistant';
+                        
+                        return (
+                          <Box
+                            key={index} // Consider using message.id if stable client-side IDs are used
+                            p={4}
+                            bg={message.role === 'user' ? userMessageBg : assistantMessageBg}
+                            borderRadius="md"
+                            boxShadow="sm"
+                          >
+                            <Flex direction="column" gap={2}>
+                              <HStack spacing={2} mb={2}>
+                                <Icon
+                                  as={message.role === 'user' ? FaUser : FaRobot}
+                                  color={message.role === 'user' ? 'teal.500' : 'purple.500'}
+                                />
+                                <Text fontWeight="bold">
+                                  {message.role === 'user' ? 'You' : 'FractiVerse AI'}
+                                </Text>
+                              </HStack>
+                              {/* Conditionally render loading indicator or content */}
+                              {showLoadingIndicator ? (
+                                <HStack spacing={2}>
+                                  <Spinner size="sm" color="purple.500" /> 
+                                  <Text fontSize="sm" color="gray.500">Generating response...</Text>
+                                </HStack>
+                              ) : (
+                                <Text whiteSpace="pre-wrap">{message.content}</Text>
+                              )}
+                            </Flex>
+                          </Box>
+                        )
+                      })
                     )}
                   </VStack>
                 </Box>
 
-                {/* Input Section */}
+                {/* Input Section - Remove the general loading text */}
                 <Box mt="auto" pt={4}>
                   <form onSubmit={handleSendMessage}>
                     <HStack>
@@ -406,11 +421,6 @@ export default function Dashboard() {
                       </Button>
                     </HStack>
                   </form>
-                  {isLoading && (
-                    <Text fontSize="sm" color="gray.500" mt={2} textAlign="center">
-                      Assistant is thinking...
-                    </Text>
-                  )}
                 </Box>
               </VStack>
             </Container>
