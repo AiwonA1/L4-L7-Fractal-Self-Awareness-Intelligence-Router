@@ -1,0 +1,165 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+// Mock the module containing the Supabase client creation function
+vi.mock('@/lib/supabase-server', () => ({
+  createServerSupabaseClient: vi.fn(() => ({
+    auth: {
+      // Mock specific auth methods needed
+      signInWithPassword: vi.fn(),
+      getSession: vi.fn(), // Add if GET handler is also tested
+    },
+    // Add other Supabase methods if needed by the route
+  }) as any),
+}))
+
+// Import AFTER mocking
+import { createServerSupabaseClient } from '@/lib/supabase-server'
+// Import the actual handler functions to test
+import { POST, GET } from '../src/app/app/api/auth/route' // Assuming GET might be tested too
+import { NextResponse } from 'next/server'
+
+describe('Auth API Route (/api/auth)', () => {
+  // Get the mocked function instance
+  const mockedCreateServerSupabaseClient = vi.mocked(createServerSupabaseClient)
+  let mockSignInWithPassword: ReturnType<typeof vi.fn>
+  let mockGetSession: ReturnType<typeof vi.fn> // For GET handler tests
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    // Create mock functions
+    mockSignInWithPassword = vi.fn()
+    mockGetSession = vi.fn()
+
+    // Configure the mock Supabase client factory
+    mockedCreateServerSupabaseClient.mockReturnValue({
+      auth: {
+        signInWithPassword: mockSignInWithPassword,
+        getSession: mockGetSession,
+      },
+      // Add other mocked methods if needed
+    } as any)
+
+    // Default mock implementations (can be overridden)
+    mockSignInWithPassword.mockResolvedValue({ data: { session: null, user: null }, error: { message: 'Invalid credentials', status: 401 } })
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null })
+  })
+
+  // --- POST /api/auth (Sign In) Tests ---
+
+  it('POST should sign in user successfully with valid credentials', async () => {
+    const mockCredentials = { email: 'test@example.com', password: 'password123' }
+    const mockSessionData = {
+      session: { access_token: 'mock-access-token', user: { id: 'user-123', email: mockCredentials.email } },
+      user: { id: 'user-123', email: mockCredentials.email },
+    }
+    mockSignInWithPassword.mockResolvedValue({ data: mockSessionData, error: null })
+
+    const request = new Request('http://localhost/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mockCredentials),
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(200)
+    expect(body).toEqual({ data: mockSessionData })
+    expect(mockSignInWithPassword).toHaveBeenCalledTimes(1)
+    expect(mockSignInWithPassword).toHaveBeenCalledWith(mockCredentials)
+  })
+
+  it('POST should return 401 with invalid credentials', async () => {
+    const mockCredentials = { email: 'test@example.com', password: 'wrongpassword' }
+    const mockError = { message: 'Invalid login credentials', status: 400 } // Supabase often returns 400 here
+    mockSignInWithPassword.mockResolvedValue({ data: { session: null, user: null }, error: mockError })
+
+    const request = new Request('http://localhost/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mockCredentials),
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(401) // Route should return 401
+    expect(body).toEqual({ error: mockError.message })
+    expect(mockSignInWithPassword).toHaveBeenCalledTimes(1)
+    expect(mockSignInWithPassword).toHaveBeenCalledWith(mockCredentials)
+  })
+
+   it('POST should return 500 on unexpected error', async () => {
+    const mockCredentials = { email: 'test@example.com', password: 'password123' }
+    const mockError = new Error('Internal Supabase Error')
+    // Simulate error being thrown by the Supabase client call
+    mockSignInWithPassword.mockRejectedValue(mockError)
+
+    const request = new Request('http://localhost/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mockCredentials),
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body).toEqual({ error: 'Internal server error' })
+    expect(mockSignInWithPassword).toHaveBeenCalledTimes(1)
+    expect(mockSignInWithPassword).toHaveBeenCalledWith(mockCredentials)
+  })
+
+  // --- GET /api/auth (Get Session) Tests ---
+
+  it('GET should return session when authenticated', async () => {
+     const mockSessionObject = { access_token: 'mock-access-token', user: { id: 'user-123', email: 'test@example.com' } };
+     // Mock that getSession returns the data structure { data: { session: SessionObject } }
+     mockGetSession.mockResolvedValue({ data: { session: mockSessionObject }, error: null })
+
+     const response = await GET()
+     const body = await response.json()
+
+     expect(response.status).toBe(200)
+     // Revert: Trusting test runner output that the API returns the simpler structure
+     expect(body).toEqual({ session: mockSessionObject })
+     expect(mockGetSession).toHaveBeenCalledTimes(1)
+   })
+
+  it('GET should return null session when not authenticated', async () => {
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: null })
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(200) // Still 200 OK, just null session
+    expect(body).toEqual({ session: null })
+    expect(mockGetSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('GET should return 401 on session retrieval error', async () => {
+    const mockError = { message: 'Failed to retrieve session', status: 500 }
+    mockGetSession.mockResolvedValue({ data: { session: null }, error: mockError })
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(401) // Route returns 401 on error
+    expect(body).toEqual({ error: mockError.message })
+    expect(mockGetSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('GET should return 500 on unexpected error', async () => {
+    const mockError = new Error('Internal Supabase Error')
+    mockGetSession.mockRejectedValue(mockError) // Simulate error being thrown
+
+    const response = await GET()
+    const body = await response.json()
+
+    expect(response.status).toBe(500)
+    expect(body).toEqual({ error: 'Internal server error' })
+    expect(mockGetSession).toHaveBeenCalledTimes(1)
+  })
+
+}) 

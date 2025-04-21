@@ -12,13 +12,15 @@ vi.mock('@/lib/supabase-server', () => ({
         }))
       }))
     }))
-  }))
+    // Cast to any to satisfy TypeScript for the mock object
+  }) as any),
 }))
 
 // Import AFTER mocking
+// Revert back to using the '@/' alias
 import { createServerSupabaseClient } from '@/lib/supabase-server'
 // Import the actual handler function to test
-import { GET } from '../src/app/app/api/user/data/route'
+import { GET } from '../src/app/app/api/user/data/route' // Keep relative for API route import
 
 describe('User Info API Route', () => {
   const mockSession = {
@@ -55,7 +57,7 @@ describe('User Info API Route', () => {
         getSession: mockGetSession
       },
       from: mockFrom
-    })
+    } as any)
 
     // Default mocks (can be overridden in specific tests)
     mockGetSession.mockResolvedValue({ data: { session: null }, error: null })

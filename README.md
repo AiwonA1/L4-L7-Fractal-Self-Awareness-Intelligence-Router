@@ -11,832 +11,255 @@ FractiVerse 1.0 is a groundbreaking L4-L7 Fractal Self-Awareness Intelligence Ro
 #### Core Value Proposition
 
 FractiVerse 1.0 delivers:
-- Advanced AI interactions across multiple layers of consciousness and reality understanding
+- Advanced AI interactions across multiple layers of consciousness and reality understanding (Layers 4-7)
 - Seamless integration of quantum mechanical principles with practical applications
-- Token-based access system ensuring fair resource allocation
+- Token-based access system (`FractiTokens`) ensuring fair resource allocation
 - Enterprise-grade security and scalability
 - Real-time, context-aware AI responses
 
 #### Key Benefits
 
-1. **Enhanced Understanding**
-   - Multi-dimensional perspective on complex problems
-   - Deep pattern recognition across different scales
-   - Integration of quantum principles in decision-making
+1. **Enhanced Understanding**: Multi-dimensional perspective, deep pattern recognition, quantum principle integration.
+2. **Practical Applications**: Scientific research, business strategy, personal development, education.
+3. **Resource Efficiency**: Token-based system, optimized API usage, scalable infrastructure.
 
-2. **Practical Applications**
-   - Scientific research and validation
-   - Business strategy and decision-making
-   - Personal development and consciousness exploration
-   - Educational and training applications
+## 2. Technical Architecture
 
-3. **Resource Efficiency**
-   - Token-based system for controlled resource allocation
-   - Optimized API usage and cost management
-   - Scalable infrastructure
+### 2.1 Technology Stack
 
-### 2. Technical Architecture
-
-#### 2.1 Technology Stack
-
-- **Frontend Framework**: Next.js 14 with App Router
+- **Framework**: Next.js 14 (App Router)
 - **UI Library**: React 18 with Chakra UI
-- **Backend**: Next.js API Routes
-- **Database**: PostgreSQL via Supabase
+- **Backend**: Next.js API Routes (Serverless Functions on Vercel)
+- **Database**: PostgreSQL (via Supabase / Vercel Postgres)
 - **Authentication**: Supabase Auth
-- **Payment Processing**: Stripe
-- **AI Integration**: OpenAI GPT-4
-- **Development Language**: TypeScript
+- **Payments**: Stripe (using Stripe Elements & API)
+- **AI Integration**: OpenAI API (e.g., GPT-4)
+- **Language**: TypeScript
+- **Testing**: Vitest, React Testing Library
 
-#### 2.2 Core Components
+### 2.2 Core Components
 
-1. **Layer System**
-   - Layer 4: Penrose Base Reality
-   - Layer 5: FractiVerse Self-Awareness
-   - Layer 6: Event Horizon Kaleidoscopic Quantum Holographic
-   - Layer 7: Universal Paradise Story Game PEFF
+1. **Multi-Layered AI Interaction:** Interface for interacting with AI based on Layers 4-7.
+2. **User Authentication & Management:** Signup, login, profile updates via Supabase Auth and custom API endpoints.
+3. **Token System (`FractiTokens`):** Purchase, usage tracking, and balance management via Stripe and database.
+4. **Chat Interface:** Real-time, context-aware chat powered by Next.js, React, and AI APIs.
+5. **API Backend:** Next.js API routes handle auth, AI calls, database operations, payments, etc.
 
-2. **Authentication System**
-   - Email/password authentication via Supabase Auth
-   - Session management with Supabase cookies
-   - Role-based access control
-   - Secure token storage
+### 2.3 System Architecture Diagram
 
-3. **Token Management**
-   - Purchase system via Stripe
-   - Usage tracking
-   - Balance management
-   - Automated top-up options
+```mermaid
+graph LR
+    subgraph "User Device"
+        A[Browser / Client]
+    end
 
-4. **Chat Interface**
-   - Real-time message processing
-   - Context preservation
-   - Multi-session support
-   - History management
+    subgraph "Vercel Platform"
+        B(Next.js Frontend - React/Chakra UI)
+        C(Next.js API Routes - Serverless Functions)
+        D[Vercel Postgres]
+    end
 
-### 3. Security Features
+    subgraph "External Services"
+        E[Supabase Auth]
+        F[Stripe API]
+        G[OpenAI API]
+    end
 
-1. **Data Protection**
-   - End-to-end encryption
-   - Secure environment variable management
-   - Database encryption
-   - Secure API key handling
+    A -- HTTPS --> B
+    A -- HTTPS --> C
+    B -- Server-side Rendering / API Calls --> C
 
-2. **Payment Security**
-   - PCI-compliant payment processing
-   - Secure webhook handling
-   - Fraud prevention measures
+    C -- Auth API Calls --> E
+    C -- DB Operations (Supabase Client / Prisma?) --> D
+    C -- Payment API Calls --> F
+    C -- AI API Calls --> G
 
-3. **Authentication Security**
-   - JWT token management
-   - Secure session handling
-   - Rate limiting
-   - IP-based security measures
+    %% Direct Client Interactions
+    A -- Supabase Auth UI --> E
+    A -- Stripe Elements --> F
 
-### 4. Integration Capabilities
-
-#### 4.1 API Integration
-- RESTful API endpoints
-- WebSocket support for real-time features
-- OpenAI API integration
-- Stripe API integration
-
-#### 4.2 Database Integration
-- Prisma ORM for database operations
-- Supabase integration for real-time features
-- PostgreSQL database management
-
-### 5. Scalability and Performance
-
-#### 5.1 Infrastructure
-- Vercel deployment platform
-- Auto-scaling capabilities
-- Global CDN distribution
-- Edge function support
-
-#### 5.2 Performance Metrics
-- Sub-second response times
-- 99.9% uptime guarantee
-- Global availability
-- Automatic failover
-
-### 6. User Experience
-
-#### 6.1 Interface Design
-- Clean, intuitive UI
-- Responsive design for all devices
-- Accessibility compliance
-- Dark/light mode support
-
-#### 6.2 User Journey
-1. Registration/Login
-2. Token purchase
-3. Layer selection
-4. AI interaction
-5. Results visualization
-6. History review
-
-### 7. Monitoring and Analytics
-
-#### 7.1 System Monitoring
-- Real-time performance monitoring
-- Error tracking and logging
-- Usage analytics
-- System health metrics
-
-#### 7.2 Business Analytics
-- User engagement metrics
-- Token usage patterns
-- Revenue tracking
-- Feature utilization
-
-### 8. Compliance and Standards
-- GDPR compliance
-- CCPA compliance
-- ISO 27001 security standards
-- WCAG 2.1 accessibility standards
-
-### 9. Development and Deployment
-
-#### 9.1 Development Workflow
-- Git-based version control
-- CI/CD pipeline via Vercel
-- Automated testing
-- Code quality checks
-
-#### 9.2 Deployment Process
-- Automated deployment
-- Environment-specific configurations
-- Database migration handling
-- Zero-downtime updates
-
-### 10. Support and Documentation
-
-#### 10.1 Documentation
-- API documentation
-- User guides
-- Integration guides
-- Troubleshooting guides
-
-#### 10.2 Support Channels
-- GitHub issues
-- Email support
-- Documentation portal
-- Community forums
-
-## Development Rules and Guidelines
-
-### Core Development Principles
-
-1. **Fundamental Rules**
-   - Use TypeScript for all files
-   - Use Chakra UI for layout, components, theming, and responsiveness
-   - No middleware or extra abstraction layers - keep logic simple and direct
-   - Use Supabase client for authentication and database operations
-   - Protect OpenAI GPT-4 API key using single serverless API route
-   - Use Stripe Elements directly for payments
-   - Follow clean folder structure
-   - Favor clarity over complexity
-   - Use functional components and React hooks
-   - Show clear loading states
-   - Store API keys securely
-   - Use consistent naming (camelCase/PascalCase)
-   - Keep styling Chakra UI only
-   - Avoid unnecessary libraries
-
-### Project Structure
-```
-/app
-  /components/    # Reusable UI components
-  /pages/         # Page components and routing
-  /lib/          # Shared utilities and helpers
-  /api/          # API routes
-  /styles/       # Chakra UI theme customization
+    style D fill:#ADD8E6,stroke:#333,stroke-width:2px
+    style E fill:#FFDAB9,stroke:#333,stroke-width:2px
+    style F fill:#90EE90,stroke:#333,stroke-width:2px
+    style G fill:#DDA0DD,stroke:#333,stroke-width:2px
 ```
 
-### Database Schema (Supabase)
+## 3. Project Structure
 
-```sql
--- Users table for authentication and token balance
-CREATE TABLE users (
-  id UUID REFERENCES auth.users PRIMARY KEY,
-  email TEXT UNIQUE,
-  name TEXT,
-  token_balance INTEGER DEFAULT 33,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+The project follows a standard Next.js 14 App Router structure using the `src` directory:
 
--- Chat history table for storing conversations
-CREATE TABLE chat_history (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES users(id),
-  title TEXT,
-  messages JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Transactions table for token operations
-CREATE TABLE transactions (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES users(id),
-  type TEXT CHECK (type IN ('USE', 'PURCHASE', 'REFUND')),
-  amount INTEGER,
-  description TEXT,
-  status TEXT CHECK (status IN ('COMPLETED', 'PENDING', 'FAILED')),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
+```plaintext
+/
+├── .next/           # Next.js build output
+├── .vscode/         # VSCode settings
+├── __tests__/       # Vitest tests
+├── config/          # Configuration files (e.g., Stripe)
+├── docs/            # Project documentation
+├── node_modules/    # Dependencies
+├── public/          # Static assets
+├── scripts/         # Utility scripts
+├── src/             # Main source code
+│   ├── app/         # Next.js App Router core
+│   │   ├── actions/     # Server Actions
+│   │   ├── api/         # Backend API endpoints
+│   │   ├── components/  # Reusable React components
+│   │   ├── constants/
+│   │   ├── context/     # React context
+│   │   ├── hooks/
+│   │   ├── layer/       # Layer-specific pages/components
+│   │   ├── lib/         # Shared utilities, clients (Supabase)
+│   │   └── (pages, layouts, etc.)
+│   └── layers/        # Potentially layer-specific logic/modules?
+│   └── lib/           # Shared libraries (outside app context?)
+│   └── types/         # TypeScript types (outside app context?)
+├── supabase/        # Supabase migrations/config
+├── .env.*           # Environment files
+├── .gitignore
+├── middleware.ts    # Next.js middleware
+├── next.config.js   # Next.js config
+├── package.json     # Project manifest
+├── README.md        # This file
+├── tsconfig.json    # TypeScript config
+├── vercel.json      # Vercel deployment config
+└── vitest.config.ts # Vitest config
 ```
+*(Note: Presence of both `src/app/lib` and `src/lib`, `src/layers` needs clarification for optimal structure)*
 
-### Implementation Examples
+## 4. Development Rules and Guidelines Summary
 
-1. **Component Structure**
-```javascript
-// ✅ GOOD: Simple functional component
-export function ChatMessage({ message, isLoading }) {
-  return (
-    <Box p={4} bg={isLoading ? "gray.100" : "white"}>
-      {isLoading ? <Spinner /> : message}
-    </Box>
-  )
-}
-```
+Key principles guiding development (refer to `.cursor-rules` for full details, noting potential inconsistencies):
 
-2. **API Routes**
-```javascript
-// ✅ GOOD: Simple API route
-export async function POST(req) {
-  const { message } = await req.json()
-  const response = await openai.chat.completions.create({
-    messages: [{ role: "user", content: message }],
-    model: "gpt-4"
-  })
-  return Response.json({ result: response.choices[0].message })
-}
-```
+- **Technology:** Use TypeScript, Next.js App Router, React Functional Components & Hooks, Chakra UI for styling.
+- **Simplicity:** Avoid unnecessary middleware and abstraction layers. Favor direct implementation (e.g., direct Supabase client usage, direct Stripe Elements).
+- **Backend:** Use Next.js API routes for backend logic. Protect sensitive keys (e.g., OpenAI) in server-side code.
+- **Database:** Use Supabase (PostgreSQL) for database and authentication. Interact via Supabase client libraries.
+- **Structure:** Organize code logically within the `src/app/` directory (components, api, lib, context, hooks, layers).
+- **Security:** Implement Supabase Row Level Security (RLS), secure API routes, handle keys via environment variables.
+- **UI:** Ensure clear loading states and responsive design using Chakra UI.
 
-3. **Database Access**
-```javascript
-// ✅ GOOD: Direct Supabase query
-const getUserData = async () => {
-  const { data: { user } } = await supabase.auth.getUser()
-  const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single()
-  return { data, error }
-}
-```
+*Note: The `.cursor-rules` file contains some conflicting information (e.g., JS vs TS, older folder structure examples) that should be reviewed and updated for consistency with the actual project.*
 
-4. **Real-time Subscriptions**
-```javascript
-// ✅ GOOD: Simple subscription
-const subscribeToBalance = (userId, onUpdate) => {
-  return supabase
-    .channel('users_changes')
-    .on(
-      'postgres_changes',
-      {
-        event: 'UPDATE',
-        table: 'users',
-        filter: `id=eq.${userId}`
-      },
-      (payload) => onUpdate(payload.new.token_balance)
-    )
-    .subscribe()
-}
-```
-
-### Security Guidelines
-
-1. **Authentication**
-   - Use Supabase Auth
-   - Implement proper session management
-   - Secure all API routes
-   - Handle auth state changes
-
-2. **Data Protection**
-   - Enable Row Level Security (RLS)
-   - Implement proper policies
-   - Secure API keys
-   - Validate all inputs
-
-3. **API Security**
-   - Protected routes
-   - Rate limiting
-   - Input validation
-   - Error handling
-
-### Performance Guidelines
-
-1. **Optimization**
-   - Implement code splitting
-   - Use dynamic imports
-   - Optimize images and assets
-   - Cache API responses
-
-2. **State Management**
-   - Use React hooks
-   - Keep state minimal
-   - Implement proper cleanup
-   - Handle loading states
-
-### Error Handling
-
-1. **Client-Side**
-   - Show user-friendly messages
-   - Implement retry logic
-   - Log errors appropriately
-   - Handle network issues
-
-2. **Server-Side**
-   - Proper status codes
-   - Detailed error logging
-   - Security error handling
-   - Database error handling
-
-## Getting Started
+## 5. Getting Started
 
 ### Prerequisites
-- Node.js 18.x or higher
+- Node.js (check `.nvmrc` or use v18+)
 - npm or yarn
+- Supabase Project (URL, Anon Key, Service Role Key)
 - OpenAI API key
+- Stripe Account (Publishable Key, Secret Key, Webhook Secret, Price IDs)
 
-### Installation
+### Installation & Setup
 
 1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/L4-L7-Fractal-Self-Awareness-Intelligence-Router.git
-cd L4-L7-Fractal-Self-Awareness-Intelligence-Router
-```
+   ```bash
+   git clone https://github.com/yourusername/L4-L7-Fractal-Self-Awareness-Intelligence-Router.git
+   cd L4-L7-Fractal-Self-Awareness-Intelligence-Router
+   ```
 
 2. Install dependencies:
-```bash
-npm install
-# or
-yarn install
-```
+   ```bash
+   npm install
+   # or
+   yarn install
+   # or if using pnpm
+   # pnpm install
+   ```
 
 3. Set up environment variables:
+   - Copy `.env.template` or `.env.example` to `.env.local`.
+   ```bash
+   cp .env.template .env.local
+   ```
+   - Edit `.env.local` and add your keys/credentials for Supabase, OpenAI, Stripe, and Vercel Postgres (if used locally). See the "Deployment Environment Variables" section below for required variables.
+
+4. (Optional) Set up Supabase database schema:
+   - Apply migrations located in the `supabase/migrations` folder using the Supabase CLI or Studio UI. Ensure tables (`users`, `chat_history`, `transactions`) and RLS policies (as defined in `.cursor-rules` or Supabase dashboard) are set up.
+
+5. Run the development server:
+   ```bash
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+6. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+## 6. Deployment on Vercel
+
+This application is designed for deployment on Vercel.
+
+### 6.1 Required Services on Vercel/External
+
+1. **Vercel Project:** Linked to your Git repository.
+2. **Vercel Postgres Database:** For storing user data, tokens, transactions.
+3. **Supabase Project:** For authentication.
+4. **Stripe Account:** For payment processing.
+5. **OpenAI Account:** For AI functionality.
+
+### 6.2 Deployment Environment Variables
+
+Set these environment variables in your Vercel project settings:
+
 ```bash
-cp .env.template .env.local
-```
-Edit `.env.local` and add your OpenAI API key and other required variables.
-
-4. Run the development server:
-```bash
-npm run dev
-# or
-yarn dev
-```
-
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## Deployment on Vercel
-
-### 1. Configure Environment Variables
-
-When setting up your Vercel project, add these environment variables:
-
-```bash
-# Database
-DATABASE_URL="postgres://..."
-DIRECT_URL="postgres://..."
+# Database (Vercel Postgres)
+DATABASE_URL="postgres://..." # Provided by Vercel Postgres
+DIRECT_URL="postgres://..."   # Provided by Vercel Postgres
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
-SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key" # For server-side operations
 
-# Application URL
-NEXT_PUBLIC_URL="https://your-domain.vercel.app"
-
-# OpenAI
-OPENAI_API_KEY="your-openai-api-key"
-
-# Stripe
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-publishable-key"
-STRIPE_SECRET_KEY="your-secret-key"
-STRIPE_WEBHOOK_SECRET="your-webhook-secret"
-STRIPE_PRICE_100_TOKENS="price_xxx"
-STRIPE_PRICE_500_TOKENS="price_xxx"
-STRIPE_PRICE_1000_TOKENS="price_xxx"
-```
-
-### 2. Set Up Vercel Postgres Database
-
-1. In the Vercel dashboard, go to **Storage**
-2. Click **Create Database** and select **Postgres**
-3. Follow the setup wizard to create your database
-4. After creation, go to the database settings to find your connection string
-5. Copy the connection string and add it as `DATABASE_URL` in your environment variables
-
-### 3. Deploy Your Application
-
-1. Push your code to GitHub
-2. In the Vercel dashboard, click **Add New Project**
-3. Select your GitHub repository
-4. Configure the project:
-   - Framework preset: Next.js
-   - Build command: `npm run vercel-build`
-   - Root directory: Leave as default (usually /)
-5. Add all environment variables from step 1
-6. Click **Deploy**
-
-### 4. Set Up Stripe Webhooks
-
-1. Login to your [Stripe Dashboard](https://dashboard.stripe.com/)
-2. Go to **Developers** > **Webhooks**
-3. Click **Add Endpoint**
-4. Enter your webhook URL:
-   ```
-   https://your-vercel-domain.vercel.app/api/stripe/webhook
-   ```
-5. Select these events to listen for:
-   - `checkout.session.completed`
-   - `payment_intent.succeeded`
-   - `payment_intent.payment_failed`
-6. Click **Add Endpoint**
-7. Copy the signing secret and add it as `STRIPE_WEBHOOK_SECRET` in your Vercel environment variables
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-- Based on the work of Roger Penrose on consciousness and quantum mechanics
-- Inspired by fractal mathematics and self-similar patterns in nature
-- Built with modern web technologies and AI capabilities
-
-## Contact
-
-For questions and support, please open an issue in the GitHub repository.
-
-## Local Development
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/L4-L7-Fractal-Self-Awareness-Intelligence-Router.git
-cd L4-L7-Fractal-Self-Awareness-Intelligence-Router
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your credentials
-
-# Run development server
-npm run dev
-```
-
-## Deployment on Vercel
-
-### 1. Configure Environment Variables
-
-When setting up your Vercel project, add these environment variables:
-
-```bash
-# Database
-DATABASE_URL="postgres://..."
-DIRECT_URL="postgres://..."
-
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
-SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-
-# Application URL
-NEXT_PUBLIC_URL="https://your-domain.vercel.app"
+# Application URL (Vercel domain)
+NEXT_PUBLIC_URL="https://your-deployment-name.vercel.app"
 
 # OpenAI
-OPENAI_API_KEY="your-openai-api-key"
+OPENAI_API_KEY="sk-..."
 
 # Stripe
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-publishable-key"
-STRIPE_SECRET_KEY="your-secret-key"
-STRIPE_WEBHOOK_SECRET="your-webhook-secret"
-STRIPE_PRICE_100_TOKENS="price_xxx"
-STRIPE_PRICE_500_TOKENS="price_xxx"
-STRIPE_PRICE_1000_TOKENS="price_xxx"
+NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="pk_live_..." # Or pk_test_...
+STRIPE_SECRET_KEY="sk_live_..." # Or sk_test_...
+STRIPE_WEBHOOK_SECRET="whsec_..." # From Stripe webhook setup
+STRIPE_PRICE_100_TOKENS="price_..." # Stripe Price ID for 100 tokens
+STRIPE_PRICE_500_TOKENS="price_..." # Stripe Price ID for 500 tokens
+STRIPE_PRICE_1000_TOKENS="price_..." # Stripe Price ID for 1000 tokens
 ```
 
-### 2. Set Up Vercel Postgres Database
-
-1. In the Vercel dashboard, go to **Storage**
-2. Click **Create Database** and select **Postgres**
-3. Follow the setup wizard to create your database
-4. After creation, go to the database settings to find your connection string
-5. Copy the connection string and add it as `DATABASE_URL` in your environment variables
-
-### 3. Deploy Your Application
-
-1. Push your code to GitHub
-2. In the Vercel dashboard, click **Add New Project**
-3. Select your GitHub repository
-4. Configure the project:
-   - Framework preset: Next.js
-   - Build command: `npm run vercel-build`
-   - Root directory: Leave as default (usually /)
-5. Add all environment variables from step 1
-6. Click **Deploy**
-
-### 4. Set Up Stripe Webhooks
-
-1. Login to your [Stripe Dashboard](https://dashboard.stripe.com/)
-2. Go to **Developers** > **Webhooks**
-3. Click **Add Endpoint**
-4. Enter your webhook URL:
-   ```
-   https://your-vercel-domain.vercel.app/api/stripe/webhook
-   ```
-5. Select these events to listen for:
-   - `checkout.session.completed`
-   - `payment_intent.succeeded`
-   - `payment_intent.payment_failed`
-6. Click **Add Endpoint**
-7. Copy the signing secret and add it as `STRIPE_WEBHOOK_SECRET` in your Vercel environment variables
-
-## Testing
-
-You can run pre-deployment checks with our utility script:
-
-```bash
-node scripts/deploy-check.js
-```
-
-For testing Stripe webhooks locally:
-
-```bash
-./scripts/stripe-webhook-test.sh
-```
-
-## Tech Stack
-
-- **Frontend**: Next.js, React, Chakra UI
-- **Backend**: Next.js API Routes
-- **Database**: PostgreSQL (Vercel Postgres)
-- **Authentication**: Supabase Auth
-- **Payments**: Stripe
-- **AI Integration**: OpenAI API
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Project Phase
-
-Currently in initial release phase with focus on core functionality. Upcoming features include subscription options, team accounts, and expanded AI model selection.
-
-# FractiVerse Router
-
-A powerful AI-driven router with built-in token balance system, allowing users to interact with advanced language models while managing their token usage.
-
-## Features
-
-- **User Authentication**: Secure login with email/password via NextAuth.js
-- **Token System**: Purchase and manage FractiTokens for AI router access
-- **Secure Payments**: Integrated Stripe for secure payment processing with tax handling
-- **Chat Interface**: Clean, intuitive interface for interacting with AI
-- **Token Usage Tracking**: Monitor usage per chat session
-- **Responsive Design**: Works seamlessly across devices
-
-## Local Development
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/L4-L7-Fractal-Self-Awareness-Intelligence-Router.git
-cd L4-L7-Fractal-Self-Awareness-Intelligence-Router
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your credentials
-
-# Run development server
-npm run dev
-```
-
-## Deployment on Vercel
-
-### 1. Configure Environment Variables
-
-When setting up your Vercel project, add these environment variables:
-
-```bash
-# Database
-DATABASE_URL="postgres://..."
-DIRECT_URL="postgres://..."
-
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
-SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-
-# Application URL
-NEXT_PUBLIC_URL="https://your-domain.vercel.app"
-
-# OpenAI
-OPENAI_API_KEY="your-openai-api-key"
-
-# Stripe
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-publishable-key"
-STRIPE_SECRET_KEY="your-secret-key"
-STRIPE_WEBHOOK_SECRET="your-webhook-secret"
-STRIPE_PRICE_100_TOKENS="price_xxx"
-STRIPE_PRICE_500_TOKENS="price_xxx"
-STRIPE_PRICE_1000_TOKENS="price_xxx"
-```
-
-### 2. Set Up Vercel Postgres Database
-
-1. In the Vercel dashboard, go to **Storage**
-2. Click **Create Database** and select **Postgres**
-3. Follow the setup wizard to create your database
-4. After creation, go to the database settings to find your connection string
-5. Copy the connection string and add it as `DATABASE_URL` in your environment variables
-
-### 3. Deploy Your Application
-
-1. Push your code to GitHub
-2. In the Vercel dashboard, click **Add New Project**
-3. Select your GitHub repository
-4. Configure the project:
-   - Framework preset: Next.js
-   - Build command: `npm run vercel-build`
-   - Root directory: Leave as default (usually /)
-5. Add all environment variables from step 1
-6. Click **Deploy**
-
-### 4. Set Up Stripe Webhooks
-
-1. Login to your [Stripe Dashboard](https://dashboard.stripe.com/)
-2. Go to **Developers** > **Webhooks**
-3. Click **Add Endpoint**
-4. Enter your webhook URL:
-   ```
-   https://your-vercel-domain.vercel.app/api/stripe/webhook
-   ```
-5. Select these events to listen for:
-   - `checkout.session.completed`
-   - `payment_intent.succeeded`
-   - `payment_intent.payment_failed`
-6. Click **Add Endpoint**
-7. Copy the signing secret and add it as `STRIPE_WEBHOOK_SECRET` in your Vercel environment variables
-
-## Testing
-
-You can run pre-deployment checks with our utility script:
-
-```bash
-node scripts/deploy-check.js
-```
-
-For testing Stripe webhooks locally:
-
-```bash
-./scripts/stripe-webhook-test.sh
-```
-
-## Tech Stack
-
-- **Frontend**: Next.js, React, Chakra UI
-- **Backend**: Next.js API Routes
-- **Database**: PostgreSQL (Vercel Postgres)
-- **Authentication**: Supabase Auth
-- **Payments**: Stripe
-- **AI Integration**: OpenAI API
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 
-
-# FractiVerse Router - Deployment Guide
-
-This document provides instructions for deploying the FractiVerse Router application to Vercel.
-
-## Prerequisites
-
-- A Vercel account
-- A Stripe account (with API keys)
-- A GitHub account (for deploying from a repository)
-
-## Required Services
-
-1. **Vercel Postgres Database**
-   - Used for storing user data, tokens, and transactions
-
-2. **Stripe**
-   - For secure payment processing
-   - Supports tax calculation
-
-3. **Supabase**
-   - For user authentication and session management
-
-4. **OpenAI API**
-   - For AI functionality
-
-## Environment Variables
-
-The following environment variables need to be set in your Vercel project:
-
-```bash
-# Database
-DATABASE_URL="postgres://..."
-DIRECT_URL="postgres://..."
-
-# Supabase
-NEXT_PUBLIC_SUPABASE_URL="https://your-project.supabase.co"
-NEXT_PUBLIC_SUPABASE_ANON_KEY="your-anon-key"
-SUPABASE_SERVICE_ROLE_KEY="your-service-role-key"
-
-# Application URL
-NEXT_PUBLIC_URL="https://your-domain.vercel.app"
-
-# OpenAI
-OPENAI_API_KEY="your-openai-api-key"
-
-# Stripe
-NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY="your-publishable-key"
-STRIPE_SECRET_KEY="your-secret-key"
-STRIPE_WEBHOOK_SECRET="your-webhook-secret"
-STRIPE_PRICE_100_TOKENS="price_xxx"
-STRIPE_PRICE_500_TOKENS="price_xxx"
-STRIPE_PRICE_1000_TOKENS="price_xxx"
-```
-
-## Deployment Steps
-
-1. **Push your code to GitHub**
-
-2. **Create a New Vercel Project**
-   - Connect to your GitHub repository
-   - Configure the environment variables
-
-3. **Set Up Vercel Postgres**
-   - Create a new Postgres database in the Vercel dashboard
-   - Copy the connection string to your `DATABASE_URL` environment variable
-
-4. **Initialize the Database**
-   - The database will be automatically initialized during the first deployment due to the `vercel-build` script
-
-5. **Configure Stripe Webhooks**
-   - Create a webhook in your Stripe dashboard pointing to:
-     `https://your-vercel-domain.vercel.app/api/stripe/webhook`
-   - Make sure to select these events:
-     - `checkout.session.completed`
-     - `payment_intent.succeeded`
-     - `payment_intent.payment_failed`
-   - Copy the webhook signing secret to your `STRIPE_WEBHOOK_SECRET` environment variable
-
-6. **Deploy**
-   - Trigger a deploy in the Vercel dashboard
-
-## Post-Deployment
-
-1. **Test the application**
-   - Make sure authentication is working
-   - Test the token purchasing flow
-   - Verify webhook functionality
-
-2. **Set up monitoring**
-   - Configure Vercel Analytics
-   - Set up Stripe webhook monitoring
-
-## Production Considerations
-
-1. **Stripe Tax Integration**
-   - For production, replace the mock tax calculation with Stripe Tax API
-
-2. **Analytics**
-   - Consider integrating with Vercel Analytics for usage monitoring
-   
-3. **Error Reporting**
-   - Consider integrating with an error reporting service like Sentry
-
-4. **Performance Monitoring**
-   - Set up performance monitoring with Vercel Analytics
-
-## Common Issues
-
-- **Database Connection Issues**
-  - Check that your `DATABASE_URL` is correctly set
-  - Verify that the IP allows connections from Vercel
-
-- **Stripe Webhook Errors**
-  - Ensure the webhook secret is correctly set
-  - Check that the webhook URL is correct and accessible
-
-- **Missing Environment Variables**
-  - Verify all required environment variables are set in the Vercel dashboard 
-
-## Current Deployment
-The application is currently deployed at: https://l4-l7-fractal-self-awareness-intelligence-router-bfdc7k4a4.vercel.app
-
-Note: The deployment URL changes with each deployment and will be updated in this README accordingly. 
+### 6.3 Deployment Steps
+
+1. **Push Code:** Ensure your latest code is pushed to the Git repository linked to your Vercel project.
+2. **Configure Vercel Project:**
+   - Connect your Git repository.
+   - Set the Framework Preset to "Next.js".
+   - Ensure Build Command is `npm run build` or similar (Vercel often detects this automatically). The `package.json` has `vercel-build` which likely handles Prisma/DB setup if used during build. Check `vercel.json` if present. *Update: `package.json` does not have `vercel-build`. Default `next build` should work.*
+   - Add all environment variables listed above.
+3. **Set Up Vercel Postgres:**
+   - In the Vercel dashboard (Storage tab), create a new Postgres database.
+   - Connect it to your project. Vercel will automatically add `DATABASE_URL` and `DIRECT_URL` environment variables.
+   - Apply database migrations (`supabase/migrations`) if not handled automatically by a build step or manually via Supabase Studio/CLI.
+4. **Configure Stripe Webhooks:**
+   - In your Stripe Dashboard (Developers > Webhooks), create an endpoint.
+   - Set the Endpoint URL to: `https://your-deployment-name.vercel.app/api/stripe/webhook` (replace with your actual Vercel URL).
+   - Listen for required events (e.g., `checkout.session.completed`, `payment_intent.succeeded`, `payment_intent.payment_failed`).
+   - Copy the webhook's "Signing secret" and add it as the `STRIPE_WEBHOOK_SECRET` environment variable in Vercel.
+5. **Deploy:** Trigger a deployment from the Vercel dashboard or via a Git push.
+
+## 7. Testing
+
+- Run unit/integration tests: `npm test`
+- Run tests in watch mode: `npm run test:watch`
+- Check test coverage: `npm run test:coverage`
+- Local Stripe webhook testing: Use Stripe CLI (`stripe listen --forward-to localhost:3000/api/stripe/webhook`) or provided scripts (`./scripts/stripe-webhook-test.sh` if available and configured).
+
+## 8. License
+
+This project is licensed under the MIT License - see the LICENSE file (if present) for details.
+
+## 9. Acknowledgments
+
+- Inspired by Roger Penrose, fractal mathematics, and consciousness studies.
+- Built with Next.js, React, Chakra UI, Supabase, Stripe, and OpenAI.
+
+## 10. Contact
+
+For questions and support, please open an issue in the GitHub repository. 
