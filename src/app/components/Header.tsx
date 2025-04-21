@@ -27,12 +27,6 @@ import { getUserProfileClient } from '@/lib/supabase/client'
 
 type Profile = Database['public']['Tables']['users']['Row']
 
-const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/dashboard', icon: FaBrain },
-  { label: 'Documentation', href: '/documentation', icon: FaBook },
-  { label: 'Performance', href: '/test-report', icon: FaChartLine },
-]
-
 export default function Header() {
   const { user, signOut } = useAuth()
   const { isOpen, onOpen, onClose } = useDisclosure()
@@ -96,27 +90,6 @@ export default function Header() {
             <Text fontSize="2xl" fontWeight="bold" color="whiteAlpha.900">
               FractiVerse
             </Text>
-
-            <HStack spacing={4} display={{ base: 'none', md: 'flex' }}>
-              {NAV_ITEMS.map((item) => (
-                <ChakraLink
-                  key={item.href}
-                  as={Link}
-                  href={item.href}
-                  px={3}
-                  py={2}
-                  rounded="md"
-                  color="whiteAlpha.900"
-                  _hover={{ bg: 'whiteAlpha.100' }}
-                  bg={pathname === item.href ? 'whiteAlpha.100' : 'transparent'}
-                >
-                  <HStack spacing={2}>
-                    <item.icon />
-                    <Text>{item.label}</Text>
-                  </HStack>
-                </ChakraLink>
-              ))}
-            </HStack>
           </HStack>
 
           <HStack spacing={4}>
@@ -177,7 +150,6 @@ export default function Header() {
         isOpen={isOpen}
         onClose={onClose}
         onPurchase={() => { 
-            // Add actual purchase handling logic here or pass down from parent
             console.log("Purchase callback triggered from Header"); 
         }} 
       />
