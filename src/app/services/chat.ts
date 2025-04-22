@@ -1,9 +1,25 @@
 import { supabase } from '@/lib/supabase/client'
 import type { Database } from '@/types/supabase'
+import { createServerSupabaseClient } from '@/lib/supabase/supabase-server'
+import { RealtimeChannel } from '@supabase/supabase-js'
+import { createMessage as createMessageAction } from '@/app/actions/chat'
 
-export type Message = Database['public']['Tables']['messages']['Row']
-export type Chat = Database['public']['Tables']['chats']['Row'] & {
-  messages?: Message[]
+export type DbChat = Database['public']['Tables']['chats']['Row']
+export type DbMessage = Database['public']['Tables']['messages']['Row']
+
+export type Message = Omit<DbMessage, 'role'> & {
+  role: 'user' | 'assistant'
+}
+
+export type Chat = DbChat & {
+  messages: Message[]
+}
+
+export interface ChatListItem {
+  id: string;
+  user_id: string;
+  title: string;
+  updated_at: string;
 }
 
 export async function getChats(userId: string) {
@@ -131,11 +147,11 @@ export function subscribeToChats(
 
 export function subscribeToChatMessages(
   chatId: string,
-  callback: (payload: Message) => void
+  callback: (message: Message) => void
 ) {
-  return supabase
-    .channel(`chat-${chatId}`)
-    .on(
+  const channel = supabase
+    .channel(`chat-messages-${chatId}`)
+    .on<DbMessage>(
       'postgres_changes',
       {
         event: '*',
@@ -143,17 +159,79 @@ export function subscribeToChatMessages(
         table: 'messages',
         filter: `chat_id=eq.${chatId}`
       },
-      (payload) => callback(payload.new as Message)
-    )
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('Successfully subscribed to message changes')
+      (payload) => {
+        console.log(`Realtime message update on chat ${chatId}:`, payload)
+        const rawMessage = payload.new
+        if (rawMessage && (rawMessage.role === 'user' || rawMessage.role === 'assistant')) {
+          callback(rawMessage as Message)
+        } else {
+          console.warn('Received message with invalid role:', rawMessage)
+        }
       }
-      if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-        console.log('Subscription closed or error, attempting to reconnect...')
-        setTimeout(() => {
-          subscribeToChatMessages(chatId, callback)
-        }, 1000)
+    )
+    .subscribe((status, err) => {
+      console.log(`Realtime channel chat-messages-${chatId} status: ${status}`)
+      if (err) {
+        console.error(`Realtime channel chat-messages-${chatId} error:`, err)
       }
     })
-} 
+
+  return channel
+}
+
+// Commenting out placeholder as context uses direct query and linter struggles with typing
+/*
+export const getChatMessages = async (chatId: string): Promise<Message[]> => {
+    console.warn(\"getChatMessages in service is placeholder, context uses direct query\");
+    const { data, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+
+    if (error) throw error;
+
+    // Map and validate roles inline
+    return (data || []).map(msg => {
+        // Check if msg is valid and has a role property
+        if (!msg || typeof msg !== 'object' || !('role' in msg)) {
+            // Handle invalid message structure (e.g., return a default or skip)
+            // Returning a default structure here to avoid downstream errors
+            return {
+                ...msg, // Spread existing properties if any
+                id: msg?.id || crypto.randomUUID(), // Ensure ID exists
+                chat_id: chatId,
+                role: 'assistant', // Default role
+                content: '[Invalid message data]',
+                created_at: msg?.created_at || new Date().toISOString()
+            } as Message;
+        }
+        // Now msg is confirmed to be an object with a role property
+        return {
+            ...msg,
+            role: msg.role === \'user\' || msg.role === \'assistant\' ? msg.role : \'assistant\' // Default role
+        } as Message;
+    });
+};
+*/
+
+export const createMessage = async (
+  chatId: string, 
+  role: 'user' | 'assistant',
+  content: string
+): Promise<Message> => {
+  try {
+    const newMessage = await createMessageAction(chatId, role, content);
+    if (!newMessage) {
+      throw new Error("Server action did not return a message.");
+    }
+    if (newMessage.role !== 'user' && newMessage.role !== 'assistant') {
+        console.warn(`createMessage action returned invalid role: ${newMessage.role}, defaulting to assistant.`);
+        return { ...newMessage, role: 'assistant' } as Message;
+    }
+    return newMessage as Message;
+  } catch (error) {
+    console.error("Error calling createMessage server action:", error);
+    throw error;
+  }
+}; 

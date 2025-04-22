@@ -54,6 +54,7 @@ export default function Dashboard() {
     isLoading: isChatLoading,
     loadChats,
     sendMessage,
+    createNewChat,
   } = useChat();
   const toast = useToast();
 
@@ -85,22 +86,41 @@ export default function Dashboard() {
   // Dependencies are correct now
   }, [user, isAuthLoading, router, loadChats, toast, isInitialLoad]);
 
-  // --- Handlers (Wrapper for ChatWindow) ---
+  // --- Handlers ---
+  // Simplified handler: decides between sending to existing or creating new chat
   const handleSendMessageForWindow = useCallback(async (content: string) => {
+    if (!content.trim()) return; // Don't send empty messages
+    if (!user?.id) { // Need user check here as createNewChat uses it
+        toast({ title: 'Error', description: 'User not found.', status: 'error' });
+        return;
+    }
+
     if (!currentChat?.id) {
-      toast({ title: 'Error', description: 'No chat selected.', status: 'error' });
-      // Or potentially create a new chat here if desired
-      // await createNewChat('New Chat', content); 
-      return; // Prevent sending if no chat is active
+      // No current chat selected, create a new one using the context function
+      const defaultTitle = content.substring(0, 30) + (content.length > 30 ? '...' : '');
+      try {
+        await createNewChat(defaultTitle, content); // Pass initial message content
+      } catch (error: any) { 
+        // Error handling for createNewChat is mostly within the context, 
+        // but catch here for any unexpected issues.
+        console.error("Error calling createNewChat from Dashboard:", error);
+        toast({ 
+            title: 'Error Starting Chat', 
+            description: error.message || 'Could not start a new chat.', 
+            status: 'error' 
+        });
+      }
+    } else {
+      // Send message to the existing chat
+      try {
+        await sendMessage(content, currentChat.id);
+      } catch (error) { 
+        console.error("Error sending message to existing chat:", error);
+        toast({ title: 'Error sending message', status: 'error' });
+      }
     }
-    try {
-      await sendMessage(content, currentChat.id);
-    } catch (error) { 
-      // Error handling is likely within sendMessage in context, but catch here just in case
-      console.error("Error sending message from Dashboard wrapper:", error);
-      toast({ title: 'Error sending message', status: 'error' });
-    }
-  }, [currentChat, sendMessage, toast]); // Add dependencies
+  // Ensure all dependencies used inside are listed
+  }, [currentChat, user, createNewChat, sendMessage, toast]); 
 
   // --- Render Logic ---
   // Loading state for authentication
@@ -139,32 +159,34 @@ export default function Dashboard() {
         {/* @ts-ignore - Ignore SimpleGrid children type error (systemic issue) */}
         <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
           {infoCards.map((card) => (
-            <Link href={card.href} key={card.title} passHref legacyBehavior>
-              {/* @ts-ignore - Ignore Card children type error (systemic issue) */}
-              <Card
-                as="a"
-                cursor="pointer"
-                bg={cardBg}
-                _hover={{ bg: cardHoverBg, transform: 'translateY(-2px)', shadow: 'md' }}
-                transition="all 0.2s ease-in-out"
-                shadow="sm"
-                borderRadius="md"
-                overflow="hidden"
-              >
-                {/* @ts-ignore - Ignore CardBody children type error (systemic issue) */}
-                <CardBody>
-                  {/* @ts-ignore - Ignore HStack children type error (systemic issue) */}
-                  <HStack spacing={4} align="center">
-                    <Icon as={card.icon} w={8} h={8} color="teal.500" />
-                    {/* @ts-ignore - Ignore Box children type error (systemic issue) */}
-                    <Box>
-                      <Text fontWeight="semibold">{card.title}</Text>
-                      <Text fontSize="sm" color={textColor}>{card.description}</Text>
-                    </Box>
-                  </HStack>
-                </CardBody>
-              </Card>
-            </Link>
+            <React.Fragment key={card.title}>
+              <Link href={card.href} passHref legacyBehavior>
+                {/* @ts-ignore - Ignore Card children type error (systemic issue) */}
+                <Card
+                  as="a"
+                  cursor="pointer"
+                  bg={cardBg}
+                  _hover={{ bg: cardHoverBg, transform: 'translateY(-2px)', shadow: 'md' }}
+                  transition="all 0.2s ease-in-out"
+                  shadow="sm"
+                  borderRadius="md"
+                  overflow="hidden"
+                >
+                  {/* @ts-ignore - Ignore CardBody children type error (systemic issue) */}
+                  <CardBody>
+                    {/* @ts-ignore - Ignore HStack children type error (systemic issue) */}
+                    <HStack spacing={4} align="center">
+                      <Icon as={card.icon} w={8} h={8} color="teal.500" />
+                      {/* @ts-ignore - Ignore Box children type error (systemic issue) */}
+                      <Box>
+                        <Text fontWeight="semibold">{card.title}</Text>
+                        <Text fontSize="sm" color={textColor}>{card.description}</Text>
+                      </Box>
+                    </HStack>
+                  </CardBody>
+                </Card>
+              </Link>
+            </React.Fragment>
           ))}
         </SimpleGrid>
       </Box>
