@@ -1,11 +1,10 @@
-import { createClient } from '@supabase/supabase-js'
+import { createBrowserClient } from '@supabase/ssr'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import type { Database } from '@/types/supabase' // Assuming global types
-import { STORAGE_KEY } from './config' // Should now resolve
 
-let supabaseInstance: ReturnType<typeof createClient<Database>> | null = null
+let supabaseInstance: ReturnType<typeof createBrowserClient<Database>> | null = null
 
-// Function to get a singleton Supabase client instance (intended for client-side use)
+// Function to get a singleton Supabase client instance (using @supabase/ssr)
 export function getSupabaseClient() {
   if (supabaseInstance) return supabaseInstance
 
@@ -15,30 +14,15 @@ export function getSupabaseClient() {
   if (!supabaseUrl) throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL')
   if (!supabaseAnonKey) throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY')
 
-  supabaseInstance = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: true,
-      storageKey: STORAGE_KEY,
-      // Explicitly check for window object before accessing localStorage
-      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-      detectSessionInUrl: true,
-      flowType: 'pkce',
-      autoRefreshToken: true,
-      // debug: process.env.NODE_ENV === 'development', // Enable debug only in dev
-    },
-    global: {
-      headers: {
-        'X-Client-Info': 'supabase-js-v2' // Default, can be customized
-      }
-    },
-    realtime: {
-      params: {
-        eventsPerSecond: 10 // Default is 10
-      }
-    }
-  })
+  // Use createBrowserClient from @supabase/ssr
+  supabaseInstance = createBrowserClient<Database>(
+    supabaseUrl,
+    supabaseAnonKey
+    // No need for explicit storage config, ssr handles cookies
+  )
 
-  // Initialize session and set auth for realtime on client-side
+  // Keep realtime setup if needed, but ensure it works with the new client
+  // Note: Realtime auth might need adjustment or review with ssr client
   if (typeof window !== 'undefined') {
     supabaseInstance.auth.getSession().then(({ data: { session } }) => {
       if (session) {
@@ -46,14 +30,13 @@ export function getSupabaseClient() {
       }
     }).catch(error => console.error("Error getting initial session:", error));
 
-    // Add listener for auth state changes to update realtime auth
     supabaseInstance.auth.onAuthStateChange((event, session) => {
-      console.log('Auth state changed (client):', event, session?.user?.id)
+      console.log('Auth state changed (client - ssr):', event, session?.user?.id)
       if (session) {
         supabaseInstance?.realtime.setAuth(session.access_token)
       } else {
-          // Handle logout for realtime if needed
-          // supabaseInstance?.realtime.setAuth(null);
+        // Handle logout for realtime if needed
+        // supabaseInstance?.realtime.setAuth(null);
       }
     });
   }
