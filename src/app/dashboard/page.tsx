@@ -142,15 +142,23 @@ export default function Dashboard() {
   useEffect(() => {
     if (!isAuthLoading && !user) {
       router.push('/login')
+      return
     }
-  }, [user, isAuthLoading, router])
 
-  useEffect(() => {
     if (user && isInitialLoad) {
-      loadChats()
+      loadChats().catch(err => {
+        console.error('Error loading chats:', err)
+        toast({
+          title: 'Error',
+          description: 'Failed to load chats. Please try again.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
+        })
+      })
       setIsInitialLoad(false)
     }
-  }, [user, isInitialLoad, loadChats])
+  }, [user, isAuthLoading, router, loadChats, toast])
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -213,26 +221,60 @@ export default function Dashboard() {
     });
   }, [toast]);
 
-  // Placeholder functions for rename and delete
-  const handleRenameChat = useCallback(async (chatId: string, currentTitle: string) => {
-    const newTitle = window.prompt("Enter new chat title:", currentTitle);
-    if (newTitle && newTitle.trim() !== '' && newTitle !== currentTitle) {
-      // Call the context function (which calls the server action)
-      await updateChatTitle(chatId, newTitle.trim()); 
+  const handleDeleteChat = async (chatId: string) => {
+    try {
+      await deleteChat(chatId)
+      toast({
+        title: 'Success',
+        description: 'Chat deleted successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (err) {
+      console.error('Error deleting chat:', err)
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to delete chat',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
     }
-  }, [updateChatTitle, toast]); // Added updateChatTitle dependency
+  }
 
-  const handleDeleteChat = useCallback(async (chatId: string) => {
-    // Confirmation is handled inside the context function now
-    await deleteChat(chatId); 
-  }, [deleteChat]); // Added deleteChat dependency
+  const handleRenameChat = async (chatId: string, newTitle: string) => {
+    try {
+      await updateChatTitle(chatId, newTitle)
+      toast({
+        title: 'Success',
+        description: 'Chat renamed successfully',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      })
+    } catch (err) {
+      console.error('Error renaming chat:', err)
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to rename chat',
+        status: 'error',
+        duration: 5000,
+        isClosable: true,
+      })
+    }
+  }
 
-  if (isAuthLoading || isInitialLoad) {
+  if (isAuthLoading) {
     return (
-      <Box minH="100vh" bg={bgColor} display="flex" alignItems="center" justifyContent="center">
-        <Spinner size="xl" color="teal.500" />
-      </Box>
+      <Flex minH="100vh" align="center" justify="center">
+        <Spinner size="xl" />
+      </Flex>
     )
+  }
+
+  if (!user) {
+    return null // Will be redirected by useEffect
   }
 
   return (
@@ -403,26 +445,26 @@ export default function Dashboard() {
       <Box width="100%" bg={bgColor} borderTop="1px" borderColor="gray.200" py={8}>
         <Container maxW="container.xl">
           <Heading size="md" mb={6}>Explore FractiVerse</Heading>
-          <SimpleGrid columns={{ base: 2, md: 3, lg: 5 }} spacing={6}>
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6} w="full">
             {infoCards.map((card, index) => (
-              <ChakraLink key={index} href={card.href} as={Link}>
-                <Card
-                  bg={cardBg}
-                  _hover={{ transform: 'translateY(-2px)', shadow: 'md', bg: cardHoverBg }}
-                  transition="all 0.2s"
-                  h="full"
-                >
-                  <CardBody>
-                    <VStack spacing={2} align="start">
-                      <Icon as={card.icon} w={6} h={6} color="teal.500" />
-                      <Heading size="sm">{card.title}</Heading>
-                      <Text fontSize="sm" color={textColor}>
-                        {card.description}
-                      </Text>
-                    </VStack>
-                  </CardBody>
-                </Card>
-              </ChakraLink>
+              <Card
+                key={index}
+                bg={cardBg}
+                _hover={{ bg: cardHoverBg, transform: 'translateY(-2px)' }}
+                transition="all 0.2s"
+                cursor="pointer"
+                onClick={() => router.push(card.href)}
+              >
+                <CardBody>
+                  <VStack align="start" spacing={4}>
+                    <HStack>
+                      <Icon as={card.icon} boxSize={6} color="teal.500" />
+                      <Heading size="md">{card.title}</Heading>
+                    </HStack>
+                    <Text color={textColor}>{card.description}</Text>
+                  </VStack>
+                </CardBody>
+              </Card>
             ))}
           </SimpleGrid>
         </Container>

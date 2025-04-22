@@ -127,62 +127,98 @@ export async function updateChatTitle(chatId: string, title: string) {
   const supabase = createServerSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user?.id) throw new Error('Not authenticated')
-  
-  // Update the chat title directly - RLS will handle the permission check
-  const { data: updatedChat, error } = await supabase
-    .from('chats')
-    .update({ title })
-    .eq('id', chatId)
-    .select()
-    .single()
-  
-  if (error) {
-    console.error('Error updating chat title:', error)
-    if (error.code === 'PGRST116') {
-      throw new Error('Chat not found or access denied')
-    }
-    throw error
-  }
-  
-  if (!updatedChat) {
-    throw new Error('Chat not found or access denied')
+  if (!session?.user?.id) {
+    console.error('Not authenticated in updateChatTitle')
+    throw new Error('Not authenticated')
   }
   
   try {
-    revalidatePath('/chat')
-  } catch (e) {
-    console.warn('Failed to revalidate path:', e)
+    // First verify the chat exists and belongs to the user
+    const { data: existingChat, error: checkError } = await supabase
+      .from('chats')
+      .select('id')
+      .eq('id', chatId)
+      .eq('user_id', session.user.id)
+      .single()
+    
+    if (checkError || !existingChat) {
+      console.error('Chat not found or access denied:', checkError)
+      throw new Error('Chat not found or access denied')
+    }
+    
+    // Update the chat title
+    const { data: updatedChat, error } = await supabase
+      .from('chats')
+      .update({ title })
+      .eq('id', chatId)
+      .select()
+      .single()
+    
+    if (error) {
+      console.error('Error updating chat title:', error)
+      throw error
+    }
+    
+    if (!updatedChat) {
+      throw new Error('Chat not found or access denied')
+    }
+    
+    try {
+      revalidatePath('/chat')
+    } catch (e) {
+      console.warn('Failed to revalidate path:', e)
+    }
+    
+    return updatedChat
+  } catch (error) {
+    console.error('Error in updateChatTitle:', error)
+    throw error
   }
-  
-  return updatedChat
 }
 
 export async function deleteChat(chatId: string) {
   const supabase = createServerSupabaseClient()
   
   const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user?.id) throw new Error('Not authenticated')
-  
-  // Delete the chat directly - RLS will handle the permission check
-  const { error } = await supabase
-    .from('chats')
-    .delete()
-    .eq('id', chatId)
-  
-  if (error) {
-    console.error('Error deleting chat:', error)
-    if (error.code === 'PGRST116') {
-      throw new Error('Chat not found or access denied')
-    }
-    throw error
+  if (!session?.user?.id) {
+    console.error('Not authenticated in deleteChat')
+    throw new Error('Not authenticated')
   }
   
   try {
-    revalidatePath('/chat')
-  } catch (e) {
-    console.warn('Failed to revalidate path:', e)
+    // First verify the chat exists and belongs to the user
+    const { data: existingChat, error: checkError } = await supabase
+      .from('chats')
+      .select('id')
+      .eq('id', chatId)
+      .eq('user_id', session.user.id)
+      .single()
+    
+    if (checkError || !existingChat) {
+      console.error('Chat not found or access denied:', checkError)
+      throw new Error('Chat not found or access denied')
+    }
+    
+    // Delete the chat
+    const { error } = await supabase
+      .from('chats')
+      .delete()
+      .eq('id', chatId)
+    
+    if (error) {
+      console.error('Error deleting chat:', error)
+      throw error
+    }
+    
+    try {
+      revalidatePath('/chat')
+    } catch (e) {
+      console.warn('Failed to revalidate path:', e)
+    }
+    
+    return true
+  } catch (error) {
+    console.error('Error in deleteChat:', error)
+    throw error
   }
-  
-  return true
 } 
