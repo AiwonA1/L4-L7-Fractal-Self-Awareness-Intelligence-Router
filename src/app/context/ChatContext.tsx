@@ -41,55 +41,56 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<Error | null>(null)
+  const [subscriptions, setSubscriptions] = useState<(() => void)[]>([])
+
+  // Cleanup subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      subscriptions.forEach(unsubscribe => unsubscribe())
+    }
+  }, [subscriptions])
 
   useEffect(() => {
     if (user?.id) {
       loadChats()
+      
       // Subscribe to chat updates
-      const subscription = chatService.subscribeToChats(user.id, (chat) => {
-        // Map the incoming full Chat object to a ChatListItem
+      const chatSubscription = chatService.subscribeToChats(user.id, (chat) => {
         const chatListItem: ChatListItem = {
           id: chat.id,
           user_id: chat.user_id,
           title: chat.title,
           updated_at: chat.updated_at,
-        };
+        }
 
         setChats((prevChats) => {
-          const index = prevChats.findIndex((c) => c.id === chatListItem.id);
+          const index = prevChats.findIndex((c) => c.id === chatListItem.id)
           if (index >= 0) {
-            // Update existing chat
-            const newChats = [...prevChats];
-            newChats[index] = chatListItem; // Use the mapped item
-            // Optionally, re-sort if updated_at changed significantly
-            return newChats.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
+            const newChats = [...prevChats]
+            newChats[index] = chatListItem
+            return newChats.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
           }
-          // Add new chat and sort
-          return [...prevChats, chatListItem].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime());
-        });
+          return [...prevChats, chatListItem].sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+        })
       })
 
-      return () => {
-        subscription.unsubscribe()
-      }
+      setSubscriptions(prev => [...prev, () => chatSubscription.unsubscribe()])
     }
   }, [user?.id])
 
   useEffect(() => {
     if (currentChat?.id) {
       // Subscribe to message updates for current chat
-      const subscription = chatService.subscribeToChatMessages(currentChat.id, (message) => {
+      const messageSubscription = chatService.subscribeToChatMessages(currentChat.id, (message) => {
         setMessages((prevMessages) => {
           if (prevMessages.some(m => m.id === message.id)) {
-            return prevMessages;
+            return prevMessages
           }
-          return [...prevMessages, message];
-        });
-      });
+          return [...prevMessages, message]
+        })
+      })
 
-      return () => {
-        subscription.unsubscribe()
-      }
+      setSubscriptions(prev => [...prev, () => messageSubscription.unsubscribe()])
     }
   }, [currentChat?.id])
 
@@ -100,10 +101,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setError(null)
 
     try {
-      // chatService.getChats now returns the fields matching ChatListItem
       const data = await chatService.getChats(user.id)
-      console.log("ChatContext: Loaded chats", data)
-      setChats(data) // This assignment should now be type-compatible
+      setChats(data)
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load chats'))
       console.error('Error loading chats:', err)
@@ -113,7 +112,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         status: "error",
         duration: 5000,
         isClosable: true,
-      });
+      })
     } finally {
       setIsLoading(false)
     }
@@ -133,35 +132,35 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           .from('messages')
           .select('*')
           .eq('chat_id', chatId)
-          .order('created_at', { ascending: true });
+          .order('created_at', { ascending: true })
           
-        if (msgError) throw msgError;
+        if (msgError) throw msgError
         
         const sortedMessages = (fetchedMessages || []).sort((a: Message, b: Message) => 
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
-        setMessages(sortedMessages);
+        )
+        setMessages(sortedMessages)
       } else {
-        setCurrentChat(null);
-        setMessages([]);
+        setCurrentChat(null)
+        setMessages([])
         toast({
           title: "Chat not found",
           description: "The selected chat may have been deleted.",
           status: "warning",
           duration: 3000,
           isClosable: true,
-        });
+        })
       }
     } catch (err) {
       setError(err instanceof Error ? err : new Error('Failed to load messages'))
       console.error('Error loading messages:', err)
-       toast({
+      toast({
         title: "Error Loading Chat",
         description: err instanceof Error ? err.message : "Could not load the chat messages.",
         status: "error",
         duration: 3000,
         isClosable: true,
-      });
+      })
     } finally {
       setIsLoading(false)
     }
@@ -222,66 +221,56 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   };
 
   const sendMessage = async (content: string, chatIdToSendTo: string) => {
-    const targetChatId = chatIdToSendTo;
-
     if (!user?.id) {
-       console.error("Cannot send message: User not logged in.");
-       toast({
+      console.error("Cannot send message: User not logged in.")
+      toast({
         title: "Authentication Error",
         description: "User not logged in.",
         status: "error",
         duration: 3000,
         isClosable: true,
-      });
-      return;
+      })
+      return
     }
     
-    // Optimistically add user message to local state
     const userMessage: Message = {
-      id: crypto.randomUUID(), // Use crypto for UUID
-      chat_id: targetChatId,
+      id: crypto.randomUUID(),
+      chat_id: chatIdToSendTo,
       role: 'user',
       content: content,
       created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
+    }
+    setMessages((prev) => [...prev, userMessage])
 
-    // --- Save User Message to DB --- 
     try {
-      // Use the imported chatService function
-      await chatService.addMessage(targetChatId, content, 'user'); 
-      console.log("ChatContext: User message saved to DB");
+      await chatService.addMessage(chatIdToSendTo, content, 'user')
     } catch (dbError) {
-      console.error("ChatContext: Failed to save user message to DB:", dbError);
-      // Optionally remove the optimistic message or show an error
-      setMessages((prev) => prev.filter(msg => msg.id !== userMessage.id)); 
+      console.error("Failed to save user message to DB:", dbError)
+      setMessages((prev) => prev.filter(msg => msg.id !== userMessage.id))
       toast({
         title: "Error Saving Message",
         description: "Could not save your message to the database. Please try again.",
         status: "error",
         duration: 5000,
         isClosable: true,
-      });
-      return; // Stop processing if user message failed to save
+      })
+      return
     }
-    // --- End Save User Message --- 
 
-    // Only proceed if user message was saved successfully
-    setIsLoading(true);
-    setError(null);
+    setIsLoading(true)
+    setError(null)
 
-    // Optimistically add assistant placeholder
-    const assistantMessageId = crypto.randomUUID();
+    const assistantMessageId = crypto.randomUUID()
     const assistantPlaceholder: Message = {
       id: assistantMessageId,
-      chat_id: targetChatId,
+      chat_id: chatIdToSendTo,
       role: 'assistant',
-      content: '', // Start empty
+      content: '',
       created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, assistantPlaceholder]);
+    }
+    setMessages((prev) => [...prev, assistantPlaceholder])
     
-    const abortController = new AbortController();
+    const abortController = new AbortController()
 
     try {
       const response = await fetch('/api/fractiverse', {
@@ -289,79 +278,64 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: content,
-          chatId: targetChatId,
+          chatId: chatIdToSendTo,
           userId: user.id,
         }),
         signal: abortController.signal,
-      });
+      })
 
       if (!response.ok) {
-        let errorData = { error: `API request failed with status ${response.status}` };
-        try {
-          errorData = await response.json();
-        } catch (parseError) {
-          console.error("Failed to parse non-streaming error response body:", parseError);
-        }
-        throw new Error(errorData.error || `API request failed with status ${response.status}`);
+        throw new Error(`API request failed with status ${response.status}`)
       }
 
       if (!response.body) {
-        throw new Error("Response body is null");
+        throw new Error("Response body is null")
       }
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let currentAssistantContent = '';
-      let chunkCount = 0;
-
-      console.log("Frontend: Starting stream read loop...");
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let done = false
+      let currentAssistantContent = ''
 
       while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
+        const { value, done: doneReading } = await reader.read()
+        done = doneReading
         if (value) {
-            const chunk = decoder.decode(value, { stream: true });
-            console.log(`Frontend: Received chunk ${++chunkCount}:`, JSON.stringify(chunk));
-            currentAssistantContent += chunk;
+          const chunk = decoder.decode(value, { stream: true })
+          currentAssistantContent += chunk
 
-            setMessages((prev) => {
-                const updatedMessages = prev.map((msg) => {
-                    if (msg.id === assistantMessageId) {
-                        return { ...msg, content: currentAssistantContent };
-                    }
-                    return msg;
-                });
-                return updatedMessages;
-            });
+          setMessages((prev) => {
+            const updatedMessages = prev.map((msg) => {
+              if (msg.id === assistantMessageId) {
+                return { ...msg, content: currentAssistantContent }
+              }
+              return msg
+            })
+            return updatedMessages
+          })
         }
       }
-      console.log(`Frontend: Stream finished. Received ${chunkCount} chunks. Final content length: ${currentAssistantContent.length}`);
 
     } catch (err) {
       if ((err as Error).name === 'AbortError') {
-         console.log("Fetch aborted by user.");
-         if (targetChatId === currentChat?.id) {
-            setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId));
-         }
+        console.log("Fetch aborted by user.")
+        setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId))
       } else {
-        setError(err instanceof Error ? err : new Error('Failed to send message or process stream'));
-        console.error('Error Sending Message / Processing Stream:', err);
+        setError(err instanceof Error ? err : new Error('Failed to send message or process stream'))
+        console.error('Error Sending Message / Processing Stream:', err)
         toast({
           title: "Error Processing Response",
           description: err instanceof Error ? err.message : "Could not process the AI response stream.",
           status: "error",
           duration: 5000,
           isClosable: true,
-        });
-         if (targetChatId === currentChat?.id) {
-            setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId)); // Keep remove for now
-         }
+        })
+        setMessages(prev => prev.filter(msg => msg.id !== assistantMessageId))
       }
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
   const value = {
     chats,

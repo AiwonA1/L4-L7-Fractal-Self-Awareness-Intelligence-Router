@@ -105,12 +105,12 @@ const infoCards = [
 
 export default function Dashboard() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, isLoading: isAuthLoading } = useAuth()
   const { 
     chats,
     currentChat,
     messages,
-    isLoading,
+    isLoading: isChatLoading,
     error,
     loadChats,
     loadMessages,
@@ -136,68 +136,46 @@ export default function Dashboard() {
   const userMessageTextColor = useColorModeValue('gray.800', 'white'); // Contrast for teal.100 / teal.700
   const assistantMessageTextColor = useColorModeValue('gray.800', 'white'); // Contrast for white / gray.800
 
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
   const [newMessage, setNewMessage] = useState('')
 
   useEffect(() => {
-    if (!user) {
+    if (!isAuthLoading && !user) {
       router.push('/login')
     }
-  }, [user, router])
+  }, [user, isAuthLoading, router])
+
+  useEffect(() => {
+    if (user && isInitialLoad) {
+      loadChats()
+      setIsInitialLoad(false)
+    }
+  }, [user, isInitialLoad, loadChats])
 
   const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMessage.trim() || isLoading) return; // Also prevent sending while already loading
+    e.preventDefault()
+    if (!newMessage.trim() || isChatLoading) return
 
-    const messageContent = newMessage;
-    setNewMessage(''); // Clear input immediately
-
-    let chatIdToSend: string | undefined = currentChat?.id;
+    const messageContent = newMessage
+    setNewMessage('')
 
     try {
-      // If no chat is currently selected, create a new one first
-      if (!chatIdToSend) {
-        console.log("handleSendMessage: No current chat, creating new one...");
-        // We need the new chat details back from createNewChat
-        // Let's modify createNewChat in context to return the new chat object
-        // For now, assuming createNewChat updates currentChat and returns void
-        // We might need to adjust ChatContext.createNewChat later if this doesn't work.
-        
-        // A potential issue: createNewChat sets loading state, 
-        // and sendMessage also sets loading state. This might be fine.
-        await createNewChat('New Chat', messageContent); // Pass initial message here
-        // After createNewChat, currentChat *should* be updated in the context.
-        // We rely on the context update to eventually call sendMessage appropriately.
-        // --- Alternative (if createNewChat doesn't trigger send): ---
-        // const newChat = await createNewChat('New Chat'); // Modify createNewChat to return the chat
-        // if (newChat?.id) {
-        //     await sendMessage(messageContent, newChat.id); 
-        // } else {
-        //     throw new Error("Failed to get ID from newly created chat.");
-        // }
-        // --- For now, assume createNewChat with initial message handles it ---
-        // If createNewChat *doesn't* send the initial message, we need to call send here.
-        // This logic depends heavily on how createNewChat is implemented.
-        // Let's assume the CURRENT createNewChat handles the initial send.
-
+      if (!currentChat?.id) {
+        await createNewChat('New Chat', messageContent)
       } else {
-        // If a chat is already selected, just send the message to it
-        console.log(`handleSendMessage: Sending to existing chat ${chatIdToSend}`);
-        await sendMessage(messageContent, chatIdToSend); 
+        await sendMessage(messageContent, currentChat.id)
       }
-
-    } catch (err) {
-      console.error("Error in handleSendMessage:", err);
+    } catch (error) {
+      console.error('Error sending message:', error)
       toast({
-        title: 'Error sending message',
-        description: err instanceof Error ? err.message : 'Failed to send message',
+        title: 'Error',
+        description: 'Failed to send message. Please try again.',
         status: 'error',
-        duration: 3000,
+        duration: 5000,
         isClosable: true,
-      });
-      // Restore input content if send failed?
-      // setNewMessage(messageContent);
+      })
     }
-  };
+  }
 
   const handleCreateChat = async () => {
     try {
@@ -249,86 +227,10 @@ export default function Dashboard() {
     await deleteChat(chatId); 
   }, [deleteChat]); // Added deleteChat dependency
 
-  if (!user?.id) {
+  if (isAuthLoading || isInitialLoad) {
     return (
-      <Box minH="100vh" bg={bgColor}>
-        <Container maxW="container.xl" py={20}>
-          <VStack spacing={8} align="center">
-            <Box 
-              bg="teal.500" 
-              color="white" 
-              px={6} 
-              py={3} 
-              borderRadius="lg" 
-              fontSize="xl"
-              fontWeight="bold"
-              mb={8}
-            >
-              We Are Here: Welcome Section
-            </Box>
-            <Heading size="2xl" textAlign="center" mb={4}>
-              Welcome to FractiVerse
-            </Heading>
-            <Text fontSize="xl" textAlign="center" color={textColor} maxW="800px" mb={8}>
-              Explore the layers of self-awareness intelligence and join our journey through the quantum fabric of existence.
-            </Text>
-            <Box 
-              bg="teal.500" 
-              color="white" 
-              px={6} 
-              py={3} 
-              borderRadius="lg" 
-              fontSize="xl"
-              fontWeight="bold"
-              mb={4}
-              display="inline-block"
-            >
-              We Are Here: Get Started Section
-            </Box>
-            <Button
-              as={Link}
-              href="/login"
-              size="lg"
-              colorScheme="teal"
-              leftIcon={<FaRobot />}
-              mb={12}
-              px={8}
-              py={6}
-              fontSize="lg"
-            >
-              Get Started
-            </Button>
-
-            {/* Info Cards Section for non-signed users */}
-            <Box width="100%" borderTop="1px" borderColor="gray.200" pt={12}>
-              <Heading size="md" mb={8}>Explore FractiVerse</Heading>
-              <SimpleGrid columns={{ base: 1, sm: 2, md: 3, lg: 5 }} spacing={6}>
-                {infoCards.map((card, index) => (
-                  <ChakraLink key={index} href={card.href} as={Link}>
-                    <Card
-                      bg={cardBg}
-                      _hover={{ transform: 'translateY(-2px)', shadow: 'lg', bg: cardHoverBg }}
-                      transition="all 0.2s"
-                      h="full"
-                      borderWidth="1px"
-                      borderColor="gray.200"
-                    >
-                      <CardBody>
-                        <VStack spacing={3} align="start">
-                          <Icon as={card.icon} w={8} h={8} color="teal.500" />
-                          <Heading size="sm">{card.title}</Heading>
-                          <Text fontSize="sm" color={textColor}>
-                            {card.description}
-                          </Text>
-                        </VStack>
-                      </CardBody>
-                    </Card>
-                  </ChakraLink>
-                ))}
-              </SimpleGrid>
-            </Box>
-          </VStack>
-        </Container>
+      <Box minH="100vh" bg={bgColor} display="flex" alignItems="center" justifyContent="center">
+        <Spinner size="xl" color="teal.500" />
       </Box>
     )
   }
@@ -347,7 +249,7 @@ export default function Dashboard() {
               onClick={handleCreateChat}
               leftIcon={<FaPlus />}
               colorScheme="teal"
-              disabled={isLoading}
+              disabled={isChatLoading}
             >
               New Chat
             </Button>
@@ -411,7 +313,7 @@ export default function Dashboard() {
                 {/* Chat Section */}
                 <Box flex={1} bg={chatBg} borderRadius="lg" p={4} overflowY="auto">
                   <Text color="red.500" fontWeight="bold" mb={4}>We Are Here: Chat Area</Text>
-                  {isLoading ? (
+                  {isChatLoading ? (
                     <Flex justify="center" align="center" h="full">
                       <Spinner size="xl" />
                     </Flex>
@@ -455,7 +357,7 @@ export default function Dashboard() {
                         </Box>
                       ))}
                       {/* Spinner while waiting for response */} 
-                      {isLoading && (
+                      {isChatLoading && (
                         <Box alignSelf="flex-start">
                            <HStack align="flex-start">
                             <Icon as={FaRobot} w={6} h={6} color="teal.500" />
@@ -478,13 +380,13 @@ export default function Dashboard() {
                         onChange={(e) => setNewMessage(e.target.value)}
                         placeholder="Ask FractiVerse anything..."
                         bg={bgColor}
-                        disabled={isLoading}
+                        disabled={isChatLoading}
                       />
                       <Button 
                         type="submit" 
                         colorScheme="teal" 
-                        isLoading={isLoading}
-                        disabled={isLoading}
+                        isLoading={isChatLoading}
+                        disabled={isChatLoading}
                       >
                         Send
                       </Button>

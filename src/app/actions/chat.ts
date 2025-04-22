@@ -139,6 +139,9 @@ export async function updateChatTitle(chatId: string, title: string) {
   
   if (error) {
     console.error('Error updating chat title:', error)
+    if (error.code === 'PGRST116') {
+      throw new Error('Chat not found or access denied')
+    }
     throw error
   }
   
@@ -146,7 +149,12 @@ export async function updateChatTitle(chatId: string, title: string) {
     throw new Error('Chat not found or access denied')
   }
   
-  revalidatePath('/chat')
+  try {
+    revalidatePath('/chat')
+  } catch (e) {
+    console.warn('Failed to revalidate path:', e)
+  }
+  
   return updatedChat
 }
 
@@ -164,9 +172,17 @@ export async function deleteChat(chatId: string) {
   
   if (error) {
     console.error('Error deleting chat:', error)
+    if (error.code === 'PGRST116') {
+      throw new Error('Chat not found or access denied')
+    }
     throw error
   }
   
-  revalidatePath('/chat')
+  try {
+    revalidatePath('/chat')
+  } catch (e) {
+    console.warn('Failed to revalidate path:', e)
+  }
+  
   return true
 } 
