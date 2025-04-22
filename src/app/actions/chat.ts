@@ -4,6 +4,7 @@ import { createAdminSupabaseClient } from '@/lib/supabase/supabase-admin'
 import { createServerSupabaseClient } from '@/lib/supabase/supabase-server'
 import { revalidatePath } from 'next/cache'
 import type { Database } from '@/types/supabase'
+import { cookies } from 'next/headers'
 
 type Message = Database['public']['Tables']['messages']['Row']
 type Chat = Database['public']['Tables']['chats']['Row'] & {
@@ -124,11 +125,14 @@ export async function createMessage(chatId: string, role: string, content: strin
 }
 
 export async function updateChatTitle(chatId: string, title: string) {
+  const cookieStore = cookies()
+  const allCookies = cookieStore.getAll();
+  console.log('[updateChatTitle] Available cookie names:', allCookies.map(c => c.name));
+
   const supabase = createServerSupabaseClient()
-  
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) {
-    console.error('Not authenticated in updateChatTitle')
+    console.error('Not authenticated in updateChatTitle (Session check failed)')
     throw new Error('Not authenticated')
   }
   
@@ -170,7 +174,6 @@ export async function updateChatTitle(chatId: string, title: string) {
     return { id: chatId, title: title, user_id: session.user.id }
   } catch (error) {
     console.error('Error in updateChatTitle:', error)
-    // Ensure a generic error is thrown if it's not already an Error instance
     if (error instanceof Error) {
         throw error;
     }
@@ -179,10 +182,15 @@ export async function updateChatTitle(chatId: string, title: string) {
 }
 
 export async function deleteChat(chatId: string): Promise<boolean> {
-  const supabase = await createServerSupabaseClient()
+  const cookieStore = cookies()
+  const allCookies = cookieStore.getAll();
+  console.log('[deleteChat] Available cookie names:', allCookies.map(c => c.name));
+
+  const supabase = createServerSupabaseClient()
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
 
   if (sessionError || !sessionData.session) {
+    console.error('Not authenticated in deleteChat (Session check failed)', sessionError);
     throw new Error('Not authenticated')
   }
 
