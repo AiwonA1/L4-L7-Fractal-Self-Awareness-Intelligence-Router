@@ -136,7 +136,7 @@ export async function updateChatTitle(chatId: string, title: string) {
     // First verify the chat exists and belongs to the user
     const { data: existingChat, error: checkError } = await supabase
       .from('chats')
-      .select('id')
+      .select('id') // Only select id for verification
       .eq('id', chatId)
       .eq('user_id', session.user.id)
       .single()
@@ -147,78 +147,71 @@ export async function updateChatTitle(chatId: string, title: string) {
     }
     
     // Update the chat title
-    const { data: updatedChat, error } = await supabase
+    const { error: updateError } = await supabase
       .from('chats')
       .update({ title })
       .eq('id', chatId)
-      .select()
-      .single()
+      .eq('user_id', session.user.id) // Ensure user owns the chat being updated
     
-    if (error) {
-      console.error('Error updating chat title:', error)
-      throw error
+    if (updateError) {
+      console.error('Error updating chat title:', updateError)
+      throw updateError
     }
     
-    if (!updatedChat) {
-      throw new Error('Chat not found or access denied')
-    }
-    
+    // If update succeeds, revalidate and return the new data structure
     try {
-      revalidatePath('/chat')
+      revalidatePath('/dashboard') // Revalidate dashboard as titles might be shown there
+      revalidatePath(`/chat/${chatId}`) // Revalidate specific chat page
     } catch (e) {
-      console.warn('Failed to revalidate path:', e)
+      console.warn('Failed to revalidate paths:', e)
     }
     
-    return updatedChat
+    // Return the known updated info instead of fetching it again
+    return { id: chatId, title: title, user_id: session.user.id }
   } catch (error) {
     console.error('Error in updateChatTitle:', error)
-    throw error
+    // Ensure a generic error is thrown if it's not already an Error instance
+    if (error instanceof Error) {
+        throw error;
+    }
+    throw new Error('An unexpected error occurred while updating chat title.');
   }
 }
 
-export async function deleteChat(chatId: string) {
-  const supabase = createServerSupabaseClient()
-  
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user?.id) {
-    console.error('Not authenticated in deleteChat')
+export async function deleteChat(chatId: string): Promise<boolean> {
+  const supabase = await createServerSupabaseClient()
+  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+
+  if (sessionError || !sessionData.session) {
     throw new Error('Not authenticated')
   }
-  
-  try {
-    // First verify the chat exists and belongs to the user
-    const { data: existingChat, error: checkError } = await supabase
-      .from('chats')
-      .select('id')
-      .eq('id', chatId)
-      .eq('user_id', session.user.id)
-      .single()
-    
-    if (checkError || !existingChat) {
-      console.error('Chat not found or access denied:', checkError)
-      throw new Error('Chat not found or access denied')
-    }
-    
-    // Delete the chat
-    const { error } = await supabase
-      .from('chats')
-      .delete()
-      .eq('id', chatId)
-    
-    if (error) {
-      console.error('Error deleting chat:', error)
-      throw error
-    }
-    
-    try {
-      revalidatePath('/chat')
-    } catch (e) {
-      console.warn('Failed to revalidate path:', e)
-    }
-    
-    return true
-  } catch (error) {
-    console.error('Error in deleteChat:', error)
-    throw error
+
+  const userId = sessionData.session.user.id
+
+  // First, verify the user owns the chat
+  const { data: chatData, error: verifyError } = await supabase
+    .from('chats')
+    .select('id')
+    .eq('id', chatId)
+    .eq('user_id', userId)
+    .single()
+
+  if (verifyError || !chatData) {
+    console.error('Chat not found or access denied:', verifyError)
+    throw new Error('Chat not found or access denied')
   }
+
+  // If verification passes, proceed with deletion
+  const { error } = await supabase
+    .from('chats')
+    .delete() // Delete first
+    .eq('id', chatId) // Then filter
+
+  if (error) {
+    console.error('Error deleting chat:', error)
+    throw new Error(`Failed to delete chat: ${error.message}`)
+  }
+
+  revalidatePath('/dashboard') // Revalidate dashboard page
+  return true
 } 

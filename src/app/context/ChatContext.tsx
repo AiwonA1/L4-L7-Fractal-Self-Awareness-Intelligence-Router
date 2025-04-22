@@ -136,10 +136,19 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           
         if (msgError) throw msgError
         
-        const sortedMessages = (fetchedMessages || []).sort((a: Message, b: Message) => 
+        // Ensure fetched messages conform to the Message type, especially the 'role'
+        const correctlyTypedMessages = (fetchedMessages || []).map(msg => ({
+          ...msg,
+          // Explicitly cast or validate the role
+          role: msg.role === 'user' || msg.role === 'assistant' 
+                ? msg.role 
+                : 'assistant', // Default to assistant if role is invalid/unexpected
+        })) as Message[]; // Cast the entire array to Message[]
+        
+        const sortedMessages = correctlyTypedMessages.sort((a, b) => 
           new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         )
-        setMessages(sortedMessages)
+        setMessages(sortedMessages) // Set state with correctly typed messages
       } else {
         setCurrentChat(null)
         setMessages([])

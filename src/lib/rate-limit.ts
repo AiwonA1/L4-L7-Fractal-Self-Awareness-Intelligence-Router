@@ -21,13 +21,15 @@ export function getIp(req: NextRequest): string | null {
 // Ensure Upstash environment variables are set in your .env file
 const redisUrl = process.env.UPSTASH_REDIS_REST_URL
 const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN
+const isTestEnvironment = process.env.NODE_ENV === 'test';
 
 let redis: Redis | null = null;
 let apiLimiter: Ratelimit | { limit: (id: string) => Promise<{ success: boolean }> };
 let authLimiter: Ratelimit | { limit: (id: string) => Promise<{ success: boolean }> };
 let paymentLimiter: Ratelimit | { limit: (id: string) => Promise<{ success: boolean }> };
 
-if (redisUrl && redisToken) {
+// Use real Redis only if URL and token are provided AND it's not the test environment
+if (redisUrl && redisToken && !isTestEnvironment) {
   redis = new Redis({
     url: redisUrl,
     token: redisToken,
@@ -53,8 +55,11 @@ if (redisUrl && redisToken) {
   })
 
 } else {
-  console.warn('Upstash Redis environment variables not set. Using mock rate limiter.')
-  // Mock rate limiter for development or if Redis is not configured
+  if (!isTestEnvironment) {
+    // Only warn if not in test environment
+    console.warn('Upstash Redis environment variables not set or invalid. Using mock rate limiter.')
+  }
+  // Use mock rate limiter for development/test or if Redis is not configured
   const mockLimiter = { limit: async (id: string) => ({ success: true }) };
   apiLimiter = mockLimiter;
   authLimiter = mockLimiter;

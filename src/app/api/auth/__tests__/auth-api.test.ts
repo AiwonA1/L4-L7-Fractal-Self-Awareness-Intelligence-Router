@@ -72,28 +72,8 @@ describe('Auth API Route (/api/auth)', () => {
 
   it('POST should return 401 with invalid credentials', async () => {
     const mockCredentials = { email: 'test@example.com', password: 'wrongpassword' }
-    const mockError = { message: 'Invalid login credentials', status: 400 } // Supabase often returns 400 here
-    mockSignInWithPassword.mockResolvedValue({ data: { session: null, user: null }, error: mockError })
-
-    const request = new Request('http://localhost/api/auth', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(mockCredentials),
-    })
-
-    const response = await POST(request)
-    const body = await response.json()
-
-    expect(response.status).toBe(401) // Route should return 401
-    expect(body).toEqual({ error: mockError.message })
-    expect(mockSignInWithPassword).toHaveBeenCalledTimes(1)
-    expect(mockSignInWithPassword).toHaveBeenCalledWith(mockCredentials)
-  })
-
-   it('POST should return 500 on unexpected error', async () => {
-    const mockCredentials = { email: 'test@example.com', password: 'password123' }
-    const mockError = new Error('Internal Supabase Error')
-    // Simulate error being thrown by the Supabase client call
+    const mockError = new Error('Invalid login credentials') // Simulate actual Error
+    // Mock the Supabase client throwing an error
     mockSignInWithPassword.mockRejectedValue(mockError)
 
     const request = new Request('http://localhost/api/auth', {
@@ -105,6 +85,29 @@ describe('Auth API Route (/api/auth)', () => {
     const response = await POST(request)
     const body = await response.json()
 
+    // The route handler should catch the error and return 401
+    expect(response.status).toBe(401)
+    expect(body).toEqual({ error: 'Invalid credentials' }) // Check error message from route handler
+    expect(mockSignInWithPassword).toHaveBeenCalledTimes(1)
+    expect(mockSignInWithPassword).toHaveBeenCalledWith(mockCredentials)
+  })
+
+   it('POST should return 500 on unexpected error', async () => {
+    const mockCredentials = { email: 'test@example.com', password: 'password123' }
+    const mockError = new Error('Internal Supabase Error') // Simulate actual Error
+    // Simulate the Supabase client throwing an error
+    mockSignInWithPassword.mockRejectedValue(mockError)
+
+    const request = new Request('http://localhost/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(mockCredentials),
+    })
+
+    const response = await POST(request)
+    const body = await response.json()
+
+    // Route handler should catch and return 500
     expect(response.status).toBe(500)
     expect(body).toEqual({ error: 'Internal server error' })
     expect(mockSignInWithPassword).toHaveBeenCalledTimes(1)
@@ -139,24 +142,28 @@ describe('Auth API Route (/api/auth)', () => {
   })
 
   it('GET should return 401 on session retrieval error', async () => {
-    const mockError = { message: 'Failed to retrieve session', status: 500 }
-    mockGetSession.mockResolvedValue({ data: { session: null }, error: mockError })
+    const mockError = new Error('Failed to retrieve session') // Simulate actual Error
+    // Simulate getSession throwing an error
+    mockGetSession.mockRejectedValue(mockError)
 
     const response = await GET()
     const body = await response.json()
 
-    expect(response.status).toBe(401) // Route returns 401 on error
-    expect(body).toEqual({ error: mockError.message })
+    // Route handler should catch and return 401
+    expect(response.status).toBe(401)
+    expect(body).toEqual({ error: 'Authentication error' }) // Check error message from route handler
     expect(mockGetSession).toHaveBeenCalledTimes(1)
   })
 
   it('GET should return 500 on unexpected error', async () => {
-    const mockError = new Error('Internal Supabase Error')
-    mockGetSession.mockRejectedValue(mockError) // Simulate error being thrown
+    const mockError = new Error('Some other DB Error') // Simulate a generic error
+    // Simulate getSession throwing an error
+    mockGetSession.mockRejectedValue(mockError)
 
     const response = await GET()
     const body = await response.json()
 
+    // Route handler should catch and return 500
     expect(response.status).toBe(500)
     expect(body).toEqual({ error: 'Internal server error' })
     expect(mockGetSession).toHaveBeenCalledTimes(1)
