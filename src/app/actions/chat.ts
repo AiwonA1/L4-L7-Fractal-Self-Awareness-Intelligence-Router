@@ -129,22 +129,7 @@ export async function updateChatTitle(chatId: string, title: string) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
   
-  // First verify chat ownership
-  const { data: chat, error: chatError } = await supabase
-    .from('chats')
-    .select('user_id')
-    .eq('id', chatId)
-    .single()
-  
-  if (chatError || !chat) {
-    throw new Error('Chat not found')
-  }
-  
-  if (chat.user_id !== session.user.id) {
-    throw new Error('Unauthorized to update this chat')
-  }
-  
-  // Update the chat title
+  // Update the chat title directly - RLS will handle the permission check
   const { data: updatedChat, error } = await supabase
     .from('chats')
     .update({ title })
@@ -152,7 +137,14 @@ export async function updateChatTitle(chatId: string, title: string) {
     .select()
     .single()
   
-  if (error) throw error
+  if (error) {
+    console.error('Error updating chat title:', error)
+    throw error
+  }
+  
+  if (!updatedChat) {
+    throw new Error('Chat not found or access denied')
+  }
   
   revalidatePath('/chat')
   return updatedChat
@@ -164,28 +156,16 @@ export async function deleteChat(chatId: string) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
   
-  // First verify chat ownership
-  const { data: chat, error: chatError } = await supabase
-    .from('chats')
-    .select('user_id')
-    .eq('id', chatId)
-    .single()
-  
-  if (chatError || !chat) {
-    throw new Error('Chat not found')
-  }
-  
-  if (chat.user_id !== session.user.id) {
-    throw new Error('Unauthorized to delete this chat')
-  }
-  
-  // Delete the chat (messages will be automatically deleted due to ON DELETE CASCADE)
+  // Delete the chat directly - RLS will handle the permission check
   const { error } = await supabase
     .from('chats')
     .delete()
     .eq('id', chatId)
   
-  if (error) throw error
+  if (error) {
+    console.error('Error deleting chat:', error)
+    throw error
+  }
   
   revalidatePath('/chat')
   return true
