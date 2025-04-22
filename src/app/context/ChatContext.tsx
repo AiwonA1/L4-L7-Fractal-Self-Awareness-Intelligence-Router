@@ -248,64 +248,138 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
     
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: crypto.randomUUID(), // Temporary ID for UI
       chat_id: chatIdToSendTo,
       role: 'user',
       content: content,
       created_at: new Date().toISOString(),
-    }
-    setMessages((prev) => [...prev, userMessage])
+    };
+    setMessages((prev) => [...prev, userMessage]);
 
+    // Optimistic timestamp update
     setChats(prevChats => 
         prevChats.map(c => 
             c.id === chatIdToSendTo ? { ...c, updated_at: new Date().toISOString() } : c
         ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     );
 
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true); // Indicate loading for assistant response
+    setError(null);
+    
+    // Add placeholder for assistant message for streaming
+    const assistantMessageId = crypto.randomUUID();
+    const assistantPlaceholder: Message = {
+      id: assistantMessageId,
+      chat_id: chatIdToSendTo,
+      role: 'assistant',
+      content: '', // Start with empty content
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, assistantPlaceholder]);
+
+    // Abort controller for fetch cancellation
+    const abortController = new AbortController();
 
     try {
-      const savedUserMessage = await chatService.createMessage(chatIdToSendTo, 'user', content);
+      // Call the actual service/action to save the user message first
+      // We assume this happens quickly or we don't wait for it before calling AI
+      // Consider potential race conditions if saving is slow
+       try {
+           await chatService.createMessage(chatIdToSendTo, 'user', content);
+           // If successful, maybe update the userMessage state with the real ID from DB?
+           // setMessages((prev) => prev.map(m => m.id === userMessage.id ? savedUserMessage : m));
+           // For now, keep the optimistic message.
+       } catch (saveError) {
+           console.error("Failed to save user message to DB:", saveError);
+           // Optionally revert optimistic update or show specific error
+           toast({ title: "Error Saving Message", description: "Could not save your message.", status: "error" });
+           // Remove the optimistically added messages (user and placeholder assistant)
+           setMessages((prev) => prev.filter(m => m.id !== userMessage.id && m.id !== assistantMessageId));
+           setIsLoading(false);
+           return; // Stop processing if user message saving fails
+       }
+
+      // --- Call the backend API for streaming response --- 
+      const response = await fetch('/api/fractiverse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: content,
+          chatId: chatIdToSendTo, 
+          userId: user.id, 
+          // Include history? API needs to handle this
+        }),
+        signal: abortController.signal,
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.text();
+        throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
+      }
+
+      if (!response.body) {
+        throw new Error("Response body is null");
+      }
+
+      // --- Process the stream --- 
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let currentAssistantContent = '';
+
+      while (!done) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          currentAssistantContent += chunk;
+
+          // Update the content of the placeholder message incrementally
+          setMessages((prev) =>
+            prev.map((msg) =>
+              msg.id === assistantMessageId
+                ? { ...msg, content: currentAssistantContent }
+                : msg
+            )
+          );
+        }
+      }
       
-      setMessages((prev) => prev.map(m => m.id === userMessage.id ? savedUserMessage : m));
+      // --- Stream finished --- 
+      // Optional: Save the complete assistant message to DB if API doesn't
+      // try {
+      //     await chatService.createMessage(chatIdToSendTo, 'assistant', currentAssistantContent);
+      // } catch (saveError) {
+      //     console.error("Failed to save assistant message:", saveError);
+      //     // Handle error - maybe show a warning
+      // }
 
-      const assistantResponse: Message = {
-        id: crypto.randomUUID(),
-        chat_id: chatIdToSendTo,
-        role: 'assistant',
-        content: `Received: "${content}" (Simulated response)`,
-        created_at: new Date().toISOString(),
-      };
-      await new Promise(resolve => setTimeout(resolve, 500));
-      setMessages((prev) => [...prev, assistantResponse]);
-
-      setChats(prevChats => 
+      // Update chat list timestamp again after assistant response is complete
+       setChats(prevChats => 
           prevChats.map(c => 
               c.id === chatIdToSendTo ? { ...c, updated_at: new Date().toISOString() } : c
           ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
       );
 
     } catch (err) {
-      if ((err as Error).name === 'AbortError') {
-        console.log("Fetch aborted by user.")
-        setMessages(prev => prev.filter(msg => msg.id !== userMessage.id))
-      } else {
-        setError(err instanceof Error ? err : new Error('Failed to send message or process stream'))
-        console.error('Error Sending Message / Processing Stream:', err)
+      // Handle fetch errors (network, abort, API errors)
+      console.error('Error Sending Message / Processing Stream:', err);
+      if ((err as Error).name !== 'AbortError') { // Don't show error if user aborted
+        setError(err instanceof Error ? err : new Error('Failed to send message or process stream'));
         toast({
           title: "Error Processing Response",
-          description: err instanceof Error ? err.message : "Could not process the AI response stream.",
+          description: err instanceof Error ? err.message : "Could not process the AI response.",
           status: "error",
           duration: 5000,
           isClosable: true,
-        })
-        setMessages(prev => prev.filter(msg => msg.id !== userMessage.id))
+        });
       }
+      // Remove optimistic messages on error
+      setMessages((prev) => prev.filter(m => m.id !== userMessage.id && m.id !== assistantMessageId));
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const updateChatTitle = async (chatId: string, newTitle: string) => {
     setIsLoading(true);
