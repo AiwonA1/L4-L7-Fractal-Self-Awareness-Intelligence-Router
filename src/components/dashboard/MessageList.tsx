@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Box, VStack, HStack, Text, Icon, Avatar, useColorModeValue } from '@chakra-ui/react';
-import { FaRobot, FaUser } from 'react-icons/fa';
+import { Box, VStack, HStack, Text, Icon, Avatar, useColorModeValue, IconButton, useToast } from '@chakra-ui/react';
+import { FaRobot, FaUser, FaCopy } from 'react-icons/fa';
 
 // Define the expected structure for a message object more precisely
 // (Assuming structure based on context/potential usage)
@@ -26,6 +26,28 @@ export function MessageList({ messages }: MessageListProps) {
   const userMessageTextColor = useColorModeValue('gray.800', 'white');
   const assistantMessageTextColor = useColorModeValue('gray.800', 'white');
   const placeholderColor = useColorModeValue('gray.500', 'gray.400');
+  const toast = useToast();
+
+  // Handler for copying text
+  const handleCopy = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      toast({
+        title: 'Copied to clipboard',
+        status: 'success',
+        duration: 1500,
+        isClosable: true,
+      });
+    }).catch(err => {
+      console.error('Failed to copy text: ', err);
+      toast({
+        title: 'Copy failed',
+        description: 'Could not copy text to clipboard.',
+        status: 'error',
+        duration: 2000,
+        isClosable: true,
+      });
+    });
+  };
 
   if (!messages || messages.length === 0) {
     return (
@@ -54,6 +76,7 @@ export function MessageList({ messages }: MessageListProps) {
             px={4}
             py={2}
             boxShadow="sm"
+            alignItems="flex-start" // Align items to top for copy button
           >
             <Avatar
               size="sm"
@@ -61,8 +84,24 @@ export function MessageList({ messages }: MessageListProps) {
               bg={isUser ? 'teal.500' : 'blue.500'}
               color="white"
               aria-label={isUser ? 'User avatar' : 'Assistant avatar'}
+              mt={1} // Add margin to align avatar with text better
             />
-            <Text whiteSpace="pre-wrap">{message.content}</Text>
+            {/* Wrap text in a Box to allow button to align next to it */}
+            <Box flex={1}>
+              <Text whiteSpace="pre-wrap">{message.content}</Text>
+            </Box>
+            {/* Conditionally render Copy button for assistant messages */}
+            {!isUser && (
+              <IconButton
+                icon={<FaCopy />}
+                aria-label="Copy message"
+                size="sm"
+                variant="ghost"
+                onClick={() => handleCopy(message.content)}
+                alignSelf="flex-start" // Keep button aligned top
+                ml={2} // Add some margin
+              />
+            )}
           </HStack>
         );
       })}
