@@ -129,18 +129,33 @@ export async function updateChatTitle(chatId: string, title: string) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
   
-  const { data: chat, error } = await supabase
+  // First verify chat ownership
+  const { data: chat, error: chatError } = await supabase
+    .from('chats')
+    .select('user_id')
+    .eq('id', chatId)
+    .single()
+  
+  if (chatError || !chat) {
+    throw new Error('Chat not found')
+  }
+  
+  if (chat.user_id !== session.user.id) {
+    throw new Error('Unauthorized to update this chat')
+  }
+  
+  // Update the chat title
+  const { data: updatedChat, error } = await supabase
     .from('chats')
     .update({ title })
     .eq('id', chatId)
-    .eq('user_id', session.user.id)
     .select()
     .single()
   
   if (error) throw error
   
   revalidatePath('/chat')
-  return chat
+  return updatedChat
 }
 
 export async function deleteChat(chatId: string) {
@@ -149,20 +164,26 @@ export async function deleteChat(chatId: string) {
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user?.id) throw new Error('Not authenticated')
   
-  // First delete all messages (due to foreign key constraint)
-  const { error: messagesError } = await supabase
-    .from('messages')
-    .delete()
-    .eq('chat_id', chatId)
+  // First verify chat ownership
+  const { data: chat, error: chatError } = await supabase
+    .from('chats')
+    .select('user_id')
+    .eq('id', chatId)
+    .single()
   
-  if (messagesError) throw messagesError
+  if (chatError || !chat) {
+    throw new Error('Chat not found')
+  }
   
-  // Then delete the chat
+  if (chat.user_id !== session.user.id) {
+    throw new Error('Unauthorized to delete this chat')
+  }
+  
+  // Delete the chat (messages will be automatically deleted due to ON DELETE CASCADE)
   const { error } = await supabase
     .from('chats')
     .delete()
     .eq('id', chatId)
-    .eq('user_id', session.user.id)
   
   if (error) throw error
   
