@@ -401,9 +401,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
     },
     deleteChat: async (chatId: string) => {
-       if (!window.confirm("Are you sure you want to delete this chat permanently?")) {
-         return; // Abort if user cancels
-       }
        setIsLoading(true);
        try {
          await deleteChatAction(chatId);

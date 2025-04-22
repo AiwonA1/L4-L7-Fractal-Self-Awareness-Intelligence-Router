@@ -1,4 +1,4 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import type { Database } from '@/types/supabase'
@@ -19,10 +19,38 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  const res = NextResponse.next()
+  let res = NextResponse.next()
   
   try {
-    const supabase = createMiddlewareClient<Database>({ req, res })
+    // Create Supabase client using ssr
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return req.cookies.get(name)?.value
+          },
+          set(name: string, value: string, options: CookieOptions) {
+            // Only modify the response object
+            res.cookies.set({
+              name,
+              value,
+              ...options,
+            })
+          },
+          remove(name: string, options: CookieOptions) {
+            // Only modify the response object
+            res.cookies.set({
+              name,
+              value: '',
+              ...options,
+            })
+          },
+        },
+      }
+    )
+
     const {
       data: { session },
       error: sessionError
@@ -41,7 +69,7 @@ export async function middleware(req: NextRequest) {
     const currentPath = req.nextUrl.pathname
     const isAuthRoute = authRoutes.includes(currentPath)
     const isProtectedRoute = protectedRoutes.some(route => currentPath.startsWith(route))
-    const isPublicRoute = publicRoutes.includes(currentPath)
+    const isPublicRoute = publicRoutes.includes(currentPath) || currentPath.startsWith('/layer')
 
     console.log('Route check:', {
       path: currentPath,
@@ -67,8 +95,8 @@ export async function middleware(req: NextRequest) {
     } else {
       // --- Not logged in users --- 
       if (isProtectedRoute) {
-        // Trying to access protected route, redirect to signin
-        redirectUrl = '/signin' 
+        // Trying to access protected route, redirect to login
+        redirectUrl = '/login'
       }
     }
 
