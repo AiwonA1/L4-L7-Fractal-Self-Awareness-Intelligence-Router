@@ -150,6 +150,8 @@ export function ChatSidebar() {
   };
 
   const handleLogout = async () => {
+    // Keep the handler logic in case it's used elsewhere, 
+    // or remove if truly unused after removing button
     try {
       await signOut();
       toast({ title: 'Logged out', status: 'success', duration: 2000 });
@@ -165,16 +167,6 @@ export function ChatSidebar() {
         <Text fontWeight="medium" color={textColor} noOfLines={1}>
           {user?.email || 'Loading...'}
         </Text>
-        <Spacer />
-        <Tooltip label="Logout" placement="right">
-          <IconButton
-            icon={<FaSignOutAlt />}
-            aria-label="Logout"
-            variant="ghost"
-            size="sm"
-            onClick={handleLogout}
-          />
-        </Tooltip>
       </HStack>
 
       <Box p={4}>
