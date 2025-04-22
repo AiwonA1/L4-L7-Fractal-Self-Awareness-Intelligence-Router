@@ -181,6 +181,7 @@ export async function POST(req: NextRequest) {
               .from('messages')
               .insert({
                 chat_id: chatId!, // Assert non-null
+                user_id: userId!, // Add user_id field
                 role: 'assistant',
                 content: assistantMessage
               });
