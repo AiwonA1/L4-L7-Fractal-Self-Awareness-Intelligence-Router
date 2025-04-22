@@ -100,7 +100,6 @@ export function ChatSidebar() {
     if (chatToDelete) {
       try {
         await deleteChat(chatToDelete);
-        toast({ title: 'Chat deleted', status: 'success', duration: 2000 });
       } catch (err) {
         toast({
           title: 'Error deleting chat',
