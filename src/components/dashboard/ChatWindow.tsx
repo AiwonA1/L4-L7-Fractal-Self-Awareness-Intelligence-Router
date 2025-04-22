@@ -49,25 +49,28 @@ export function ChatWindow({
     <VStack
       flex={1}
       align="stretch"
-      spacing={0} // Remove spacing between MessageList and MessageInput
+      spacing={0} // Remove spacing between content and input
       bg={bgColor}
-      // Optional: add height constraints if needed, e.g., h="calc(100vh - someOffset)"
     >
-      {isLoadingMessages ? (
-        <Center flex={1}>
-          <Spinner size="xl" />
-        </Center>
-      ) : currentChat ? (
-        <>
-          {/* Optional: Add a header here displaying currentChat.title */}
+      {/* Message display area (conditional) */}
+      <Box flex={1} overflowY="auto"> { /* Allow message list to scroll */}
+        {isLoadingMessages ? (
+          <Center h="full">
+            <Spinner size="xl" />
+          </Center>
+        ) : currentChat ? (
           <MessageList messages={messages} />
-          <MessageInput onSendMessage={onSendMessage} isLoading={isSendingMessage} />
-        </>
-      ) : (
-        <Center flex={1}>
-          <Text color={placeholderColor}>Select a chat or start a new one.</Text>
-        </Center>
-      )}
+        ) : (
+          <Center h="full">
+            <Text color={placeholderColor}>Select a chat or start a new one.</Text>
+          </Center>
+        )}
+      </Box>
+
+      {/* Input area (unconditional) */}
+      <Box pt={2} px={4} pb={4}> { /* Add some padding around input */}
+        <MessageInput onSendMessage={onSendMessage} isLoading={isSendingMessage} />
+      </Box>
     </VStack>
   );
 } 
