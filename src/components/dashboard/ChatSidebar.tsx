@@ -32,6 +32,11 @@ import { useAuth } from '@/app/context/AuthContext';
 import { useChat } from '@/app/context/ChatContext';
 import { useRouter } from 'next/navigation';
 
+// Import ChatContainer
+import { ChatContainer } from '@/components/dashboard/ChatComponents';
+// Import DeleteConfirmationDialog
+import { DeleteConfirmationDialog } from '@/components/dashboard/DeleteConfirmationDialog';
+
 // Re-define or import Chat interface if needed
 interface Chat {
   id: string;
@@ -189,20 +194,12 @@ export function ChatSidebar() {
             <Spinner />
           </Center>
         ) : (
-          <ChatList
+          <ChatContainer
             chats={chats}
-            currentChat={currentChat}
-            editingChatId={editingChatId}
-            renameValue={renameValue}
-            onRename={(e) => setRenameValue(e.target.value)}
-            onSelect={handleSelectChat}
-            onDelete={handleDeleteClick}
-            onRenameSubmit={handleRenameSubmit}
-            onCancelRename={() => setEditingChatId(null)}
-            onRenameClick={handleRenameClick}
-            selectedBg={selectedBg}
-            hoverBg={hoverBg}
-            textColor={textColor}
+            currentChatId={currentChat?.id}
+            onSelectChat={handleSelectChat}
+            onDeleteChat={handleDeleteClick}
+            onRenameChat={handleRenameSubmit}
           />
         )}
       </Box>
