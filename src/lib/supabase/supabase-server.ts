@@ -32,16 +32,16 @@ export const createServerSupabaseClient = () => {
           try {
             cookieStore.set({ name, value, ...options })
           } catch (error) {
-            // Handle potential errors setting cookies in Server Actions or Route Handlers
-            console.warn(`Error setting cookie ${name}:`, error);
+            // Handle cookie errors in Server Actions/Route Handlers
+            console.warn(`Error setting cookie ${name}:`, error)
           }
         },
         remove(name: string, options: CookieOptions) {
           try {
-            cookieStore.set({ name, value: '', ...options }) // Use set with empty value for removal
+            cookieStore.delete({ name, ...options })
           } catch (error) {
-            // Handle potential errors removing cookies
-            console.warn(`Error removing cookie ${name}:`, error);
+            // Handle cookie errors in Server Actions/Route Handlers
+            console.warn(`Error removing cookie ${name}:`, error)
           }
         }
       }

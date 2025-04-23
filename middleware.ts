@@ -19,8 +19,8 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next()
   }
 
-  let res = NextResponse.next()
-  
+  let response = NextResponse.next()
+
   try {
     // Create Supabase client using ssr
     const supabase = createServerClient<Database>(
@@ -32,18 +32,15 @@ export async function middleware(req: NextRequest) {
             return req.cookies.get(name)?.value
           },
           set(name: string, value: string, options: CookieOptions) {
-            // Only modify the response object
-            res.cookies.set({
+            response.cookies.set({
               name,
               value,
               ...options,
             })
           },
           remove(name: string, options: CookieOptions) {
-            // Only modify the response object
-            res.cookies.set({
+            response.cookies.delete({
               name,
-              value: '',
               ...options,
             })
           },
@@ -51,14 +48,11 @@ export async function middleware(req: NextRequest) {
       }
     )
 
-    const {
-      data: { session },
-      error: sessionError
-    } = await supabase.auth.getSession()
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
 
     if (sessionError) {
       console.error('Session error:', sessionError)
-      return res
+      return response
     }
 
     // Define routes
@@ -82,21 +76,22 @@ export async function middleware(req: NextRequest) {
 
     let redirectUrl: string | null = null
 
-    // Determine redirect based on session state and current route
+    // Handle redirects based on auth state
     if (session) {
-      // --- Logged in users --- 
+      // Signed in
       if (isAuthRoute) {
-        // Already logged in, redirect from auth pages to dashboard
+        // Redirect from auth routes to dashboard
         redirectUrl = '/dashboard'
       } else if (currentPath === '/') {
         // Already logged in, redirect from home page to dashboard
         redirectUrl = '/dashboard'
       }
     } else {
-      // --- Not logged in users --- 
+      // Not signed in
       if (isProtectedRoute) {
-        // Trying to access protected route, redirect to login
+        // Redirect to login with return URL
         redirectUrl = '/login'
+        redirectUrl += '?' + new URLSearchParams({ returnUrl: currentPath })
       }
     }
 
@@ -107,15 +102,15 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(new URL(redirectUrl, req.url))
     }
 
-    // No redirect needed, clear counter
-    redirectCount.delete(requestId)
-    return res
-
+    return response
   } catch (error) {
     console.error('Middleware error:', error)
-    // On error, clear counter and continue
-    redirectCount.delete(requestId)
-    return res
+    return response
+  } finally {
+    // Clean up redirect count after processing
+    if (currentCount > 0) {
+      redirectCount.delete(requestId)
+    }
   }
 }
 

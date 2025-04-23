@@ -18,7 +18,6 @@ export function getSupabaseClient() {
   supabaseInstance = createBrowserClient<Database>(
     supabaseUrl,
     supabaseAnonKey
-    // No need for explicit storage config, ssr handles cookies
   )
 
   // Keep realtime setup if needed, but ensure it works with the new client
