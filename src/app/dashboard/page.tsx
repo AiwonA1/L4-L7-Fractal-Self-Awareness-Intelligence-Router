@@ -59,32 +59,46 @@ export default function Dashboard() {
   const toast = useToast();
 
   // --- State ---
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [isInitialLoadComplete, setIsInitialLoadComplete] = useState(false);
 
   // --- Effects ---
   useEffect(() => {
-    // This effect checks auth and loads initial chats
+    // Redirect immediately if auth is done loading and there's no user
     if (!isAuthLoading && !user) {
-      router.push('/login');
+      console.log('Auth loaded, no user found, redirecting to login...');
+      router.replace('/login'); // Use replace to avoid history entry
+      return; // Stop further execution in this effect run
+    }
+
+    // If auth is still loading, wait for the next run
+    if (isAuthLoading) {
+      console.log('Auth is loading, waiting...');
       return;
     }
-    // Only load chats if we have a user and haven't loaded them yet
-    if (user && isInitialLoad) {
-      loadChats().catch(err => {
+
+    // If we have a user and haven't done the initial chat load yet
+    if (user && !isInitialLoadComplete) {
+      console.log('User found, performing initial chat load...');
+      loadChats().then(() => {
+        console.log('Initial chat load complete.');
+        setIsInitialLoadComplete(true); // Mark initial load as done
+      }).catch(err => {
         console.error('Error loading chats:', err);
-        // Simplified toast for brevity in example
-      toast({
-            title: 'Error loading chats',
-            description: err instanceof Error ? err.message : 'Please try again.',
-        status: 'error',
-            duration: 5000,
-        isClosable: true,
+        toast({
+          title: 'Error loading chats',
+          description: err instanceof Error ? err.message : 'Please try again.',
+          status: 'error',
+          duration: 5000,
+          isClosable: true,
         });
+        // Still mark as complete even if error, to avoid retry loops
+        setIsInitialLoadComplete(true); 
       });
-      setIsInitialLoad(false);
     }
-  // Dependencies are correct now
-  }, [user, isAuthLoading, router, loadChats, toast, isInitialLoad]);
+  // Depend on user and isAuthLoading to re-run the check if they change
+  // Depend on loadChats, toast, router for stable functions
+  // Depend on isInitialLoadComplete to prevent re-loading chats
+  }, [user, isAuthLoading, loadChats, toast, router, isInitialLoadComplete]);
 
   // --- Handlers ---
   // Simplified handler: decides between sending to existing or creating new chat
@@ -123,13 +137,20 @@ export default function Dashboard() {
   }, [currentChat, user, createNewChat, sendMessage, toast]); 
 
   // --- Render Logic ---
-  // Loading state for authentication
-  if (isAuthLoading || (!user && !isAuthLoading)) {
+  // Show spinner ONLY while authentication is explicitly loading
+  // If auth is done and user is null, the effect above will redirect
+  if (isAuthLoading) {
     return (
       <Center h="100vh">
         <Spinner size="xl" />
       </Center>
     );
+  }
+  
+  // If not loading and still no user (should be redirecting, but as fallback)
+  if (!user) {
+     // Optionally show a brief message or just rely on redirect
+     return <Center h="100vh"><Text>Redirecting to login...</Text></Center>; 
   }
 
   // --- Colors (for remaining elements) ---

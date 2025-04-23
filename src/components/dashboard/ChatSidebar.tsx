@@ -11,13 +11,8 @@ import {
   useColorModeValue,
   Icon,
   Flex,
-  IconButton,
-  Divider,
-  Tooltip,
   Spinner,
   Avatar,
-  Spacer,
-  Input,
   useDisclosure,
   AlertDialog,
   AlertDialogBody,
@@ -27,25 +22,16 @@ import {
   AlertDialogOverlay,
   Center,
 } from '@chakra-ui/react';
-import { FaPlus, FaTrash, FaEdit, FaCheck, FaTimes, FaSignOutAlt } from 'react-icons/fa';
+import { FaPlus, FaTrash } from 'react-icons/fa';
 import { useAuth } from '@/app/context/AuthContext';
 import { useChat } from '@/app/context/ChatContext';
-import { useRouter } from 'next/navigation';
 
 // Import ChatContainer
 import { ChatContainer } from '@/components/dashboard/ChatComponents';
 // Import DeleteConfirmationDialog
 import { DeleteConfirmationDialog } from '@/components/dashboard/DeleteConfirmationDialog';
 
-// Re-define or import Chat interface if needed
-interface Chat {
-  id: string;
-  title: string;
-  // Add other relevant fields if needed
-}
-
 export function ChatSidebar() {
-  const router = useRouter();
   const { user, userProfile, signOut } = useAuth();
   const {
     chats,
@@ -58,10 +44,6 @@ export function ChatSidebar() {
   } = useChat();
   const toast = useToast();
 
-  // State for renaming
-  const [editingChatId, setEditingChatId] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState('');
-
   // State for delete confirmation
   const { isOpen: isAlertOpen, onOpen: onAlertOpen, onClose: onAlertClose } = useDisclosure();
   const [chatToDelete, setChatToDelete] = useState<string | null>(null);
@@ -69,8 +51,6 @@ export function ChatSidebar() {
 
   // Colors
   const sidebarBg = useColorModeValue('gray.50', 'gray.900');
-  const hoverBg = useColorModeValue('gray.100', 'gray.700');
-  const selectedBg = useColorModeValue('teal.50', 'teal.800');
   const textColor = useColorModeValue('gray.800', 'white');
   const secondaryTextColor = useColorModeValue('gray.600', 'gray.300');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
@@ -105,6 +85,7 @@ export function ChatSidebar() {
     if (chatToDelete) {
       try {
         await deleteChat(chatToDelete);
+        toast({ title: 'Chat deleted', status: 'info', duration: 2000 });
       } catch (err) {
         toast({
           title: 'Error deleting chat',
@@ -118,50 +99,21 @@ export function ChatSidebar() {
     setChatToDelete(null);
   };
 
-  const handleRenameClick = (chat: Chat) => {
-    setEditingChatId(chat.id);
-    setRenameValue(chat.title);
-  };
-
-  const handleRenameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRenameValue(event.target.value);
-  };
-
-  const handleRenameSubmit = async (chatId: string) => {
-    if (!renameValue.trim()) {
+  const handleRenameSubmit = async (chatId: string, newTitle: string) => {
+    if (!newTitle.trim()) {
       toast({ title: 'Title cannot be empty', status: 'warning', duration: 2000 });
       return;
     }
-    if (editingChatId === chatId) {
-      try {
-        await updateChatTitle(chatId, renameValue);
-        toast({ title: 'Chat renamed', status: 'success', duration: 2000 });
-      } catch (err) {
-        toast({
-          title: 'Error renaming chat',
-          description: err instanceof Error ? err.message : 'Failed to rename chat',
-          status: 'error',
-          duration: 3000,
-        });
-      }
-    }
-    setEditingChatId(null);
-    setRenameValue('');
-  };
-
-  const handleCancelRename = () => {
-    setEditingChatId(null);
-    setRenameValue('');
-  };
-
-  const handleLogout = async () => {
-    // Keep the handler logic in case it's used elsewhere, 
-    // or remove if truly unused after removing button
     try {
-      await signOut();
-      toast({ title: 'Logged out', status: 'success', duration: 2000 });
-    } catch (error) {
-      toast({ title: 'Logout failed', status: 'error', duration: 3000 });
+      await updateChatTitle(chatId, newTitle);
+      toast({ title: 'Chat renamed', status: 'success', duration: 2000 });
+    } catch (err) {
+      toast({
+        title: 'Error renaming chat',
+        description: err instanceof Error ? err.message : 'Failed to rename chat',
+        status: 'error',
+        duration: 3000,
+      });
     }
   };
 
