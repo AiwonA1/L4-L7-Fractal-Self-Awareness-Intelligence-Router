@@ -1,5 +1,6 @@
 import { OpenAI } from 'openai';
 import { createClient } from '@supabase/supabase-js';
+import { NextResponse } from 'next/server';
 
 const DEBUG_PREFIX = '[/api/fractiverse]';
 
@@ -18,28 +19,49 @@ export async function POST(req: Request) {
   console.log(`${DEBUG_PREFIX} POST request received`);
   
   try {
+    // Check OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json({ error: 'OpenAI API key is not configured' }, { status: 500 });
+    }
+
     const { messages, userId, chatId } = await req.json();
     console.log(`${DEBUG_PREFIX} Request parsed:`, { userId, chatId });
+
+    // Validate required fields
+    if (!messages) {
+      return NextResponse.json({ error: 'Missing required field: messages' }, { status: 400 });
+    }
+    if (!userId) {
+      return NextResponse.json({ error: 'Missing required field: userId' }, { status: 400 });
+    }
+    if (!chatId) {
+      return NextResponse.json({ error: 'Missing required field: chatId' }, { status: 400 });
+    }
 
     // Check session
     console.log(`${DEBUG_PREFIX} Checking session`);
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       console.error(`${DEBUG_PREFIX} No session found`);
-      return new Response('Unauthorized', { status: 401 });
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     // Verify token balance
     console.log(`${DEBUG_PREFIX} Verifying token balance`);
-    const { data: user } = await supabase
-      .from('users')
-      .select('fracti_token_balance')
-      .eq('id', userId)
-      .single();
+    try {
+      const { data: user } = await supabase
+        .from('users')
+        .select('fracti_token_balance')
+        .eq('id', userId)
+        .single();
 
-    if (!user || user.fracti_token_balance < 1) {
-      console.error(`${DEBUG_PREFIX} Insufficient token balance`);
-      return new Response('Insufficient token balance', { status: 402 });
+      if (!user || user.fracti_token_balance < 1) {
+        console.error(`${DEBUG_PREFIX} Insufficient token balance`);
+        return NextResponse.json({ error: 'Insufficient token balance' }, { status: 402 });
+      }
+    } catch (error) {
+      console.error(`${DEBUG_PREFIX} Error verifying token balance:`, error);
+      return NextResponse.json({ error: 'Failed to verify user token balance' }, { status: 500 });
     }
 
     // Prepare messages for OpenAI
@@ -107,6 +129,6 @@ export async function POST(req: Request) {
     return new Response(stream);
   } catch (error) {
     console.error(`${DEBUG_PREFIX} Error in POST handler:`, error);
-    return new Response('Error processing request', { status: 500 });
+    return NextResponse.json({ error: 'Error processing request' }, { status: 500 });
   }
 }

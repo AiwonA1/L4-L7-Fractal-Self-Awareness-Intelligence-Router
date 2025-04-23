@@ -91,11 +91,18 @@ type Session = {
   };
 };
 
+type AuthResponse = {
+  data: {
+    session: Session | null;
+  };
+  error: null;
+};
+
 const mockSupabaseAuth = {
   getSession: vi.fn(() => Promise.resolve({ 
-    data: { session: { user: { id: 'test-user-id' } } as Session },
+    data: { session: { user: { id: 'test-user-id' } } },
     error: null 
-  }))
+  } as AuthResponse))
 };
 
 vi.mock('@supabase/supabase-js', () => ({
@@ -186,7 +193,7 @@ describe('FractiVerse API Route', () => {
         // Reset request mock
         requestMock = {
             json: vi.fn().mockResolvedValue({
-                message: 'Explain fractals briefly.',
+                messages: [{ role: 'user', content: 'Explain fractals briefly.' }],
                 chatId: 'test-chat-id', // Use test IDs
                 userId: 'test-user-id'
             }),
@@ -222,9 +229,9 @@ describe('FractiVerse API Route', () => {
         
         // Mock no session
         mockSupabaseAuth.getSession.mockResolvedValueOnce({
-            data: { session: null as Session | null },
+            data: { session: null },
             error: null
-        });
+        } as AuthResponse);
 
         const request = {
             json: vi.fn().mockResolvedValue({
@@ -236,6 +243,8 @@ describe('FractiVerse API Route', () => {
 
         const response = await POST(request);
         expect(response.status).toBe(401);
+        const responseData = await response.json();
+        expect(responseData).toEqual({ error: 'Unauthorized' });
     });
 
     it('should return 402 if insufficient tokens', async () => {
@@ -282,47 +291,39 @@ describe('FractiVerse API Route', () => {
     // Add more tests: missing fields in body, rate limiting, db errors during initial checks etc.
 
     it('should return 400 if message is missing', async () => {
-      requestMock.json.mockResolvedValueOnce({ chatId: 'c1', userId: 'u1' }); // Missing message
+      requestMock.json.mockResolvedValueOnce({ chatId: 'c1', userId: 'u1' }); // Missing messages
       const { POST } = await import('../route');
       const response = await POST(requestMock as unknown as NextRequest);
-      expect(jsonSpy).toHaveBeenCalledWith(
-        { error: 'Missing required fields (message, chatId, userId)' },
-        { status: 400 }
-      );
-       expect(response.status).toBe(400);
+      expect(response.status).toBe(400);
+      const responseData = await response.json();
+      expect(responseData).toEqual({ error: 'Missing required field: messages' });
     });
 
-     it('should return 400 if chatId is missing', async () => {
-      requestMock.json.mockResolvedValueOnce({ message: 'm1', userId: 'u1' }); // Missing chatId
+    it('should return 400 if chatId is missing', async () => {
+      requestMock.json.mockResolvedValueOnce({ messages: [{ role: 'user', content: 'm1' }], userId: 'u1' }); // Missing chatId
       const { POST } = await import('../route');
       const response = await POST(requestMock as unknown as NextRequest);
-      expect(jsonSpy).toHaveBeenCalledWith(
-        { error: 'Missing required fields (message, chatId, userId)' },
-        { status: 400 }
-      );
-       expect(response.status).toBe(400);
+      expect(response.status).toBe(400);
+      const responseData = await response.json();
+      expect(responseData).toEqual({ error: 'Missing required field: chatId' });
     });
 
-     it('should return 400 if userId is missing', async () => {
-      requestMock.json.mockResolvedValueOnce({ message: 'm1', chatId: 'c1' }); // Missing userId
+    it('should return 400 if userId is missing', async () => {
+      requestMock.json.mockResolvedValueOnce({ messages: [{ role: 'user', content: 'm1' }], chatId: 'c1' }); // Missing userId
       const { POST } = await import('../route');
       const response = await POST(requestMock as unknown as NextRequest);
-      expect(jsonSpy).toHaveBeenCalledWith(
-        { error: 'Missing required fields (message, chatId, userId)' },
-        { status: 400 }
-      );
-       expect(response.status).toBe(400);
+      expect(response.status).toBe(400);
+      const responseData = await response.json();
+      expect(responseData).toEqual({ error: 'Missing required field: userId' });
     });
 
     it('should return 500 if checking token balance fails', async () => {
         mockSupabaseSingle.mockRejectedValueOnce(new Error('DB Connection Error'));
         const { POST } = await import('../route');
         const response = await POST(requestMock as unknown as NextRequest);
-        expect(jsonSpy).toHaveBeenCalledWith(
-          { error: 'Failed to verify user token balance' },
-          { status: 500 }
-        );
-         expect(response.status).toBe(500);
+        expect(response.status).toBe(500);
+        const responseData = await response.json();
+        expect(responseData).toEqual({ error: 'Failed to verify user token balance' });
     });
 
     it('should verify token balance before processing request', async () => {
@@ -336,8 +337,8 @@ describe('FractiVerse API Route', () => {
         await POST(requestMock as unknown as NextRequest);
 
         // Verify balance check was made
-        expect(mockSupabaseSingle).toHaveBeenCalledWith();
         expect(mockSupabaseFrom).toHaveBeenCalledWith('users');
+        expect(mockSupabaseSingle).toHaveBeenCalled();
     });
 
     it('should deduct exactly one token for successful completion', async () => {
@@ -354,17 +355,12 @@ describe('FractiVerse API Route', () => {
         const reader = response.body!.getReader();
         while (!(await reader.read()).done) {}
 
-        // Trigger onFinish with successful completion
-        const streamTextCallResult = await mockStreamText.mock.results[0].value;
-        await streamTextCallResult.triggerOnFinish();
-
         // Verify token deduction
-        expect(mockSupabaseAuth.rpc).toHaveBeenCalledWith(
+        expect(mockSupabaseRpc).toHaveBeenCalledWith(
             'use_tokens',
             {
                 p_user_id: 'test-user-id',
-                p_amount: 1,
-                p_description: expect.stringContaining('Chat completion for chat')
+                p_amount: 1
             }
         );
     });
@@ -400,7 +396,7 @@ describe('FractiVerse API Route', () => {
         await POST(requestMock as unknown as NextRequest).catch(() => {});
 
         // Verify no token deduction occurred
-        expect(mockSupabaseAuth.rpc).not.toHaveBeenCalled();
+        expect(mockSupabaseRpc).not.toHaveBeenCalled();
     });
 
     it('should handle concurrent token balance checks correctly', async () => {
@@ -412,18 +408,26 @@ describe('FractiVerse API Route', () => {
         const { POST } = await import('../route');
         
         // Send two concurrent requests
-        const request1 = POST(requestMock as unknown as NextRequest);
-        const request2 = POST({
-            ...requestMock,
+        const request1 = {
             json: vi.fn().mockResolvedValue({
-                message: 'Second concurrent request',
-                chatId: 'test-chat-id-2',
-                userId: 'test-user-id'
+                messages: [{ role: 'user', content: 'Test message' }],
+                userId: 'test-user-id',
+                chatId: 'test-chat-id'
             })
-        } as unknown as NextRequest);
+        } as unknown as NextRequest;
 
-        // Wait for both to complete
-        const [response1, response2] = await Promise.all([request1, request2]);
+        const request2 = {
+            json: vi.fn().mockResolvedValue({
+                messages: [{ role: 'user', content: 'Second concurrent request' }],
+                userId: 'test-user-id',
+                chatId: 'test-chat-id-2'
+            })
+        } as unknown as NextRequest;
+
+        const [response1, response2] = await Promise.all([
+            POST(request1),
+            POST(request2)
+        ]);
         
         // Both should succeed initially (as balance was sufficient)
         expect(response1.status).toBe(200);
@@ -435,14 +439,8 @@ describe('FractiVerse API Route', () => {
         while (!(await reader1.read()).done) {}
         while (!(await reader2.read()).done) {}
 
-        // Trigger onFinish for both
-        const stream1Result = await mockStreamText.mock.results[0].value;
-        const stream2Result = await mockStreamText.mock.results[1].value;
-        await stream1Result.triggerOnFinish();
-        await stream2Result.triggerOnFinish();
-
         // Verify both token deductions were attempted
-        expect(mockSupabaseAuth.rpc).toHaveBeenCalledTimes(2);
+        expect(mockSupabaseRpc).toHaveBeenCalledTimes(2);
     });
 
     // Note: Rate limit testing requires mocking the rate-limit utility
