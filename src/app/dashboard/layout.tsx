@@ -4,7 +4,12 @@ import { Box } from '@chakra-ui/react'
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <Box minH="calc(100vh - 5rem)" py={8}>
+    <Box 
+      minH="calc(100vh - 5rem)" 
+      py={8}
+      bg="gray.50"
+      position="relative"
+    >
       {children}
     </Box>
   )

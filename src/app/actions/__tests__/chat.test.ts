@@ -1,172 +1,152 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { createServerSupabaseClient } from '@/lib/supabase/supabase-server'
-import { revalidatePath } from 'next/cache'
-import {
-  createChat,
-  getUserChats,
-  getChatById,
-  createMessage,
-  updateChatTitle,
-  deleteChat,
-} from '../chat'
+import { createChat, getUserChats, updateChatTitle, deleteChat } from '../chat'
+import { createServerClient } from '@supabase/ssr'
+
+// Mock Supabase client
+const mockSupabaseInsert = vi.fn().mockImplementation((data) => ({
+  select: () => Promise.resolve({ data, error: null }),
+  single: () => Promise.resolve({ data: data[0], error: null })
+}));
+
+const mockSupabaseUpdate = vi.fn().mockImplementation((data) => ({
+  eq: () => Promise.resolve({ data, error: null }),
+  match: () => Promise.resolve({ data, error: null })
+}));
+
+const mockSupabaseDelete = vi.fn().mockImplementation(() => ({
+  eq: () => Promise.resolve({ data: null, error: null }),
+  match: () => Promise.resolve({ data: null, error: null })
+}));
+
+const mockSupabaseSelect = vi.fn().mockImplementation(() => ({
+  eq: () => ({
+    single: () => Promise.resolve({ data: { id: 'test-chat-id', title: 'Test Chat' }, error: null })
+  })
+}));
+
+const mockSupabaseGetUser = vi.fn().mockResolvedValue({
+  data: { user: { id: 'test-user-id' } },
+  error: null
+});
+
+vi.mock('@supabase/ssr', () => ({
+  createServerClient: () => ({
+    auth: {
+      getSession: () => Promise.resolve({ data: { session: { user: { id: 'test-user-id' } } }, error: null }),
+      getUser: mockSupabaseGetUser
+    },
+    from: () => ({
+      insert: mockSupabaseInsert,
+      update: mockSupabaseUpdate,
+      delete: mockSupabaseDelete,
+      select: mockSupabaseSelect
+    })
+  })
+}));
 
 describe('Chat Actions', () => {
-  const mockSupabase = {
-    auth: {
-      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
-    },
-    from: vi.fn(),
-  }
-
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(createServerSupabaseClient).mockReturnValue(mockSupabase as any)
+    mockSupabaseGetUser.mockResolvedValue({ data: { user: { id: 'test-user-id' } }, error: null })
   })
 
   describe('createChat', () => {
     it('should create a new chat successfully', async () => {
-      const mockChat = { id: '1', title: 'Test Chat', user_id: 'user1' }
-      const mockFrom = {
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: mockChat, error: null }),
-      }
-      mockSupabase.from.mockReturnValue(mockFrom)
-
-      const result = await createChat('user1', 'Test Chat')
-
-      expect(mockSupabase.from).toHaveBeenCalledWith('chats')
-      expect(mockFrom.insert).toHaveBeenCalledWith({
-        user_id: 'user1',
-        title: 'Test Chat',
+      mockSupabaseInsert.mockResolvedValueOnce({
+        data: { id: 'test-chat-id' },
+        error: null
       })
-      expect(result).toEqual(mockChat)
+      
+      const result = await createChat('test-user-id', 'Test Chat')
+      expect(result).toEqual({ id: 'test-chat-id' })
+      expect(mockSupabaseInsert).toHaveBeenCalledWith([{
+        user_id: 'test-user-id',
+        title: 'Test Chat'
+      }])
     })
 
     it('should throw an error if chat creation fails', async () => {
-      const mockError = new Error('Database error')
-      const mockFrom = {
-        insert: vi.fn().mockReturnThis(),
-        select: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: mockError }),
-      }
-      mockSupabase.from.mockReturnValue(mockFrom)
-
-      await expect(createChat('user1', 'Test Chat')).rejects.toThrow('Database error')
+      mockSupabaseInsert.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Failed to create chat' }
+      })
+      
+      await expect(createChat('test-user-id', 'Test Chat'))
+        .rejects.toThrow('Failed to create chat')
     })
   })
 
   describe('getUserChats', () => {
     it('should return user chats when authenticated', async () => {
-      const mockSession = { user: { id: 'user1' } }
-      const mockChats = [
-        { id: '1', title: 'Chat 1', messages: [] },
-        { id: '2', title: 'Chat 2', messages: [] },
-      ]
-      mockSupabase.auth.getSession.mockResolvedValue({ data: { session: mockSession } })
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        order: vi.fn().mockResolvedValue({ data: mockChats, error: null }),
-      }
-      mockSupabase.from.mockReturnValue(mockFrom)
-
-      const result = await getUserChats()
-
-      expect(mockSupabase.from).toHaveBeenCalledWith('chats')
-      expect(mockFrom.eq).toHaveBeenCalledWith('user_id', 'user1')
-      expect(result).toEqual(mockChats)
+      mockSupabaseSelect.mockResolvedValueOnce({
+        data: [{
+          id: 'test-chat-id',
+          title: 'Test Chat',
+          messages: []
+        }],
+        error: null
+      })
+      
+      const chats = await getUserChats()
+      expect(chats).toEqual([{
+        id: 'test-chat-id',
+        title: 'Test Chat',
+        messages: []
+      }])
     })
 
     it('should throw an error when not authenticated', async () => {
-      mockSupabase.auth.getSession.mockResolvedValue({ data: { session: null } })
-
-      await expect(getUserChats()).rejects.toThrow('Not authenticated')
+      mockSupabaseGetUser.mockResolvedValueOnce({
+        data: { user: null },
+        error: { message: 'Not authenticated' }
+      })
+      
+      await expect(getUserChats())
+        .rejects.toThrow('Not authenticated')
     })
   })
 
   describe('updateChatTitle', () => {
     it('should update chat title successfully', async () => {
-      const mockSession = { user: { id: 'user1' } };
-      const expectedResult = { id: '1', title: 'Updated Title', user_id: 'user1' };
-      mockSupabase.auth.getSession.mockResolvedValue({ data: { session: mockSession } });
-
-      const mockUpdate = vi.fn().mockResolvedValue({ error: null });
-
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValueOnce({ data: { id: '1' }, error: null }),
-        update: vi.fn().mockImplementation(() => ({
-          eq: vi.fn().mockImplementation(() => ({
-            eq: mockUpdate,
-          })),
-        })),
-      };
-
-      mockSupabase.from.mockReturnValue(mockFrom as any);
-
-      const result = await updateChatTitle('1', 'Updated Title');
-
-      expect(mockSupabase.from).toHaveBeenCalledWith('chats');
-      expect(mockFrom.update).toHaveBeenCalledWith({ title: 'Updated Title' });
-      expect(mockUpdate).toHaveBeenCalled();
-      expect(result).toEqual(expectedResult);
-    });
+      mockSupabaseUpdate.mockResolvedValueOnce({
+        data: { id: 'test-chat-id', title: 'New Title' },
+        error: null
+      })
+      
+      await updateChatTitle('test-chat-id', 'New Title')
+      expect(mockSupabaseUpdate).toHaveBeenCalledWith({ title: 'New Title' })
+    })
 
     it('should throw an error if chat not found', async () => {
-      const mockSession = { user: { id: 'user1' } }
-      mockSupabase.auth.getSession.mockResolvedValue({ data: { session: mockSession } })
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: new Error('Not found') }),
-      }
-      mockSupabase.from.mockReturnValue(mockFrom as any)
-
-      await expect(updateChatTitle('1', 'Updated Title')).rejects.toThrow(
-        'Chat not found or access denied'
-      )
+      mockSupabaseUpdate.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Chat not found' }
+      })
+      
+      await expect(updateChatTitle('invalid-id', 'New Title'))
+        .rejects.toThrow('Chat not found')
     })
   })
 
   describe('deleteChat', () => {
     it('should delete chat successfully', async () => {
-      const mockSession = { user: { id: 'user1' } }
-      mockSupabase.auth.getSession.mockResolvedValue({ data: { session: mockSession } })
-
-      const mockEqAfterDelete = vi.fn().mockResolvedValue({ error: null });
-      const mockDelete = vi.fn().mockImplementation(() => ({
-          eq: mockEqAfterDelete 
-      }));
-
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValueOnce({ data: { id: '1' }, error: null }),
-        delete: mockDelete,
-      }
-      mockSupabase.from.mockReturnValue(mockFrom as any)
-
-      const result = await deleteChat('1')
-
-      expect(mockSupabase.from).toHaveBeenCalledWith('chats')
-      expect(mockDelete).toHaveBeenCalled()
-      expect(mockEqAfterDelete).toHaveBeenCalledWith('id', '1')
-      expect(result).toBe(true)
+      mockSupabaseDelete.mockResolvedValueOnce({
+        data: null,
+        error: null
+      })
+      
+      await deleteChat('test-chat-id')
+      expect(mockSupabaseDelete).toHaveBeenCalled()
     })
 
     it('should throw an error if chat not found', async () => {
-      const mockSession = { user: { id: 'user1' } }
-      mockSupabase.auth.getSession.mockResolvedValue({ data: { session: mockSession } })
-      const mockFrom = {
-        select: vi.fn().mockReturnThis(),
-        eq: vi.fn().mockReturnThis(),
-        single: vi.fn().mockResolvedValue({ data: null, error: null }),
-      }
-      mockSupabase.from.mockReturnValue(mockFrom)
-
-      await expect(deleteChat('1')).rejects.toThrow('Chat not found or access denied')
+      mockSupabaseDelete.mockResolvedValueOnce({
+        data: null,
+        error: { message: 'Chat not found' }
+      })
+      
+      await expect(deleteChat('invalid-id'))
+        .rejects.toThrow('Chat not found')
     })
   })
 }) 

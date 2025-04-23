@@ -4,11 +4,22 @@ import { createServerSupabaseClient } from '@/lib/supabase/supabase-server'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { createMessage as createMessageAction } from '@/app/actions/chat'
 
-export type DbChat = Database['public']['Tables']['chats']['Row']
-export type DbMessage = Database['public']['Tables']['messages']['Row']
+type DbChat = Database['public']['Tables']['chats']['Row']
+type DbMessage = {
+  id: string;
+  chat_id: string;
+  role: string;
+  content: string;
+  created_at: string;
+  user_id: string;
+}
 
-export type Message = Omit<DbMessage, 'role'> & {
-  role: 'user' | 'assistant'
+export type Message = {
+  id: string;
+  chat_id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at: string;
 }
 
 export type Chat = DbChat & {
@@ -22,52 +33,70 @@ export interface ChatListItem {
   updated_at: string;
 }
 
-export async function getChats(userId: string) {
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('No session')
+export async function getUserChats(userId: string): Promise<ChatListItem[]> {
+  const { data: chats, error } = await supabase
+    .from('chats')
+    .select('*')
+    .eq('user_id', userId)
+    .order('updated_at', { ascending: false })
 
-    const { data, error } = await supabase
-      .from('chats')
-      .select('id, title, user_id, updated_at')
-      .eq('user_id', userId)
-      .order('updated_at', { ascending: false })
-
-    if (error) {
-      console.error('Error fetching chats:', error)
-      throw error
-    }
-
-    return data || []
-  } catch (error) {
-    console.error('Error in getChats:', error)
-    throw error
-  }
+  if (error) throw error
+  return chats
 }
 
-export async function createChat(userId: string, title: string) {
-  try {
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) throw new Error('No session')
+export async function getChatMessages(chatId: string): Promise<Message[]> {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('id, chat_id, role, content, created_at')
+    .eq('chat_id', chatId)
+    .order('created_at', { ascending: true }) as { data: DbMessage[] | null, error: any }
 
-    const { data, error } = await supabase
-      .from('chats')
-      .insert([
-        { user_id: userId, title }
-      ])
-      .select()
-      .single()
+  if (error) throw error
+  if (!data) return []
+  
+  return data.map(msg => ({
+    id: msg.id,
+    chat_id: msg.chat_id,
+    role: msg.role === 'user' ? 'user' : 'assistant',
+    content: msg.content,
+    created_at: msg.created_at
+  }))
+}
 
-    if (error) {
-      console.error('Error creating chat:', error)
-      throw error
-    }
+export async function createChat(userId: string, title: string): Promise<ChatListItem | null> {
+  const { data: chat, error } = await supabase
+    .from('chats')
+    .insert({
+      user_id: userId,
+      title,
+      updated_at: new Date().toISOString()
+    })
+    .select()
+    .single()
 
-    return data
-  } catch (error) {
-    console.error('Error in createChat:', error)
-    throw error
-  }
+  if (error) throw error
+  return chat
+}
+
+export async function updateChatTitle(chatId: string, newTitle: string): Promise<void> {
+  const { error } = await supabase
+    .from('chats')
+    .update({ 
+      title: newTitle,
+      updated_at: new Date().toISOString()
+    })
+    .eq('id', chatId)
+
+  if (error) throw error
+}
+
+export async function deleteChat(chatId: string): Promise<void> {
+  const { error } = await supabase
+    .from('chats')
+    .delete()
+    .eq('id', chatId)
+
+  if (error) throw error
 }
 
 export async function addMessage(chatId: string, content: string, role: string) {
@@ -178,42 +207,6 @@ export function subscribeToChatMessages(
 
   return channel
 }
-
-// Commenting out placeholder as context uses direct query and linter struggles with typing
-/*
-export const getChatMessages = async (chatId: string): Promise<Message[]> => {
-    console.warn(\"getChatMessages in service is placeholder, context uses direct query\");
-    const { data, error } = await supabase
-        .from('messages')
-        .select('*')
-        .eq('chat_id', chatId)
-        .order('created_at', { ascending: true });
-
-    if (error) throw error;
-
-    // Map and validate roles inline
-    return (data || []).map(msg => {
-        // Check if msg is valid and has a role property
-        if (!msg || typeof msg !== 'object' || !('role' in msg)) {
-            // Handle invalid message structure (e.g., return a default or skip)
-            // Returning a default structure here to avoid downstream errors
-            return {
-                ...msg, // Spread existing properties if any
-                id: msg?.id || crypto.randomUUID(), // Ensure ID exists
-                chat_id: chatId,
-                role: 'assistant', // Default role
-                content: '[Invalid message data]',
-                created_at: msg?.created_at || new Date().toISOString()
-            } as Message;
-        }
-        // Now msg is confirmed to be an object with a role property
-        return {
-            ...msg,
-            role: msg.role === \'user\' || msg.role === \'assistant\' ? msg.role : \'assistant\' // Default role
-        } as Message;
-    });
-};
-*/
 
 export const createMessage = async (
   chatId: string, 

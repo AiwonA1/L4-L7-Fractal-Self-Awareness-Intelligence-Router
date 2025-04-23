@@ -48,7 +48,7 @@ export default function Dashboard() {
   // --- Hooks ---
   const router = useRouter();
   const { user, isLoading: isAuthLoading } = useAuth();
-  const {
+  const { 
     currentChat,
     messages,
     isLoading: isChatLoading,
@@ -73,12 +73,12 @@ export default function Dashboard() {
       loadChats().catch(err => {
         console.error('Error loading chats:', err);
         // Simplified toast for brevity in example
-        toast({
+      toast({
             title: 'Error loading chats',
             description: err instanceof Error ? err.message : 'Please try again.',
-            status: 'error',
+        status: 'error',
             duration: 5000,
-            isClosable: true,
+        isClosable: true,
         });
       });
       setIsInitialLoad(false);
@@ -104,7 +104,7 @@ export default function Dashboard() {
         // Error handling for createNewChat is mostly within the context, 
         // but catch here for any unexpected issues.
         console.error("Error calling createNewChat from Dashboard:", error);
-        toast({ 
+      toast({
             title: 'Error Starting Chat', 
             description: error.message || 'Could not start a new chat.', 
             status: 'error' 
@@ -151,7 +151,7 @@ export default function Dashboard() {
           isSendingMessage={isChatLoading}
           onSendMessage={handleSendMessageForWindow}
         />
-      </Flex>
+                                </Flex>
 
       {/* @ts-ignore - Ignore Box children type error (systemic issue) */}
       <Box>
@@ -187,9 +187,9 @@ export default function Dashboard() {
                 </Card>
               </Link>
             </React.Fragment>
-          ))}
-        </SimpleGrid>
+            ))}
+          </SimpleGrid>
       </Box>
     </VStack>
   );
-}
+} 

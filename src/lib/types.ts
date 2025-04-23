@@ -20,14 +20,8 @@ export interface Chat {
   updated_at: string
 }
 
-export interface Message {
-  id: string
-  chat_id: string
-  user_id: string
-  content: string
-  role: 'user' | 'assistant'
-  created_at: string
-}
+// Message type has been moved to src/app/services/chat.ts
+// to ensure type safety with database schema
 
 // This seems redundant if Chat already contains messages or messages are fetched separately.
 // Consider if this specific structure is needed.
