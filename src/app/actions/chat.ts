@@ -125,9 +125,13 @@ export async function createMessage(chatId: string, role: string, content: strin
 }
 
 export async function updateChatTitle(chatId: string, title: string) {
-  const cookieStore = cookies()
-  const allCookies = cookieStore.getAll();
-  console.log('[updateChatTitle] Available cookie names:', allCookies.map(c => c.name));
+  try {
+    const cookieStore = cookies()
+    const allCookies = cookieStore.getAll();
+    console.log('[updateChatTitle] Available cookie names:', allCookies.map(c => c.name));
+  } catch (cookieError) {
+    console.error('[updateChatTitle] Error accessing cookies:', cookieError);
+  }
 
   const supabase = createServerSupabaseClient()
   const { data: { session } } = await supabase.auth.getSession()
@@ -182,9 +186,13 @@ export async function updateChatTitle(chatId: string, title: string) {
 }
 
 export async function deleteChat(chatId: string): Promise<boolean> {
-  const cookieStore = cookies()
-  const allCookies = cookieStore.getAll();
-  console.log('[deleteChat] Available cookie names:', allCookies.map(c => c.name));
+  try {
+    const cookieStore = cookies()
+    const allCookies = cookieStore.getAll();
+    console.log('[deleteChat] Available cookie names:', allCookies.map(c => c.name));
+  } catch (cookieError) {
+    console.error('[deleteChat] Error accessing cookies:', cookieError);
+  }
 
   const supabase = createServerSupabaseClient()
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession()

@@ -2,8 +2,8 @@
 
 import React from 'react';
 import {
+  Flex,
   Box,
-  VStack,
   Text,
   Spinner,
   Center,
@@ -11,6 +11,7 @@ import {
 } from '@chakra-ui/react';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
+import { useChat } from '@/app/context/ChatContext';
 
 // Re-define or import the Message interface if needed
 interface Message {
@@ -24,6 +25,7 @@ interface Message {
 interface Chat {
   id: string;
   title: string;
+  updated_at: string;
   // Add other relevant fields if needed
 }
 
@@ -44,33 +46,73 @@ export function ChatWindow({
 }: ChatWindowProps) {
   const bgColor = useColorModeValue('white', 'gray.800');
   const placeholderColor = useColorModeValue('gray.500', 'gray.400');
+  const { createNewChat } = useChat();
+
+  const handleSendMessage = async (message: string) => {
+    if (!currentChat) {
+      // Create new chat with first message
+      try {
+        const newChat = await createNewChat(message.slice(0, 30) + '...', message);
+        if (!newChat) {
+          throw new Error('Failed to create new chat');
+        }
+      } catch (error) {
+        console.error('Error creating new chat:', error);
+        return;
+      }
+    } else {
+      // Send message to existing chat
+      await onSendMessage(message);
+    }
+  };
+
+  let content;
+  if (isLoadingMessages) {
+    content = (
+      <Center h="full">
+        <Spinner size="xl" />
+      </Center>
+    );
+  } else if (messages.length > 0) {
+    content = <MessageList messages={messages} />;
+  } else {
+    content = (
+      <Center h="full">
+        <Text color={placeholderColor}>
+          {currentChat 
+            ? "No messages yet. Start the conversation!"
+            : "Type a message to start a new chat."}
+        </Text>
+      </Center>
+    );
+  }
 
   return (
-    <VStack
-      flex={1}
-      align="stretch"
-      spacing={0} // Remove spacing between content and input
+    <Flex
+      direction="column"
+      h="full"
       bg={bgColor}
+      position="relative"
     >
-      {/* Message display area (conditional) */}
-      <Box flex={1} overflowY="auto"> { /* Allow message list to scroll */}
-        {isLoadingMessages ? (
-          <Center h="full">
-            <Spinner size="xl" />
-          </Center>
-        ) : currentChat ? (
-          <MessageList messages={messages} />
-        ) : (
-          <Center h="full">
-            <Text color={placeholderColor}>Select a chat or start a new one.</Text>
-          </Center>
-        )}
-      </Box>
+      <Flex
+        flex={1}
+        direction="column"
+        overflowY="auto"
+        p={4}
+      >
+        {content}
+      </Flex>
 
-      {/* Input area (unconditional) */}
-      <Box pt={2} px={4} pb={4}> { /* Add some padding around input */}
-        <MessageInput onSendMessage={onSendMessage} isLoading={isSendingMessage} />
+      <Box
+        borderTopWidth="1px"
+        borderColor="gray.200"
+        bg={bgColor}
+      >
+        <MessageInput
+          onSendMessage={handleSendMessage}
+          isLoading={isSendingMessage}
+        />
       </Box>
-    </VStack>
+    </Flex>
   );
 } 

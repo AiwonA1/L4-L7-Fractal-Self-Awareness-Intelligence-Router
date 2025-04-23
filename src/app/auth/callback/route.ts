@@ -1,54 +1,47 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
-import type { Database } from '@/types/supabase'
+import { createClient } from '@/lib/supabase/server'
+import { type EmailOtpType } from '@supabase/supabase-js'
+import { type NextRequest } from 'next/server'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: Request) {
-  try {
-    const requestUrl = new URL(request.url)
-    const code = requestUrl.searchParams.get('code')
-    const cookieStore = cookies()
-    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore })
+export async function GET(request: NextRequest) {
+  const { searchParams } = new URL(request.url)
+  const token_hash = searchParams.get('token_hash')
+  const type = searchParams.get('type') as EmailOtpType | null
+  const next = searchParams.get('next') ?? '/dashboard'
 
-    if (code) {
-      // Exchange the code for a session
-      const { error } = await supabase.auth.exchangeCodeForSession(code)
-      
-      if (error) {
-        console.error('Auth callback error:', error)
-        return NextResponse.redirect(new URL('/login?error=auth', requestUrl.origin))
-      }
-
+  if (token_hash && type) {
+    const supabase = await createClient()
+    const { error } = await supabase.auth.verifyOtp({
+      type,
+      token_hash,
+    })
+    if (!error) {
       // Get the session to ensure it was created
       const { data: { session } } = await supabase.auth.getSession()
       
-      if (!session) {
-        return NextResponse.redirect(new URL('/login?error=session', requestUrl.origin))
-      }
+      if (session) {
+        // Create or update user profile
+        const { error: profileError } = await supabase
+          .from('users')
+          .upsert({
+            id: session.user.id,
+            email: session.user.email,
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single()
 
-      // Create or update user profile
-      const { error: profileError } = await supabase
-        .from('users')
-        .upsert({
-          id: session.user.id,
-          email: session.user.email,
-          updated_at: new Date().toISOString()
-        })
-        .select()
-        .single()
-
-      if (profileError) {
-        console.error('Profile update error:', profileError)
+        if (profileError) {
+          console.error('Profile update error:', profileError)
+        }
+        
+        return redirect(next)
       }
     }
-
-    // URL to redirect to after sign in process completes
-    return NextResponse.redirect(new URL('/dashboard', requestUrl.origin))
-  } catch (error) {
-    console.error('Auth callback error:', error)
-    const origin = request.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-    return NextResponse.redirect(new URL('/login?error=unknown', origin))
   }
+
+  // Redirect to error page if verification fails
+  return redirect('/login?error=auth')
 } 

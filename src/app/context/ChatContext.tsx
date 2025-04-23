@@ -119,64 +119,50 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }
 
   const loadMessages = async (chatId: string) => {
-    if (!user?.id) return
+    if (!user?.id) return;
 
-    setIsLoading(true)
-    setError(null)
+    setIsLoading(true);
+    setError(null);
 
     try {
-      const chatListItem = chats.find((c) => c.id === chatId)
-      if (chatListItem) {
-        setCurrentChat(chatListItem)
-        
-        // Revert to direct Supabase query
-        const { data: fetchedMessages, error: msgError } = await supabase
-          .from('messages')
-          .select('*')
-          .eq('chat_id', chatId)
-          .order('created_at', { ascending: true })
-          
-        if (msgError) throw msgError
-        
-        // Ensure fetched messages conform to the Message type, especially the 'role'
-        // Use the refined Message type from chatService
-        const correctlyTypedMessages = (fetchedMessages || []).map(msg => ({
+      // Get messages from Supabase
+      const { data: messages, error } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('chat_id', chatId)
+        .order('created_at', { ascending: true });
+
+      if (error) throw error;
+
+      // Update current chat
+      const selectedChat = chats.find(c => c.id === chatId);
+      if (selectedChat) {
+        setCurrentChat(selectedChat);
+        // Ensure messages are properly typed and sorted
+        const typedMessages = messages.map(msg => ({
           ...msg,
-          // Explicitly cast or validate the role
-          role: msg.role === 'user' || msg.role === 'assistant' 
-                ? msg.role 
-                : 'assistant', // Default to assistant if role is invalid/unexpected
-        })) as Message[]; // Cast the entire array to Message[]
+          role: msg.role === 'user' || msg.role === 'assistant' ? msg.role : 'assistant',
+          created_at: msg.created_at || new Date().toISOString()
+        })) as Message[];
         
-        const sortedMessages = correctlyTypedMessages.sort((a, b) => 
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        )
-        setMessages(sortedMessages) // Set state with correctly typed messages
+        setMessages(typedMessages);
       } else {
-         setCurrentChat(null)
-         setMessages([])
-         toast({
-           title: "Chat not found",
-           description: "The selected chat may have been deleted.",
-           status: "warning",
-           duration: 3000,
-           isClosable: true,
-         })
+        throw new Error('Selected chat not found');
       }
-    } catch (err) { 
-        setError(err instanceof Error ? err : new Error('Failed to load messages'));
-        console.error('Error loading messages:', err);
-        toast({
-            title: "Error Loading Chat",
-            description: err instanceof Error ? err.message : "Could not load the chat messages.",
-            status: "error",
-            duration: 3000,
-            isClosable: true,
-        });
-    } finally { 
-        setIsLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err : new Error('Failed to load messages'));
+      console.error('Error loading messages:', err);
+      toast({
+        title: "Error Loading Chat",
+        description: err instanceof Error ? err.message : "Could not load the chat messages.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }
+  };
 
   const createNewChat = async (title: string = "New Chat", initialMessage?: string): Promise<Chat | null> => {
     if (!user?.id) return null;
@@ -236,146 +222,111 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   const sendMessage = async (content: string, chatIdToSendTo: string) => {
     if (!user?.id) {
-      console.error("Cannot send message: User not logged in.")
+      console.error("Cannot send message: User not logged in.");
       toast({
         title: "Authentication Error",
         description: "User not logged in.",
         status: "error",
         duration: 3000,
         isClosable: true,
-      })
-      return
+      });
+      return;
     }
-    
+
+    // Create user message
     const userMessage: Message = {
-      id: crypto.randomUUID(), // Temporary ID for UI
+      id: crypto.randomUUID(),
       chat_id: chatIdToSendTo,
       role: 'user',
       content: content,
       created_at: new Date().toISOString(),
     };
-    setMessages((prev) => [...prev, userMessage]);
 
-    // Optimistic timestamp update
+    // Optimistically add user message to state
+    setMessages(prev => [...prev, userMessage]);
+
+    // Update chat timestamp optimistically
     setChats(prevChats => 
-        prevChats.map(c => 
-            c.id === chatIdToSendTo ? { ...c, updated_at: new Date().toISOString() } : c
-        ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+      prevChats.map(c => 
+        c.id === chatIdToSendTo 
+          ? { ...c, updated_at: new Date().toISOString() } 
+          : c
+      ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
     );
 
-    setIsLoading(true); // Indicate loading for assistant response
+    setIsLoading(true);
     setError(null);
-    
-    // Add placeholder for assistant message for streaming
-    const assistantMessageId = crypto.randomUUID();
-    const assistantPlaceholder: Message = {
-      id: assistantMessageId,
-      chat_id: chatIdToSendTo,
-      role: 'assistant',
-      content: '', // Start with empty content
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, assistantPlaceholder]);
-
-    // Abort controller for fetch cancellation
-    const abortController = new AbortController();
 
     try {
-      // Call the actual service/action to save the user message first
-      // We assume this happens quickly or we don't wait for it before calling AI
-      // Consider potential race conditions if saving is slow
-       try {
-           await chatService.createMessage(chatIdToSendTo, 'user', content);
-           // If successful, maybe update the userMessage state with the real ID from DB?
-           // setMessages((prev) => prev.map(m => m.id === userMessage.id ? savedUserMessage : m));
-           // For now, keep the optimistic message.
-       } catch (saveError) {
-           console.error("Failed to save user message to DB:", saveError);
-           // Optionally revert optimistic update or show specific error
-           toast({ title: "Error Saving Message", description: "Could not save your message.", status: "error" });
-           // Remove the optimistically added messages (user and placeholder assistant)
-           setMessages((prev) => prev.filter(m => m.id !== userMessage.id && m.id !== assistantMessageId));
-           setIsLoading(false);
-           return; // Stop processing if user message saving fails
-       }
-
-      // --- Call the backend API for streaming response --- 
+      // Send message to API with complete chat history for context
       const response = await fetch('/api/fractiverse', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: content,
-          chatId: chatIdToSendTo, 
-          userId: user.id, 
-          // Include history? API needs to handle this
+          chatId: chatIdToSendTo,
+          userId: user.id,
         }),
-        signal: abortController.signal,
       });
 
       if (!response.ok) {
-        const errorBody = await response.text();
-        throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to send message');
       }
 
-      if (!response.body) {
-        throw new Error("Response body is null");
-      }
-
-      // --- Process the stream --- 
-      const reader = response.body.getReader();
+      // Handle streaming response
+      const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let done = false;
-      let currentAssistantContent = '';
+      let assistantContent = '';
 
-      while (!done) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          currentAssistantContent += chunk;
+      // Create placeholder for assistant message
+      const assistantMessage: Message = {
+        id: crypto.randomUUID(),
+        chat_id: chatIdToSendTo,
+        role: 'assistant',
+        content: '',
+        created_at: new Date().toISOString(),
+      };
 
-          // Update the content of the placeholder message incrementally
-          setMessages((prev) =>
-            prev.map((msg) =>
-              msg.id === assistantMessageId
-                ? { ...msg, content: currentAssistantContent }
-                : msg
-            )
-          );
+      // Add empty assistant message to state
+      setMessages(prev => [...prev, assistantMessage]);
+
+      if (reader) {
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            assistantContent += chunk;
+            
+            // Update assistant message content as chunks arrive
+            setMessages(prev => 
+              prev.map(msg => 
+                msg.id === assistantMessage.id 
+                  ? { ...msg, content: assistantContent }
+                  : msg
+              )
+            );
+          }
+        } finally {
+          reader.releaseLock();
         }
       }
-      
-      // --- Stream finished --- 
-      // Optional: Save the complete assistant message to DB if API doesn't
-      // try {
-      //     await chatService.createMessage(chatIdToSendTo, 'assistant', currentAssistantContent);
-      // } catch (saveError) {
-      //     console.error("Failed to save assistant message:", saveError);
-      //     // Handle error - maybe show a warning
-      // }
-
-      // Update chat list timestamp again after assistant response is complete
-       setChats(prevChats => 
-          prevChats.map(c => 
-              c.id === chatIdToSendTo ? { ...c, updated_at: new Date().toISOString() } : c
-          ).sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-      );
 
     } catch (err) {
-      // Handle fetch errors (network, abort, API errors)
-      console.error('Error Sending Message / Processing Stream:', err);
-      if ((err as Error).name !== 'AbortError') { // Don't show error if user aborted
-        setError(err instanceof Error ? err : new Error('Failed to send message or process stream'));
-        toast({
-          title: "Error Processing Response",
-          description: err instanceof Error ? err.message : "Could not process the AI response.",
-          status: "error",
-          duration: 5000,
-          isClosable: true,
-        });
-      }
-      // Remove optimistic messages on error
-      setMessages((prev) => prev.filter(m => m.id !== userMessage.id && m.id !== assistantMessageId));
+      setError(err instanceof Error ? err : new Error('Failed to send message'));
+      console.error('Error sending message:', err);
+      toast({
+        title: "Error Sending Message",
+        description: err instanceof Error ? err.message : "Could not send your message.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
+      });
+
+      // Remove failed assistant message from state
+      setMessages(prev => prev.filter(msg => msg.role === 'user'));
     } finally {
       setIsLoading(false);
     }
