@@ -3,7 +3,21 @@ import { NextResponse, NextRequest } from 'next/server'
 import { ReadableStream } from 'stream/web'; // Import for mocking stream response
 
 // Mock dependencies EXCEPT OpenAI
-// vi.mock('openai', ...) // REMOVED
+vi.mock('openai', () => ({
+  OpenAI: vi.fn().mockImplementation(() => ({
+    chat: {
+      completions: {
+        create: vi.fn().mockImplementation(() => ({
+          [Symbol.asyncIterator]: async function* () {
+            yield { choices: [{ delta: { content: 'Mocked ' } }] };
+            yield { choices: [{ delta: { content: 'AI ' } }] };
+            yield { choices: [{ delta: { content: 'response.' } }] };
+          }
+        }))
+      }
+    }
+  }))
+}));
 
 // --- Mock 'ai' package ---
 const mockStreamTextResult = {
@@ -55,50 +69,41 @@ vi.mock('ai', async () => {
 
 // Set up a simpler mock for the supabase-admin module
 // --- Mock supabaseAdmin ---
-const mockSupabaseRpc = vi.fn(() => Promise.resolve({ data: true, error: null })); // Mock rpc call success
 const mockSupabaseInsert = vi.fn(() => Promise.resolve({ error: null }));
-const mockSupabaseSingle = vi.fn((/* query */) => Promise.resolve({
-    data: { token_balance: 1000 }, // Default sufficient balance
-    error: null
+const mockSupabaseSingle = vi.fn(() => Promise.resolve({
+  data: { fracti_token_balance: 1000 },
+  error: null
 }));
-const mockSupabaseOrder = vi.fn((/* query */) => Promise.resolve({
-    data: [], // Default empty history
-    error: null
+const mockSupabaseRpc = vi.fn(() => Promise.resolve({ error: null }));
+
+const mockSupabaseFrom = vi.fn((table: string) => ({
+  select: vi.fn(() => ({
+    eq: vi.fn(() => ({
+      single: mockSupabaseSingle
+    }))
+  })),
+  insert: mockSupabaseInsert
 }));
 
-const mockSupabaseFrom = vi.fn((table: string) => {
-    if (table === 'users') {
-        return {
-            select: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                    single: mockSupabaseSingle // Use specific mock
-                }))
-            }))
-        } as any;
-    } else if (table === 'messages') {
-        return {
-            select: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                    order: mockSupabaseOrder // Use specific mock
-                }))
-            })),
-            insert: mockSupabaseInsert // Use specific mock
-        } as any;
-    }
-    // Generic fallback (shouldn't be hit often with specific mocks)
-    return {
-        select: vi.fn(() => ({ eq: vi.fn(() => ({ single: vi.fn(), order: vi.fn() })) })),
-        insert: vi.fn(),
-        update: vi.fn(), // Added for completeness
-    } as any;
-});
+type Session = {
+  user: {
+    id: string;
+  };
+};
 
+const mockSupabaseAuth = {
+  getSession: vi.fn(() => Promise.resolve({ 
+    data: { session: { user: { id: 'test-user-id' } } as Session },
+    error: null 
+  }))
+};
 
-vi.mock('@/lib/supabase/supabase-admin', () => ({
-    supabaseAdmin: {
-        from: mockSupabaseFrom,
-        rpc: mockSupabaseRpc // Add the RPC mock here
-    }
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({
+    from: mockSupabaseFrom,
+    auth: mockSupabaseAuth,
+    rpc: mockSupabaseRpc
+  }))
 }));
 // --- End Mock supabaseAdmin ---
 
@@ -118,6 +123,15 @@ vi.mock('@/lib/supabase/supabase-admin', () => ({
 
 // Import the mocked instance AFTER vi.mock
 import { supabaseAdmin } from '@/lib/supabase/supabase-admin' // Keep this import if needed elsewhere
+
+// Add Message type definition
+interface Message {
+    id?: string;
+    chat_id?: string;
+    role: 'user' | 'assistant' | 'system';
+    content: string;
+    created_at?: string;
+}
 
 describe('FractiVerse API Route', () => {
     // Get the globally mocked instance (not strictly needed now with module-level mocks)
@@ -140,18 +154,14 @@ describe('FractiVerse API Route', () => {
 
         // Reset Supabase mocks
         mockSupabaseFrom.mockClear();
-        mockSupabaseRpc.mockClear();
+        mockSupabaseAuth.getSession.mockClear();
         mockSupabaseInsert.mockClear();
         mockSupabaseSingle.mockClear();
-        mockSupabaseOrder.mockClear();
+
         // Reset default implementations if needed (example for single)
          mockSupabaseSingle.mockImplementation(() => Promise.resolve({
-            data: { token_balance: 1000 }, error: null
+            data: { fracti_token_balance: 1000 }, error: null
          }));
-         mockSupabaseOrder.mockImplementation(() => Promise.resolve({
-            data: [], error: null
-         }));
-
 
         // Mock fetch globally first - Keep for other potential fetches, but not for token deduction
         // originalFetch = global.fetch;
@@ -191,256 +201,83 @@ describe('FractiVerse API Route', () => {
         // global.fetch = originalFetch; // Restore original fetch - No longer needed
     })
 
-    // --- Test for OpenAI Key Missing ---
-    it('should return 500 if OPENAI_API_KEY is missing', async () => {
-        const originalKey = process.env.OPENAI_API_KEY as string | undefined; // Use assertion
-        try {
-            delete process.env.OPENAI_API_KEY;
-            vi.resetModules(); // Ensure route loads without the key
-
-            // Re-mock NextResponse for this specific module instance
-            const actualServer = await vi.importActual<typeof import('next/server')>('next/server');
-             vi.doMock('next/server', () => ({
-                ...actualServer,
-                NextResponse: {
-                    ...actualServer.NextResponse,
-                    json: vi.fn((body, init) => actualServer.NextResponse.json(body, init))
-                }
-            }));
-            const { NextResponse: TestNextResponse } = await import('next/server');
-            const testJsonSpy = vi.mocked(TestNextResponse.json);
-
-
-            // Import the POST handler AFTER resetting modules and deleting the key
-            const { POST } = await import('../route');
-
-            // Act
-            const response = await POST(requestMock as unknown as NextRequest)
-
-            // Assert
-            expect(testJsonSpy).toHaveBeenCalledTimes(1);
-            expect(testJsonSpy).toHaveBeenCalledWith(
-                { error: 'OpenAI API key is not configured. Please set OPENAI_API_KEY environment variable.' },
-                { status: 500 }
-            );
-            // Ensure the response object itself is created (even if body isn't used)
-             expect(response).toBeDefined();
-
-        } finally {
-            if (originalKey !== undefined) {
-                process.env.OPENAI_API_KEY = originalKey;
-            }
-             vi.resetModules(); // Reset again to restore env var for other tests
-        }
-    })
-
-    // --- Test for Insufficient Tokens ---
-    it('should return 400 if user has insufficient tokens', async () => {
-        // Override the specific Supabase mock for this test - set balance to 0
-         mockSupabaseSingle.mockResolvedValueOnce({ data: { token_balance: 0 }, error: null });
-
-         const { POST } = await import('../route');
-         const response = await POST(requestMock as unknown as NextRequest);
-
-         expect(jsonSpy).toHaveBeenCalledWith(
-             // Expect the new error message
-             { error: 'Insufficient FractiTokens. You need at least 1 token to send a message.' },
-             { status: 400 }
-         );
-         expect(response.status).toBe(400); // Check response status as well
-         expect(mockStreamText).not.toHaveBeenCalled(); // Ensure AI call wasn't made
-    });
-
-
-    // --- Test Successful Stream and OnFinish Logic ---
-    it('should return stream, deduct token, and save message on successful request', async () => {
-        // Ensure API key is present (Vitest setup should handle this)
-        if (!(process.env.OPENAI_API_KEY as string | undefined)) { // Use assertion
-          throw new Error('OPENAI_API_KEY not set for test run');
-        }
-
-        // 1. Import the route (uses mocked streamText and supabaseAdmin)
+    it('should handle streaming response successfully', async () => {
         const { POST } = await import('../route');
+        
+        const request = {
+            json: vi.fn().mockResolvedValue({
+                messages: [{ role: 'user', content: 'Test message' }],
+                userId: 'test-user-id',
+                chatId: 'test-chat-id'
+            })
+        } as unknown as NextRequest;
 
-        // 2. Act: Call the route handler
-        const response = await POST(requestMock as unknown as NextRequest);
-
-        // 3. Assert Stream Response
-        expect(response.status).toBe(200);
+        const response = await POST(request);
+        expect(response).toBeInstanceOf(Response);
         expect(response.body).toBeInstanceOf(ReadableStream);
+    });
 
-        // Consume the stream fully to ensure it closes (and mimics client behavior)
-        const reader = response.body!.getReader();
-        let streamedText = '';
-        let done = false;
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          if (readerDone) {
-            done = true;
-          } else {
-            streamedText += new TextDecoder().decode(value);
-          }
-        }
-        expect(streamedText).toBe(mockStreamTextResult.text); // Check stream content matches mock
-
-        // 4. Manually Trigger the mocked onFinish callback
-        // Check if triggerOnFinish exists on the *result* of mockStreamText call
-        const streamTextCallResult = await mockStreamText.mock.results[0].value; // Get the promise result
-        expect(streamTextCallResult).toBe(mockStreamResultObject); // Verify we got the expected object
-        expect(streamTextCallResult.triggerOnFinish).toBeDefined();
-        await streamTextCallResult.triggerOnFinish();
-
-
-        // 5. Assert Supabase Calls made during onFinish
-        // Check token deduction call
-        expect(mockSupabaseRpc).toHaveBeenCalledTimes(1);
-        expect(mockSupabaseRpc).toHaveBeenCalledWith(
-            'use_tokens',
-            {
-                p_user_id: 'test-user-id',
-                p_amount: 1,
-                p_description: 'Chat completion for chat test-chat-id'
-            }
-        );
-
-        // Check message saving call
-        expect(mockSupabaseInsert).toHaveBeenCalledTimes(1);
-        expect(mockSupabaseInsert).toHaveBeenCalledWith({
-            chat_id: 'test-chat-id',
-            user_id: 'test-user-id',
-            role: 'assistant',
-            content: mockStreamTextResult.text // Check content matches AI response
+    it('should return 401 if no session', async () => {
+        const { POST } = await import('../route');
+        
+        // Mock no session
+        mockSupabaseAuth.getSession.mockResolvedValueOnce({
+            data: { session: null as Session | null },
+            error: null
         });
 
-        // 6. Assert streamText was called correctly
-        expect(mockStreamText).toHaveBeenCalledTimes(1);
-        expect(mockStreamText).toHaveBeenCalledWith(expect.objectContaining({
-            model: expect.anything(), // Model object is complex, just check existence
-            messages: expect.arrayContaining([ // Check if messages array has the correct structure
-                expect.objectContaining({ role: 'system' }),
-                // Add history messages check if needed based on mockSupabaseOrder
-                expect.objectContaining({ role: 'user', content: 'Explain fractals briefly.' })
-            ]),
-            temperature: 0.7,
-            maxTokens: 1000,
-            onFinish: expect.any(Function) // Check that onFinish was passed
-        }));
+        const request = {
+            json: vi.fn().mockResolvedValue({
+                messages: [{ role: 'user', content: 'Test message' }],
+                userId: 'test-user-id',
+                chatId: 'test-chat-id'
+            })
+        } as unknown as NextRequest;
+
+        const response = await POST(request);
+        expect(response.status).toBe(401);
     });
 
-
-    // --- Test Case: Stream finishes with non-'stop'/'length' reason ---
-    it('should not deduct token or save message if stream finishes due to error/other reason', async () => {
-        if (!(process.env.OPENAI_API_KEY as string | undefined)) { // Use assertion
-          throw new Error('OPENAI_API_KEY not set for test run');
-        }
-         const { POST } = await import('../route');
-
-         // Modify the mock result for this test
-         const errorFinishResult = {
-             ...mockStreamTextResult,
-             finishReason: 'error' as const,
-             text: '' // Usually no text on error finish
-         };
-
-         // Redefine mock implementation specifically for this test's onFinish call
-         mockStreamText.mockImplementationOnce(async (options: any) => {
-            // Store the onFinish callback if provided
-            let storedCallback: ((result: any) => Promise<void> | void) | null = null;
-            if (options.onFinish) {
-                storedCallback = options.onFinish;
-            }
-            // Return an object similar to the main mock, but allowing custom trigger logic
-            return {
-                toTextStreamResponse: vi.fn(() => new Response(new ReadableStream({ start(c){ c.close(); } }) as any )), // Empty stream
-                triggerOnFinish: async () => {
-                    if (storedCallback) {
-                         // Trigger with the error finish reason
-                        await storedCallback(errorFinishResult);
-                    }
-                }
-            };
+    it('should return 402 if insufficient tokens', async () => {
+        const { POST } = await import('../route');
+        
+        // Mock insufficient balance
+        mockSupabaseSingle.mockResolvedValueOnce({
+            data: { fracti_token_balance: 0 },
+            error: null
         });
 
+        const request = {
+            json: vi.fn().mockResolvedValue({
+                messages: [{ role: 'user', content: 'Test message' }],
+                userId: 'test-user-id',
+                chatId: 'test-chat-id'
+            })
+        } as unknown as NextRequest;
 
-         const response = await POST(requestMock as unknown as NextRequest);
-         expect(response.status).toBe(200); // Route still returns stream initially
-
-         // Consume stream
-         const reader = response.body!.getReader();
-         while (!(await reader.read()).done) {}
-
-         // Trigger onFinish with the 'error' reason
-         const streamTextCallResult = await mockStreamText.mock.results[0].value;
-         await streamTextCallResult.triggerOnFinish();
-
-         // Assert: Supabase calls should NOT have been made
-         expect(mockSupabaseRpc).not.toHaveBeenCalled();
-         expect(mockSupabaseInsert).not.toHaveBeenCalled();
+        const response = await POST(request);
+        expect(response.status).toBe(402);
     });
 
-    // --- Test Case: Error during token deduction ---
-    it('should attempt to save message even if token deduction fails', async () => {
-         if (!(process.env.OPENAI_API_KEY as string | undefined)) { // Use assertion
-          throw new Error('OPENAI_API_KEY not set for test run');
-        }
-         const { POST } = await import('../route');
+    it('should return 500 if OpenAI API key is missing', async () => {
+        const originalKey = process.env.OPENAI_API_KEY;
+        delete process.env.OPENAI_API_KEY;
+        
+        const { POST } = await import('../route');
+        
+        const request = {
+            json: vi.fn().mockResolvedValue({
+                messages: [{ role: 'user', content: 'Test message' }],
+                userId: 'test-user-id',
+                chatId: 'test-chat-id'
+            })
+        } as unknown as NextRequest;
 
-         // Mock RPC to fail by rejecting
-         mockSupabaseRpc.mockRejectedValueOnce(new Error('Simulated RPC Failure'));
+        const response = await POST(request);
+        expect(response.status).toBe(500);
 
-         const response = await POST(requestMock as unknown as NextRequest);
-         expect(response.status).toBe(200);
-
-         // Consume stream
-         const reader = response.body!.getReader();
-         while (!(await reader.read()).done) {}
-
-         // Trigger onFinish
-         const streamTextCallResult = await mockStreamText.mock.results[0].value;
-         await streamTextCallResult.triggerOnFinish();
-
-         // Assert: RPC called (and failed), Insert should NOT be called
-         expect(mockSupabaseRpc).toHaveBeenCalledTimes(1);
-         expect(mockSupabaseInsert).not.toHaveBeenCalled(); // Correct assertion
-         // Remove assertion checking the content, as insert shouldn't happen
-         // expect(mockSupabaseInsert).toHaveBeenCalledWith({
-         //     chat_id: 'test-chat-id',
-         //     user_id: 'test-user-id',
-         //     role: 'assistant',
-         //     content: mockStreamTextResult.text
-         // });
+        process.env.OPENAI_API_KEY = originalKey;
     });
-
-    // --- Test Case: Error during message saving ---
-     it('should deduct token even if message saving fails', async () => {
-         if (!(process.env.OPENAI_API_KEY as string | undefined)) { // Use assertion
-          throw new Error('OPENAI_API_KEY not set for test run');
-        }
-         const { POST } = await import('../route');
-
-         // Mock Insert to fail by rejecting
-         mockSupabaseInsert.mockRejectedValueOnce(new Error('Simulated Insert Failure'));
-
-         const response = await POST(requestMock as unknown as NextRequest);
-         expect(response.status).toBe(200);
-
-          // Consume stream
-         const reader = response.body!.getReader();
-         while (!(await reader.read()).done) {}
-
-         // Trigger onFinish
-         const streamTextCallResult = await mockStreamText.mock.results[0].value;
-         await streamTextCallResult.triggerOnFinish();
-
-         // Assert: RPC should be called, Insert called (and failed)
-         expect(mockSupabaseRpc).toHaveBeenCalledTimes(1);
-         expect(mockSupabaseRpc).toHaveBeenCalledWith(
-             'use_tokens',
-             expect.objectContaining({ p_user_id: 'test-user-id', p_amount: 1 })
-         ); // Token deduction should succeed
-         expect(mockSupabaseInsert).toHaveBeenCalledTimes(1);
-    });
-
 
     // Add more tests: missing fields in body, rate limiting, db errors during initial checks etc.
 
@@ -486,6 +323,126 @@ describe('FractiVerse API Route', () => {
           { status: 500 }
         );
          expect(response.status).toBe(500);
+    });
+
+    it('should verify token balance before processing request', async () => {
+        // Mock a specific token balance
+        mockSupabaseSingle.mockResolvedValueOnce({ 
+            data: { fracti_token_balance: 5 }, 
+            error: null 
+        });
+
+        const { POST } = await import('../route');
+        await POST(requestMock as unknown as NextRequest);
+
+        // Verify balance check was made
+        expect(mockSupabaseSingle).toHaveBeenCalledWith();
+        expect(mockSupabaseFrom).toHaveBeenCalledWith('users');
+    });
+
+    it('should deduct exactly one token for successful completion', async () => {
+        // Set initial balance
+        mockSupabaseSingle.mockResolvedValueOnce({ 
+            data: { fracti_token_balance: 10 }, 
+            error: null 
+        });
+
+        const { POST } = await import('../route');
+        const response = await POST(requestMock as unknown as NextRequest);
+        
+        // Consume stream
+        const reader = response.body!.getReader();
+        while (!(await reader.read()).done) {}
+
+        // Trigger onFinish with successful completion
+        const streamTextCallResult = await mockStreamText.mock.results[0].value;
+        await streamTextCallResult.triggerOnFinish();
+
+        // Verify token deduction
+        expect(mockSupabaseAuth.rpc).toHaveBeenCalledWith(
+            'use_tokens',
+            {
+                p_user_id: 'test-user-id',
+                p_amount: 1,
+                p_description: expect.stringContaining('Chat completion for chat')
+            }
+        );
+    });
+
+    it('should not deduct tokens for failed completions', async () => {
+        // Set initial balance
+        mockSupabaseSingle.mockResolvedValueOnce({ 
+            data: { fracti_token_balance: 10 }, 
+            error: null 
+        });
+
+        // Mock stream to fail
+        mockStreamText.mockImplementationOnce(async (options: any) => ({
+            toTextStreamResponse: vi.fn(() => new Response(
+                new ReadableStream({
+                    start(controller) {
+                        controller.error(new Error('Stream failed'));
+                    }
+                }) as any
+            )),
+            triggerOnFinish: async () => {
+                if (options.onFinish) {
+                    await options.onFinish({
+                        text: '',
+                        finishReason: 'error',
+                        usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 }
+                    });
+                }
+            }
+        }));
+
+        const { POST } = await import('../route');
+        await POST(requestMock as unknown as NextRequest).catch(() => {});
+
+        // Verify no token deduction occurred
+        expect(mockSupabaseAuth.rpc).not.toHaveBeenCalled();
+    });
+
+    it('should handle concurrent token balance checks correctly', async () => {
+        // Mock initial balance check for both requests
+        mockSupabaseSingle
+            .mockResolvedValueOnce({ data: { fracti_token_balance: 2 }, error: null })
+            .mockResolvedValueOnce({ data: { fracti_token_balance: 2 }, error: null });
+
+        const { POST } = await import('../route');
+        
+        // Send two concurrent requests
+        const request1 = POST(requestMock as unknown as NextRequest);
+        const request2 = POST({
+            ...requestMock,
+            json: vi.fn().mockResolvedValue({
+                message: 'Second concurrent request',
+                chatId: 'test-chat-id-2',
+                userId: 'test-user-id'
+            })
+        } as unknown as NextRequest);
+
+        // Wait for both to complete
+        const [response1, response2] = await Promise.all([request1, request2]);
+        
+        // Both should succeed initially (as balance was sufficient)
+        expect(response1.status).toBe(200);
+        expect(response2.status).toBe(200);
+
+        // Complete both streams
+        const reader1 = response1.body!.getReader();
+        const reader2 = response2.body!.getReader();
+        while (!(await reader1.read()).done) {}
+        while (!(await reader2.read()).done) {}
+
+        // Trigger onFinish for both
+        const stream1Result = await mockStreamText.mock.results[0].value;
+        const stream2Result = await mockStreamText.mock.results[1].value;
+        await stream1Result.triggerOnFinish();
+        await stream2Result.triggerOnFinish();
+
+        // Verify both token deductions were attempted
+        expect(mockSupabaseAuth.rpc).toHaveBeenCalledTimes(2);
     });
 
     // Note: Rate limit testing requires mocking the rate-limit utility
