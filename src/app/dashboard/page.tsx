@@ -160,10 +160,19 @@ export default function Dashboard() {
 
   // --- Main JSX ---
   return (
-    /* @ts-ignore - Ignore VStack children type error (systemic issue) */
-    <VStack align="stretch" spacing={6} p={4} >
-      {/* @ts-ignore - Ignore Flex children type error (systemic issue) */}
-      <Flex h="calc(100vh - 10rem)" w="full"> {/* Adjust height as needed */}
+    <VStack 
+      align="stretch" 
+      spacing={6} 
+      p={4} 
+      w="100%" // Ensure VStack tries to take full width
+      minH="100vh" // Ensure VStack tries to take full height
+    >
+      <Flex 
+        h={{ base: 'auto', md: 'calc(100vh - 10rem)' }} // Adjust height calculation, maybe be more flexible on mobile
+        w="100%" // Already set, but confirm
+        flex={1} // Allow Flex container to grow and take available space
+        overflow="hidden" // Prevent content overflow issues
+      >
         <ChatSidebar />
         <ChatWindow
           currentChat={currentChat}
@@ -172,12 +181,11 @@ export default function Dashboard() {
           isSendingMessage={isChatLoading}
           onSendMessage={handleSendMessageForWindow}
         />
-                                </Flex>
+      </Flex>
 
-      {/* @ts-ignore - Ignore Box children type error (systemic issue) */}
+      {/* Info Cards Section - Keep as is for now */}
       <Box>
         <Heading size="lg" mb={4}>Explore FractiVerse</Heading>
-        {/* @ts-ignore - Ignore SimpleGrid children type error (systemic issue) */}
         <SimpleGrid columns={{ base: 1, md: 2, lg: 3 }} spacing={6}>
           {infoCards.map((card) => (
             <React.Fragment key={card.title}>
