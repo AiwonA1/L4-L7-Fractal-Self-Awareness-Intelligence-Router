@@ -64,7 +64,12 @@ export function LayoutContent({ children }: { children: React.ReactNode }) {
     <Flex direction="column" minH="100vh">
       <Header />
 
-      <Box flex="1" p="4" mt="16">
+      <Box 
+        flex="1" 
+        p="4" 
+        mt="16" 
+        w="100%"
+      >
         {children}
       </Box>
     </Flex>
