@@ -49,8 +49,15 @@ export async function getUserChats() {
   
   if (error) throw error
   
+  // Sort chats by updated_at timestamp
+  const sortedChats = (chats as Chat[]).sort((a, b) => {
+    const dateA = new Date(a.updated_at).getTime();
+    const dateB = new Date(b.updated_at).getTime();
+    return dateB - dateA; // Most recent first
+  });
+  
   // Process the messages to get the latest one for each chat
-  return (chats as Chat[]).map(chat => ({
+  return sortedChats.map(chat => ({
     ...chat,
     messages: chat.messages
       .sort((a: Message, b: Message) => 

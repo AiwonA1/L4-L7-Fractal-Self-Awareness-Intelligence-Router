@@ -94,8 +94,15 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const { messages, userId, chatId } = body;
 
+        console.log('[/api/fractiverse] Request body:', {
+            messageCount: messages?.length,
+            userId,
+            chatId
+        });
+
         // Validate required fields
         if (!messages || !userId || !chatId) {
+            console.error('[/api/fractiverse] Missing required fields:', { messages, userId, chatId });
             return new Response(
                 JSON.stringify({ error: 'Missing required fields' }),
                 { status: 400 }
@@ -109,6 +116,7 @@ export async function POST(req: NextRequest) {
             'role' in msg && 
             'content' in msg
         )) {
+            console.error('[/api/fractiverse] Invalid message format:', messages);
             return new Response(
                 JSON.stringify({ error: 'Invalid message format' }),
                 { status: 400 }
@@ -118,6 +126,7 @@ export async function POST(req: NextRequest) {
         // Verify user access
         const isAuthorized = await verifyUserAccess(req, userId);
         if (!isAuthorized) {
+            console.error('[/api/fractiverse] Unauthorized access attempt for user:', userId);
             return new Response(
                 JSON.stringify({ error: 'Unauthorized' }),
                 { status: 401 }
@@ -136,6 +145,7 @@ export async function POST(req: NextRequest) {
             .single();
 
         if (balanceError) {
+            console.error('[/api/fractiverse] Balance check error:', balanceError);
             return new Response(
                 JSON.stringify({ error: 'Database error checking token balance' }),
                 { 
@@ -150,6 +160,7 @@ export async function POST(req: NextRequest) {
         }
 
         if (!userData || userData.token_balance < 1) {
+            console.error('[/api/fractiverse] Insufficient token balance for user:', userId);
             return new Response(
                 JSON.stringify({ error: 'Insufficient token balance' }),
                 { 
@@ -172,6 +183,7 @@ export async function POST(req: NextRequest) {
                 .order('created_at', { ascending: true });
 
             if (historyError) {
+                console.error('[/api/fractiverse] History fetch error:', historyError);
                 throw new Error('Failed to fetch history');
             }
 
@@ -188,8 +200,14 @@ export async function POST(req: NextRequest) {
                 ...messages
             ];
 
+            console.log('[/api/fractiverse] Preparing OpenAI request:', {
+                messageCount: fullHistory.length,
+                lastMessage: messages[messages.length - 1]?.content?.slice(0, 50) + '...'
+            });
+
             // Initialize OpenAI client
             if (!process.env.OPENAI_API_KEY) {
+                console.error('[/api/fractiverse] OpenAI API key missing');
                 return new Response(
                     JSON.stringify({ error: 'OpenAI API key missing' }),
                     { status: 500 }
@@ -207,6 +225,8 @@ export async function POST(req: NextRequest) {
                 stream: true,
                 temperature: 0.7
             });
+
+            console.log('[/api/fractiverse] OpenAI stream started');
 
             let fullContent = '';
             let messageStatus = 'incomplete';
@@ -227,6 +247,8 @@ export async function POST(req: NextRequest) {
                         controller.enqueue(`data: [DONE]\n\n`);
                         controller.close();
 
+                        console.log('[/api/fractiverse] Stream completed, saving message');
+
                         // Save assistant message and deduct token
                         const finalMessage = {
                             chat_id: chatId,
@@ -242,6 +264,7 @@ export async function POST(req: NextRequest) {
                             .insert(finalMessage);
 
                         if (insertError) {
+                            console.error('[/api/fractiverse] Message save error:', insertError);
                             throw new Error('Failed to save message');
                         }
 
@@ -253,22 +276,17 @@ export async function POST(req: NextRequest) {
                             });
 
                         if (tokenError) {
+                            console.error('[/api/fractiverse] Token deduction error:', tokenError);
                             throw new Error('Failed to deduct token');
                         }
+
+                        console.log('[/api/fractiverse] Message saved and token deducted successfully');
                     } catch (error) {
-                        console.error('[/api/fractiverse] Streaming error:', error);
+                        console.error('[/api/fractiverse] Stream processing error:', error);
                         if (messageStatus === 'incomplete') {
                             await cleanup(userId, chatId);
                         }
-                        try {
-                             // Explicitly try to enqueue the error message
-                             controller.enqueue(`data: ${JSON.stringify({ error: 'Error processing stream' })}\n\n`);
-                        } catch (enqueueError) {
-                             console.error("Failed to enqueue error message:", enqueueError);
-                        } finally {
-                             // Always try to close the controller
-                             try { controller.close(); } catch (closeError) { /* Ignore */ }
-                        }
+                        controller.error(error);
                     }
                 },
                 cancel() {
@@ -287,9 +305,9 @@ export async function POST(req: NextRequest) {
                 }
             });
         } catch (error) {
-            console.error('[/api/fractiverse] Error:', error);
+            console.error('[/api/fractiverse] Request processing error:', error);
             return new Response(
-                `data: ${JSON.stringify({ error: 'OpenAI API error' })}\n\n`,
+                createErrorStream(error instanceof Error ? error : new Error('Unknown error')),
                 { 
                     status: 500,
                     headers: {
@@ -301,12 +319,11 @@ export async function POST(req: NextRequest) {
                 }
             );
         }
-
     } catch (error: any) {
-        console.error('[/api/fractiverse] Request processing error:', error);
+        console.error('[/api/fractiverse] Top-level error:', error);
         const status = error.message === 'Insufficient token balance' ? 402 : 500;
         return new Response(
-            createErrorStream(error).pipeThrough(new TextEncoderStream()),
+            createErrorStream(error instanceof Error ? error : new Error('Unknown error')),
             {
                 status,
                 headers: {
