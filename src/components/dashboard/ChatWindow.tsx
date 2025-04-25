@@ -8,18 +8,12 @@ import {
   Spinner,
   Center,
   useColorModeValue,
+  type FlexProps,
 } from '@chakra-ui/react';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { useChat } from '@/app/context/ChatContext';
-
-// Re-define or import the Message interface if needed
-interface Message {
-  id: string;
-  content: string;
-  role: 'user' | 'assistant';
-  created_at?: string | number | Date;
-}
+import type { Message } from '@/app/services/chat';
 
 // Define the Chat interface (simplified, based on context)
 interface Chat {
@@ -94,12 +88,25 @@ export function ChatWindow({
       h="full"
       bg={bgColor}
       position="relative"
+      maxH="100vh"
     >
       <Flex
         flex={1}
-        direction="column"
+        direction="column-reverse"
         overflowY="auto"
         p={4}
+        sx={{
+          '&::-webkit-scrollbar': {
+            width: '4px',
+          },
+          '&::-webkit-scrollbar-track': {
+            width: '6px',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: 'gray.200',
+            borderRadius: '24px',
+          },
+        }}
       >
         {content}
       </Flex>
@@ -108,6 +115,10 @@ export function ChatWindow({
         borderTopWidth="1px"
         borderColor="gray.200"
         bg={bgColor}
+        position="sticky"
+        bottom={0}
+        width="100%"
+        zIndex={1}
       >
         <MessageInput
           onSendMessage={handleSendMessage}

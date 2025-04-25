@@ -217,17 +217,37 @@ export async function deleteChat(chatId: string): Promise<boolean> {
     throw new Error('Chat not found or access denied')
   }
 
-  // If verification passes, proceed with deletion
-  const { error } = await supabase
-    .from('chats')
-    .delete() // Delete first
-    .eq('id', chatId) // Then filter
+  // Delete messages first
+  const { error: messagesError } = await supabase
+    .from('messages')
+    .delete()
+    .eq('chat_id', chatId)
 
-  if (error) {
-    console.error('Error deleting chat:', error)
-    throw new Error(`Failed to delete chat: ${error.message}`)
+  if (messagesError) {
+    console.error('Error deleting messages:', messagesError)
+    throw new Error(`Failed to delete messages: ${messagesError.message}`)
   }
 
-  revalidatePath('/dashboard') // Revalidate dashboard page
+  // Then delete the chat
+  const { error: chatError } = await supabase
+    .from('chats')
+    .delete()
+    .eq('id', chatId)
+    .eq('user_id', userId)
+
+  if (chatError) {
+    console.error('Error deleting chat:', chatError)
+    throw new Error(`Failed to delete chat: ${chatError.message}`)
+  }
+
+  // Revalidate all relevant paths
+  try {
+    revalidatePath('/dashboard')
+    revalidatePath('/chat/[id]')
+    revalidatePath(`/chat/${chatId}`)
+  } catch (e) {
+    console.warn('Failed to revalidate some paths:', e)
+  }
+
   return true
 } 
