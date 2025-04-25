@@ -105,7 +105,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
   // Wrap sendMessage in useCallback
   const sendMessage = useCallback(async (content: string, chatId: string) => {
+    const debugPrefix = '[ChatContext]';
+    console.log(`${debugPrefix} sendMessage called with chatId:`, chatId);
+    
     if (!user?.id) {
+      console.error(`${debugPrefix} No user ID found`);
       toast({
         title: 'Authentication Error',
         description: 'Please log in to send messages',
@@ -126,6 +130,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     // Declare assistantMessageId here to be accessible in catch block
     let assistantMessageId: string | null = null; 
 
+    console.log(`${debugPrefix} Adding user message to state:`, {
+      messageId: userMessage.id,
+      content: content.slice(0, 100) + (content.length > 100 ? '...' : '')
+    });
+
     // Add user message first
     setState(prev => ({
       ...prev,
@@ -134,7 +143,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }))
 
     const requestBody = {
-      // Construct body using the state *before* the API call
       messages: [...state.messages, userMessage].map(msg => ({
         role: msg.role,
         content: msg.content
@@ -143,43 +151,76 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       chatId
     };
 
+    console.log(`${debugPrefix} Getting session token...`);
+    // Get the session token
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.error(`${debugPrefix} No valid session token found`);
+      throw new Error('No valid session token found');
+    }
+    console.log(`${debugPrefix} Session token retrieved successfully`);
+
     const fetchOptions = {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(requestBody),
+      credentials: 'include' as RequestCredentials
     };
 
-    // Log the options just before fetch
-    console.log('[ChatContext] Sending message. Fetch options:', fetchOptions);
-    console.log('[ChatContext] Sending message. Body:', requestBody); // Log body separately for clarity
+    // Log the options just before fetch (safely redacting auth token)
+    console.log(`${debugPrefix} Sending message with options:`, {
+      ...fetchOptions,
+      headers: {
+        ...fetchOptions.headers,
+        Authorization: 'Bearer [REDACTED]'
+      }
+    });
+    console.log(`${debugPrefix} Request body:`, {
+      ...requestBody,
+      messages: requestBody.messages.map(m => ({
+        role: m.role,
+        contentLength: m.content.length,
+        preview: m.content.slice(0, 50) + '...'
+      }))
+    });
 
     try {
-      const response = await fetch('/api/fractiverse', { 
-        ...fetchOptions, 
-        credentials: 'include'
-      });
+      console.log(`${debugPrefix} Initiating fetch to /api/fractiverse`);
+      const response = await fetch('/api/fractiverse', fetchOptions);
 
       // Check response status *before* trying to read body
       if (!response.ok) { 
+        console.error(`${debugPrefix} Response not OK:`, response.status);
         // Try to get error details from response body
         let errorDetails = 'Failed to send message';
         try {
             const errorData = await response.json();
             errorDetails = errorData.error || errorDetails;
+            console.error(`${debugPrefix} Error details:`, errorDetails);
         } catch (parseError) {
+            console.error(`${debugPrefix} Failed to parse error response:`, parseError);
             // Ignore if parsing fails, stick to default message
         }
         throw new Error(errorDetails); // Throw error with details
       }
 
+      console.log(`${debugPrefix} Response OK, getting reader`);
       const reader = response.body?.getReader()
-      if (!reader) throw new Error('No response body')
+      if (!reader) {
+        console.error(`${debugPrefix} No response body reader available`);
+        throw new Error('No response body')
+      }
 
       let assistantMessage = ''
       // Assign the ID here
       assistantMessageId = crypto.randomUUID(); 
+      console.log(`${debugPrefix} Created assistant message ID:`, assistantMessageId);
 
       // Initial streaming message placeholder
+      console.log(`${debugPrefix} Adding initial empty assistant message to state`);
       setState(prev => ({
         ...prev,
         messages: [
@@ -194,12 +235,22 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         ]
       }))
 
+      let chunkCount = 0;
+      console.log(`${debugPrefix} Starting to read response stream`);
       while (true) {
         const { done, value } = await reader.read()
-        if (done) break
+        if (done) {
+          console.log(`${debugPrefix} Stream complete after ${chunkCount} chunks`);
+          break;
+        }
         
+        chunkCount++;
         const chunk = new TextDecoder().decode(value)
         assistantMessage += chunk
+        
+        if (chunkCount % 10 === 0) {
+          console.log(`${debugPrefix} Processed ${chunkCount} chunks. Current message length: ${assistantMessage.length}`);
+        }
         
         // Update streaming assistant message content
         setState(prev => ({
@@ -211,6 +262,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
 
       // Final message state update (redundant if last update covers it, but safe)
+      console.log(`${debugPrefix} Finalizing message state. Final length:`, assistantMessage.length);
       setState(prev => ({
         ...prev,
         isLoading: false,
@@ -221,6 +273,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }))
 
     } catch (error) {
+      console.error(`${debugPrefix} Error in sendMessage:`, error);
       // Now using the error message from the backend if available
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       toast({
@@ -230,6 +283,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         duration: 5000 // Longer duration for errors
       })
       // Remove optimistic user message and streaming assistant message on error
+      console.log(`${debugPrefix} Cleaning up messages after error`);
       setState(prev => ({
         ...prev, 
         isLoading: false, 

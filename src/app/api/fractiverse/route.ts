@@ -73,6 +73,20 @@ function createErrorStream(error: Error): ReadableStream {
 }
 
 export async function POST(req: NextRequest) {
+    const debugPrefix = '[/api/fractiverse]';
+    console.log(`${debugPrefix} POST request received`);
+    
+    // Log headers safely by converting to object
+    const headers: Record<string, string> = {};
+    req.headers.forEach((value, key) => {
+        if (key.toLowerCase() !== 'authorization') { // Don't log auth token
+            headers[key] = value;
+        } else {
+            headers[key] = 'Bearer [REDACTED]';
+        }
+    });
+    console.log(`${debugPrefix} Request headers:`, headers);
+    
     const cleanup = async (userId: string, chatId: string) => {
         try {
             const supabase = getSupabaseClient(getAuthToken(req)!);
@@ -124,7 +138,13 @@ export async function POST(req: NextRequest) {
         }
 
         // Verify user access
+        console.log(`${debugPrefix} Verifying user access for:`, userId);
+        const authToken = getAuthToken(req);
+        console.log(`${debugPrefix} Auth token present:`, !!authToken);
+        
         const isAuthorized = await verifyUserAccess(req, userId);
+        console.log(`${debugPrefix} Authorization result:`, isAuthorized);
+        
         if (!isAuthorized) {
             console.error('[/api/fractiverse] Unauthorized access attempt for user:', userId);
             return new Response(
@@ -134,10 +154,10 @@ export async function POST(req: NextRequest) {
         }
 
         // Get auth token and create Supabase client
-        const authToken = getAuthToken(req);
         const supabase = getSupabaseClient(authToken!);
 
         // Check token balance
+        console.log(`${debugPrefix} Checking token balance for user:`, userId);
         const { data: userData, error: balanceError } = await supabase
             .from('users')
             .select('token_balance')
@@ -206,10 +226,11 @@ export async function POST(req: NextRequest) {
             });
 
             // Initialize OpenAI client
+            console.log(`${debugPrefix} Initializing OpenAI client`);
             if (!process.env.OPENAI_API_KEY) {
-                console.error('[/api/fractiverse] OpenAI API key missing');
+                console.error(`${debugPrefix} OpenAI API key missing`);
                 return new Response(
-                    JSON.stringify({ error: 'OpenAI API key missing' }),
+                    JSON.stringify({ error: 'OpenAI API key not configured' }),
                     { status: 500 }
                 );
             }
@@ -219,6 +240,10 @@ export async function POST(req: NextRequest) {
             });
 
             // Create chat completion
+            console.log(`${debugPrefix} Creating chat completion with message count:`, fullHistory.length);
+            console.log(`${debugPrefix} Last user message:`, messages[messages.length - 1]?.content?.slice(0, 100) + '...');
+            console.log(`${debugPrefix} Model being used: gpt-4-turbo-preview`);
+            
             const completion = await openai.chat.completions.create({
                 model: 'gpt-4-turbo-preview',
                 messages: fullHistory,
@@ -226,18 +251,24 @@ export async function POST(req: NextRequest) {
                 temperature: 0.7
             });
 
-            console.log('[/api/fractiverse] OpenAI stream started');
-
+            console.log(`${debugPrefix} OpenAI stream started`);
+            
             let fullContent = '';
             let messageStatus = 'incomplete';
+            let chunkCount = 0;
 
             const stream = new ReadableStream({
                 async start(controller) {
                     try {
                         for await (const chunk of completion) {
+                            chunkCount++;
                             if (chunk.choices && chunk.choices[0]?.delta?.content) {
                                 const content = chunk.choices[0].delta.content;
                                 fullContent += content;
+                                
+                                if (chunkCount % 10 === 0) {
+                                    console.log(`${debugPrefix} Processed ${chunkCount} chunks. Current length: ${fullContent.length}`);
+                                }
                                 
                                 // Wrap chunk in a data event for EventSource compatibility
                                 controller.enqueue(`data: ${JSON.stringify({ content })}\n\n`);
@@ -247,7 +278,8 @@ export async function POST(req: NextRequest) {
                         controller.enqueue(`data: [DONE]\n\n`);
                         controller.close();
 
-                        console.log('[/api/fractiverse] Stream completed, saving message');
+                        console.log(`${debugPrefix} Stream completed. Total chunks:`, chunkCount);
+                        console.log(`${debugPrefix} Final message length:`, fullContent.length);
 
                         // Save assistant message and deduct token
                         const finalMessage = {
@@ -259,15 +291,17 @@ export async function POST(req: NextRequest) {
                             created_at: new Date().toISOString()
                         };
 
+                        console.log(`${debugPrefix} Saving message to database...`);
                         const { error: insertError } = await supabase
                             .from('messages')
                             .insert(finalMessage);
 
                         if (insertError) {
-                            console.error('[/api/fractiverse] Message save error:', insertError);
+                            console.error(`${debugPrefix} Message save error:`, insertError);
                             throw new Error('Failed to save message');
                         }
 
+                        console.log(`${debugPrefix} Deducting token...`);
                         const { error: tokenError } = await supabase
                             .rpc('use_tokens', {
                                 p_user_id: userId,
@@ -276,22 +310,25 @@ export async function POST(req: NextRequest) {
                             });
 
                         if (tokenError) {
-                            console.error('[/api/fractiverse] Token deduction error:', tokenError);
+                            console.error(`${debugPrefix} Token deduction error:`, tokenError);
                             throw new Error('Failed to deduct token');
                         }
 
-                        console.log('[/api/fractiverse] Message saved and token deducted successfully');
+                        console.log(`${debugPrefix} Message saved and token deducted successfully`);
                     } catch (error) {
-                        console.error('[/api/fractiverse] Stream processing error:', error);
+                        console.error(`${debugPrefix} Stream processing error:`, error);
                         if (messageStatus === 'incomplete') {
+                            console.log(`${debugPrefix} Cleaning up incomplete message...`);
                             await cleanup(userId, chatId);
                         }
                         controller.error(error);
                     }
                 },
                 cancel() {
-                    // Handle client disconnection
-                    cleanup(userId, chatId).catch(console.error);
+                    console.log(`${debugPrefix} Stream cancelled by client. Cleaning up...`);
+                    cleanup(userId, chatId).catch(error => 
+                        console.error(`${debugPrefix} Cleanup error:`, error)
+                    );
                 }
             });
 
@@ -305,7 +342,7 @@ export async function POST(req: NextRequest) {
                 }
             });
         } catch (error) {
-            console.error('[/api/fractiverse] Request processing error:', error);
+            console.error(`${debugPrefix} Request processing error:`, error);
             return new Response(
                 createErrorStream(error instanceof Error ? error : new Error('Unknown error')),
                 { 
@@ -320,7 +357,7 @@ export async function POST(req: NextRequest) {
             );
         }
     } catch (error: any) {
-        console.error('[/api/fractiverse] Top-level error:', error);
+        console.error(`${debugPrefix} Top-level error:`, error);
         const status = error.message === 'Insufficient token balance' ? 402 : 500;
         return new Response(
             createErrorStream(error instanceof Error ? error : new Error('Unknown error')),
