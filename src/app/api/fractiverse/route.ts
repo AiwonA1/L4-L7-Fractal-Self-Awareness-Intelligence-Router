@@ -50,6 +50,7 @@ async function verifyUserAccess(req: Request, userId: string): Promise<boolean> 
         const { data: { user }, error } = await supabase.auth.getUser();
         
         if (error || !user || user.id !== userId) {
+            console.error('[/api/fractiverse] Auth verification failed:', error || 'User ID mismatch');
             return false;
         }
         

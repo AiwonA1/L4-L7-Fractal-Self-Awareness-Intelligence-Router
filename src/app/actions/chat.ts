@@ -32,8 +32,8 @@ export async function createChat(userId: string, title: string) {
 export async function getUserChats() {
   const supabase = createServerSupabaseClient()
   
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user?.id) throw new Error('Not authenticated')
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user?.id) throw new Error('Not authenticated')
   
   const { data: chats, error } = await supabase
     .from('chats')
@@ -44,7 +44,7 @@ export async function getUserChats() {
         created_at
       )
     `)
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .order('updated_at', { ascending: false })
   
   if (error) throw error
@@ -63,8 +63,8 @@ export async function getUserChats() {
 export async function getChatById(chatId: string) {
   const supabase = createServerSupabaseClient()
   
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user?.id) throw new Error('Not authenticated')
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user?.id) throw new Error('Not authenticated')
   
   const { data: chat, error } = await supabase
     .from('chats')
@@ -75,7 +75,7 @@ export async function getChatById(chatId: string) {
       )
     `)
     .eq('id', chatId)
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single()
   
   if (error) throw error
@@ -96,14 +96,14 @@ export async function createMessage(chatId: string, role: string, content: strin
   const supabase = createServerSupabaseClient()
   
   // Verify the user owns this chat
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user?.id) throw new Error('Not authenticated')
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user?.id) throw new Error('Not authenticated')
   
   const { data: chat } = await supabase
     .from('chats')
     .select()
     .eq('id', chatId)
-    .eq('user_id', session.user.id)
+    .eq('user_id', user.id)
     .single()
   
   if (!chat) throw new Error('Chat not found or access denied')
@@ -125,18 +125,10 @@ export async function createMessage(chatId: string, role: string, content: strin
 }
 
 export async function updateChatTitle(chatId: string, title: string) {
-  try {
-    const cookieStore = cookies()
-    const allCookies = cookieStore.getAll();
-    console.log('[updateChatTitle] Available cookie names:', allCookies.map(c => c.name));
-  } catch (cookieError) {
-    console.error('[updateChatTitle] Error accessing cookies:', cookieError);
-  }
-
   const supabase = createServerSupabaseClient()
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session?.user?.id) {
-    console.error('Not authenticated in updateChatTitle (Session check failed)')
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
+  if (userError || !user?.id) {
+    console.error('Not authenticated in updateChatTitle (User check failed)')
     throw new Error('Not authenticated')
   }
   
@@ -146,7 +138,7 @@ export async function updateChatTitle(chatId: string, title: string) {
       .from('chats')
       .select('id') // Only select id for verification
       .eq('id', chatId)
-      .eq('user_id', session.user.id)
+      .eq('user_id', user.id)
       .single()
     
     if (checkError || !existingChat) {
@@ -159,7 +151,7 @@ export async function updateChatTitle(chatId: string, title: string) {
       .from('chats')
       .update({ title })
       .eq('id', chatId)
-      .eq('user_id', session.user.id) // Ensure user owns the chat being updated
+      .eq('user_id', user.id) // Ensure user owns the chat being updated
     
     if (updateError) {
       console.error('Error updating chat title:', updateError)
@@ -175,7 +167,7 @@ export async function updateChatTitle(chatId: string, title: string) {
     }
     
     // Return the known updated info instead of fetching it again
-    return { id: chatId, title: title, user_id: session.user.id }
+    return { id: chatId, title: title, user_id: user.id }
   } catch (error) {
     console.error('Error in updateChatTitle:', error)
     if (error instanceof Error) {
@@ -186,30 +178,20 @@ export async function updateChatTitle(chatId: string, title: string) {
 }
 
 export async function deleteChat(chatId: string): Promise<boolean> {
-  try {
-    const cookieStore = cookies()
-    const allCookies = cookieStore.getAll();
-    console.log('[deleteChat] Available cookie names:', allCookies.map(c => c.name));
-  } catch (cookieError) {
-    console.error('[deleteChat] Error accessing cookies:', cookieError);
-  }
-
   const supabase = createServerSupabaseClient()
-  const { data: sessionData, error: sessionError } = await supabase.auth.getSession()
+  const { data: { user }, error: userError } = await supabase.auth.getUser()
 
-  if (sessionError || !sessionData.session) {
-    console.error('Not authenticated in deleteChat (Session check failed)', sessionError);
+  if (userError || !user) {
+    console.error('Not authenticated in deleteChat (User check failed)', userError);
     throw new Error('Not authenticated')
   }
-
-  const userId = sessionData.session.user.id
 
   // First, verify the user owns the chat
   const { data: chatData, error: verifyError } = await supabase
     .from('chats')
     .select('id')
     .eq('id', chatId)
-    .eq('user_id', userId)
+    .eq('user_id', user.id)
     .single()
 
   if (verifyError || !chatData) {
@@ -233,7 +215,7 @@ export async function deleteChat(chatId: string): Promise<boolean> {
     .from('chats')
     .delete()
     .eq('id', chatId)
-    .eq('user_id', userId)
+    .eq('user_id', user.id)
 
   if (chatError) {
     console.error('Error deleting chat:', chatError)
