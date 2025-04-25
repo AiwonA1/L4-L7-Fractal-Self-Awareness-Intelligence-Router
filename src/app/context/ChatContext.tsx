@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import { useAuth } from './AuthContext'
 import * as chatService from '@/app/services/chat'
 import type { ChatListItem, Message, Chat } from '@/app/services/chat'
@@ -37,6 +37,27 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   })
 
   // Load initial chats
+  const loadChats = useCallback(async () => {
+    if (!user?.id) return
+    
+    setState(prev => ({ ...prev, isLoading: true }))
+    try {
+      const chats = await chatService.getUserChats(user.id)
+      setState(prev => ({ 
+        ...prev, 
+        chats,
+        isLoading: false 
+      }))
+    } catch (error) {
+      toast({
+        title: 'Error loading chats',
+        status: 'error',
+        duration: 3000
+      })
+      setState(prev => ({ ...prev, isLoading: false }))
+    }
+  }, [user?.id, toast])
+
   useEffect(() => {
     if (user?.id) {
       loadChats()
@@ -56,30 +77,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         chatSubscription.unsubscribe()
       }
     }
-  }, [user?.id])
+  }, [user?.id, loadChats])
 
-  const loadChats = async () => {
-    if (!user?.id) return
-    
-    setState(prev => ({ ...prev, isLoading: true }))
-    try {
-      const chats = await chatService.getUserChats(user.id)
-      setState(prev => ({ 
-        ...prev, 
-        chats,
-        isLoading: false 
-      }))
-    } catch (error) {
-      toast({
-        title: 'Error loading chats',
-        status: 'error',
-        duration: 3000
-      })
-      setState(prev => ({ ...prev, isLoading: false }))
-    }
-  }
-
-  const loadMessages = async (chatId: string) => {
+  // Wrap loadMessages in useCallback
+  const loadMessages = useCallback(async (chatId: string) => {
     if (!user?.id) return
     
     setState(prev => ({ ...prev, isLoading: true }))
@@ -100,9 +101,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       })
       setState(prev => ({ ...prev, isLoading: false }))
     }
-  }
+  }, [user?.id, toast, state.chats])
 
-  const sendMessage = async (content: string, chatId: string) => {
+  // Wrap sendMessage in useCallback
+  const sendMessage = useCallback(async (content: string, chatId: string) => {
     if (!user?.id) {
       toast({
         title: 'Authentication Error',
@@ -113,7 +115,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       return
     }
 
-    // Optimistically add user message
     const userMessage: Message = {
       id: crypto.randomUUID(),
       chat_id: chatId,
@@ -121,34 +122,78 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       content,
       created_at: new Date().toISOString(),
     }
+    
+    // Declare assistantMessageId here to be accessible in catch block
+    let assistantMessageId: string | null = null; 
 
+    // Add user message first
     setState(prev => ({
       ...prev,
       messages: [...prev.messages, userMessage],
       isLoading: true
     }))
 
+    const requestBody = {
+      // Construct body using the state *before* the API call
+      messages: [...state.messages, userMessage].map(msg => ({
+        role: msg.role,
+        content: msg.content
+      })),
+      userId: user.id,
+      chatId
+    };
+
+    const fetchOptions = {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestBody)
+    };
+
+    // Log the options just before fetch
+    console.log('[ChatContext] Sending message. Fetch options:', fetchOptions);
+    console.log('[ChatContext] Sending message. Body:', requestBody); // Log body separately for clarity
+
     try {
-      const response = await fetch('/api/fractiverse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [...state.messages, userMessage].map(msg => ({
-            role: msg.role,
-            content: msg.content
-          })),
-          userId: user.id,
-          chatId
-        })
-      })
+      const response = await fetch('/api/fractiverse', { 
+        ...fetchOptions, 
+        credentials: 'include'
+      });
 
-      if (!response.ok) throw new Error('Failed to send message')
+      // Check response status *before* trying to read body
+      if (!response.ok) { 
+        // Try to get error details from response body
+        let errorDetails = 'Failed to send message';
+        try {
+            const errorData = await response.json();
+            errorDetails = errorData.error || errorDetails;
+        } catch (parseError) {
+            // Ignore if parsing fails, stick to default message
+        }
+        throw new Error(errorDetails); // Throw error with details
+      }
 
-      // Handle streaming response
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No response body')
 
       let assistantMessage = ''
+      // Assign the ID here
+      assistantMessageId = crypto.randomUUID(); 
+
+      // Initial streaming message placeholder
+      setState(prev => ({
+        ...prev,
+        messages: [
+          ...prev.messages,
+          {
+            id: assistantMessageId!, // Use the generated ID (non-null assertion ok here)
+            chat_id: chatId,
+            role: 'assistant',
+            content: '', // Start empty
+            created_at: new Date().toISOString()
+          }
+        ]
+      }))
+
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
@@ -156,133 +201,158 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         const chunk = new TextDecoder().decode(value)
         assistantMessage += chunk
         
-        // Update assistant message in real-time
+        // Update streaming assistant message content
         setState(prev => ({
           ...prev,
-          messages: [
-            ...prev.messages.filter(m => m.role !== 'assistant' || m.id !== 'streaming'),
-            {
-              id: 'streaming',
-              chat_id: chatId,
-              role: 'assistant',
-              content: assistantMessage,
-              created_at: new Date().toISOString()
-            }
-          ]
+          messages: prev.messages.map(m => 
+            m.id === assistantMessageId ? { ...m, content: assistantMessage } : m
+          )
         }))
       }
 
-      // Final message update
+      // Final message state update (redundant if last update covers it, but safe)
       setState(prev => ({
         ...prev,
         isLoading: false,
-        messages: [
-          ...prev.messages.filter(m => m.id !== 'streaming'),
-          {
-            id: crypto.randomUUID(),
-            chat_id: chatId,
-            role: 'assistant',
-            content: assistantMessage,
-            created_at: new Date().toISOString()
-          }
-        ]
+        // Optionally re-map to ensure final content is set if loop finishes unexpectedly
+        messages: prev.messages.map(m => 
+          m.id === assistantMessageId ? { ...m, content: assistantMessage } : m
+        )
       }))
 
     } catch (error) {
+      // Now using the error message from the backend if available
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       toast({
         title: 'Error sending message',
+        description: errorMessage, // Show detailed error from backend
         status: 'error',
-        duration: 3000
+        duration: 5000 // Longer duration for errors
       })
-      setState(prev => ({ ...prev, isLoading: false }))
+      // Remove optimistic user message and streaming assistant message on error
+      setState(prev => ({
+        ...prev, 
+        isLoading: false, 
+        // Correctly filter using assistantMessageId if it was set
+        messages: prev.messages.filter(m => 
+          m.id !== userMessage.id && 
+          !(assistantMessageId && m.id === assistantMessageId) // Use the variable
+        )
+      }));
     }
-  }
+  }, [user?.id, toast, state.messages]) // Keep state.messages dependency for initial body construction
 
-  const createNewChat = async (title: string, initialMessage: string) => {
+  // Wrap createNewChat in useCallback
+  const createNewChat = useCallback(async (title: string, initialMessage: string): Promise<Chat | null> => {
     if (!user?.id) return null
     
     setState(prev => ({ ...prev, isLoading: true }))
     try {
-      const newChat = await chatService.createChat(user.id, title)
-      if (!newChat) throw new Error('Failed to create chat')
-      
+      const { data, error } = await supabase
+        .from('chats')
+        .insert([{ user_id: user.id, title: 'New Chat' }]) // Start with a default title
+        .select()
+        .single()
+
+      if (error) throw error
+      if (!data) throw new Error('No data returned after creating chat')
+
+      // Explicitly cast to Chat for now to satisfy linter
+      const newChat = data as Chat; 
+
       setState(prev => ({
         ...prev,
-        chats: [newChat, ...prev.chats],
-        currentChat: newChat,
-        messages: [],
-        isLoading: false
+        // Add the fully formed Chat object
+        chats: [...prev.chats, newChat],
+        currentChatId: newChat.id,
+        messages: [], // Clear messages for the new chat
+        isLoading: false,
       }))
-
-      await sendMessage(initialMessage, newChat.id)
       return newChat
     } catch (error) {
       toast({
-        title: 'Error creating chat',
+        title: 'Error creating new chat',
         status: 'error',
-        duration: 3000
+        duration: 3000,
       })
-      setState(prev => ({ ...prev, isLoading: false }))
+      setState(prev => ({ ...prev, chats: state.chats, isLoading: false })) // Revert on error
       return null
     }
-  }
+  }, [user?.id, toast, state.chats])
 
-  const updateChatTitle = async (chatId: string, newTitle: string) => {
-    setState(prev => ({ ...prev, isLoading: true }))
+  // Wrap updateChatTitle in useCallback
+  const updateChatTitle = useCallback(async (chatId: string, newTitle: string) => {
+    // Optimistic update
+    const originalChats = state.chats;
+    setState(prev => ({
+      ...prev,
+      chats: prev.chats.map(c => 
+        c.id === chatId ? { ...c, title: newTitle } : c
+      ),
+      // Optional: isLoading: true here? 
+    }));
+
     try {
-      await updateChatTitleAction(chatId, newTitle)
-      setState(prev => ({
-        ...prev,
-        chats: prev.chats.map(c => 
-          c.id === chatId ? { ...c, title: newTitle } : c
-        ),
-        isLoading: false
-      }))
+      await updateChatTitleAction(chatId, newTitle);
+      // No state update needed here if optimistic works
+      // setState(prev => ({ ...prev, isLoading: false }));
     } catch (error) {
       toast({
         title: 'Error updating chat title',
         status: 'error',
         duration: 3000
-      })
-      setState(prev => ({ ...prev, isLoading: false }))
+      });
+      // Revert optimistic update on error
+      setState(prev => ({ ...prev, chats: originalChats, isLoading: false }));
     }
-  }
+    // Dependencies: toast, state.chats (for optimistic update)
+  }, [toast, state.chats])
 
-  const deleteChat = async (chatId: string) => {
-    setState(prev => ({ ...prev, isLoading: true }))
+  // Wrap deleteChat in useCallback
+  const deleteChat = useCallback(async (chatId: string) => {
+    // Optimistic update
+    const originalState = { chats: state.chats, currentChat: state.currentChat, messages: state.messages }; 
+    setState(prev => ({
+      ...prev,
+      chats: prev.chats.filter(c => c.id !== chatId),
+      currentChat: prev.currentChat?.id === chatId ? null : prev.currentChat,
+      messages: prev.currentChat?.id === chatId ? [] : prev.messages,
+      // isLoading: true // Optional
+    }));
+
     try {
-      await deleteChatAction(chatId)
-      setState(prev => ({
-        ...prev,
-        chats: prev.chats.filter(c => c.id !== chatId),
-        currentChat: prev.currentChat?.id === chatId ? null : prev.currentChat,
-        messages: prev.currentChat?.id === chatId ? [] : prev.messages,
-        isLoading: false
-      }))
-      toast({ title: 'Chat deleted', status: 'success', duration: 2000 })
+      await deleteChatAction(chatId);
+      toast({ title: 'Chat deleted', status: 'success', duration: 2000 });
+      // No state update needed here
+      // setState(prev => ({ ...prev, isLoading: false }));
     } catch (error) {
       toast({
         title: 'Error deleting chat',
         status: 'error',
         duration: 3000
-      })
-      setState(prev => ({ ...prev, isLoading: false }))
+      });
+      // Revert optimistic update
+      setState(prev => ({ ...prev, ...originalState, isLoading: false }));
     }
+    // Dependencies: toast, state (chats, currentChat, messages)
+  }, [toast, state.chats, state.currentChat, state.messages])
+
+  // Provide the memoized functions in the context value
+  const value = {
+    ...state,
+    loadChats,
+    loadMessages,
+    sendMessage,
+    createNewChat,
+    updateChatTitle,
+    deleteChat
   }
 
   return (
-    <ChatContext.Provider value={{
-      ...state,
-      loadChats,
-      loadMessages,
-      sendMessage,
-      createNewChat,
-      updateChatTitle,
-      deleteChat
-    }}>
+    <ChatContext.Provider value={value}>
       {children}
     </ChatContext.Provider>
-  )
+  );
 }
 
 export const useChat = () => {

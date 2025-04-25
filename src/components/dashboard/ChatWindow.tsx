@@ -89,6 +89,7 @@ export function ChatWindow({
 
   return (
     <Flex
+      flex={1}
       direction="column"
       h="full"
       bg={bgColor}

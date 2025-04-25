@@ -4,16 +4,6 @@ import path from 'path'
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
-// Extend ProcessEnv interface
-declare global {
-  namespace NodeJS {
-    interface ProcessEnv {
-      NEXT_PUBLIC_SUPABASE_URL: string
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: string
-    }
-  }
-}
-
 // Load test environment variables
 dotenv.config({
   path: path.resolve(__dirname, '../../.env.test')

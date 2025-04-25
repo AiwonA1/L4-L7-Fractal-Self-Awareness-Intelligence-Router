@@ -32,7 +32,7 @@ import { ChatContainer } from '@/components/dashboard/ChatComponents';
 import { DeleteConfirmationDialog } from '@/components/dashboard/DeleteConfirmationDialog';
 
 export function ChatSidebar() {
-  const { user, userProfile, signOut } = useAuth();
+  const { user: authUser } = useAuth();
   const {
     chats,
     currentChat,
@@ -51,8 +51,6 @@ export function ChatSidebar() {
 
   // Colors
   const sidebarBg = useColorModeValue('gray.50', 'gray.900');
-  const textColor = useColorModeValue('gray.800', 'white');
-  const secondaryTextColor = useColorModeValue('gray.600', 'gray.300');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
 
   const handleCreateChat = async () => {
@@ -118,17 +116,8 @@ export function ChatSidebar() {
   };
 
   return (
-    <VStack h="100%" w="64" bg={sidebarBg} borderRightWidth="1px" borderColor={borderColor} spacing={0}>
-      <Box w="full">
-        <HStack w="full" p={4} borderBottomWidth="1px" borderColor={borderColor} spacing={3}>
-          <Avatar name={user?.email} size="sm" />
-          <Text fontWeight="medium" color={textColor} noOfLines={1}>
-            {user?.email || 'Loading...'}
-          </Text>
-        </HStack>
-      </Box>
-
-      <Box p={4} w="full">
+    <VStack h="100%" w="64" bg={sidebarBg} borderRightWidth="1px" borderColor={borderColor} align="stretch">
+      <Box p={4} w="full" borderBottomWidth="1px" borderColor={borderColor}>
         <Button
           leftIcon={<FaPlus />}
           width="full"
@@ -154,12 +143,6 @@ export function ChatSidebar() {
             onRenameChat={handleRenameSubmit}
           />
         )}
-      </Box>
-
-      <Box p={4} w="full" borderTopWidth="1px" borderColor={borderColor}>
-        <Text fontSize="sm" color={secondaryTextColor}>
-          Tokens: {userProfile?.fract_tokens ?? 'N/A'}
-        </Text>
       </Box>
 
       <DeleteConfirmationDialog
